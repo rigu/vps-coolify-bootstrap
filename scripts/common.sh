@@ -77,14 +77,13 @@ load_env_file_strict() {
         echo "ERROR: unquoted whitespace for $key at line $line_no in $env_file" >&2
         return 1
       fi
-      if [[ "$raw_value" == *'$('* ]] || [[ "$raw_value" == *'${'* ]] || [[ "$raw_value" == *'`'* ]]; then
+      if [[ "$raw_value" == *\$\(* ]] || [[ "$raw_value" == *\$\{* ]] || [[ "$raw_value" == *\`* ]]; then
         echo "ERROR: potential shell expansion syntax for $key at line $line_no in $env_file; quote the value" >&2
         return 1
       fi
       value="$raw_value"
     fi
 
-    printf -v "$key" '%s' "$value"
-    export "$key"
+    declare -gx "$key=$value"
   done < "$env_file"
 }
