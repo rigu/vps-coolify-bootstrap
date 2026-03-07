@@ -127,7 +127,7 @@ variables beyond the quick reference in Getting Started.
 
 - `SSH_PUBLIC_KEY` / `SSH_PUBLIC_KEY_PATH`
   - When: local preparation step and host bootstrap key installation
-  - How: **AUTO-DETECTED** if a valid key exists on your machine (`~/.ssh/*.pub`); otherwise set `SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_PATH` manually
+  - How: **AUTO-DETECTED** if a valid key exists on your machine (`~/.ssh/*.pub`); `generate-secrets.*` fills both `SSH_PUBLIC_KEY` and `SSH_PUBLIC_KEY_PATH` when placeholders are present
   - Must change: YES (valid key required)
 - `SSH_PORT`
   - When: bootstrap/replay SSH hardening

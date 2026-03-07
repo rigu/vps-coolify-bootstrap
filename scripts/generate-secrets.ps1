@@ -35,6 +35,13 @@ function Test-ValidSshPublicKey {
     return $Key -match '^ssh-(ed25519|rsa|ecdsa-[^\s]+)\s+'
 }
 
+function Format-EnvValue {
+    param([string]$Value)
+    if (-not $Value.Contains("'")) { return "'$Value'" }
+    $escaped = $Value.Replace('\', '\\').Replace('"', '\"').Replace('$', '\$')
+    return '"' + $escaped + '"'
+}
+
 function Get-DetectedSshPublicKey {
     $homes = @()
     if ($HOME) { $homes += $HOME }
@@ -46,7 +53,12 @@ function Get-DetectedSshPublicKey {
             $path = Join-Path $homeDir ".ssh/$name"
             if (Test-Path -LiteralPath $path -PathType Leaf) {
                 $key = (Get-Content -LiteralPath $path -TotalCount 1).Trim()
-                if (Test-ValidSshPublicKey -Key $key) { return $key }
+                if (Test-ValidSshPublicKey -Key $key) {
+                    return [PSCustomObject]@{
+                        Key = $key
+                        Path = $path
+                    }
+                }
             }
         }
     }
@@ -56,28 +68,48 @@ function Get-DetectedSshPublicKey {
         if (-not (Test-Path -LiteralPath $sshDir -PathType Container)) { continue }
         foreach ($file in Get-ChildItem -LiteralPath $sshDir -Filter "*.pub" -File -ErrorAction SilentlyContinue) {
             $key = (Get-Content -LiteralPath $file.FullName -TotalCount 1).Trim()
-            if (Test-ValidSshPublicKey -Key $key) { return $key }
+            if (Test-ValidSshPublicKey -Key $key) {
+                return [PSCustomObject]@{
+                    Key = $key
+                    Path = $file.FullName
+                }
+            }
         }
     }
 
     return $null
 }
 
-$detectedSshKey = Get-DetectedSshPublicKey
-$hasDetectedSshKey = -not [string]::IsNullOrWhiteSpace($detectedSshKey)
+$detectedSshEntry = Get-DetectedSshPublicKey
+$hasDetectedSshKey = $null -ne $detectedSshEntry
+$detectedSshKey = if ($hasDetectedSshKey) { [string]$detectedSshEntry.Key } else { "" }
+$detectedSshKeyPath = if ($hasDetectedSshKey) { [string]$detectedSshEntry.Path } else { "" }
 
 $sawCoolifyPassword = $false
 $sawEncryptionPassword = $false
 $sawSshPublicKey = $false
+$sawSshPublicKeyPath = $false
 $newLines = New-Object System.Collections.Generic.List[string]
 
 foreach ($line in Get-Content -LiteralPath $envPath) {
+    if ($line.StartsWith("SSH_PUBLIC_KEY_PATH=")) {
+        $sawSshPublicKeyPath = $true
+        $current = $line.Substring("SSH_PUBLIC_KEY_PATH=".Length)
+        $shouldReplace = $ForceSshKey -or [string]::IsNullOrWhiteSpace($current) -or $current -match "CHANGE_ME"
+        if ($shouldReplace -and $hasDetectedSshKey) {
+            $newLines.Add("SSH_PUBLIC_KEY_PATH=$(Format-EnvValue -Value $detectedSshKeyPath)")
+        } else {
+            $newLines.Add($line)
+        }
+        continue
+    }
+
     if ($line.StartsWith("SSH_PUBLIC_KEY=")) {
         $sawSshPublicKey = $true
         $current = $line.Substring("SSH_PUBLIC_KEY=".Length)
         $shouldReplace = $ForceSshKey -or [string]::IsNullOrWhiteSpace($current) -or $current -match "CHANGE_ME"
         if ($shouldReplace -and $hasDetectedSshKey) {
-            $newLines.Add("SSH_PUBLIC_KEY=$detectedSshKey")
+            $newLines.Add("SSH_PUBLIC_KEY=$(Format-EnvValue -Value $detectedSshKey)")
         } else {
             $newLines.Add($line)
         }
@@ -118,7 +150,10 @@ if (-not $sawEncryptionPassword) {
 }
 
 if (-not $sawSshPublicKey -and $hasDetectedSshKey) {
-    $newLines.Add("SSH_PUBLIC_KEY=$detectedSshKey")
+    $newLines.Add("SSH_PUBLIC_KEY=$(Format-EnvValue -Value $detectedSshKey)")
+}
+if (-not $sawSshPublicKeyPath -and $hasDetectedSshKey) {
+    $newLines.Add("SSH_PUBLIC_KEY_PATH=$(Format-EnvValue -Value $detectedSshKeyPath)")
 }
 
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -127,7 +162,7 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 Write-Host "Updated: $envPath"
 Write-Host "WARNING: Env file contains secrets. On shared Windows systems, verify ACLs (for example with icacls)."
 if ($hasDetectedSshKey) {
-    Write-Host "SSH public key auto-detected and applied when needed."
+    Write-Host "SSH public key and SSH_PUBLIC_KEY_PATH auto-detected and applied when needed."
 } else {
     Write-Host "No local SSH public key detected; set SSH_PUBLIC_KEY or SSH_PUBLIC_KEY_PATH manually."
 }

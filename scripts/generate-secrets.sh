@@ -65,6 +65,18 @@ pw_gen_encryption_password() {
   openssl rand -hex 16
 }
 
+format_env_value() {
+  local value="$1"
+  if [[ "$value" != *"'"* ]]; then
+    printf "'%s'" "$value"
+    return 0
+  fi
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//\$/\\\$}"
+  printf '"%s"' "$value"
+}
+
 is_valid_ssh_pub_key() {
   local key="$1"
   [[ "$key" =~ ^ssh-(ed25519|rsa|ecdsa-[^[:space:]]+)[[:space:]] ]]
@@ -110,7 +122,8 @@ detect_current_user_ssh_pub_key() {
       if [ -f "$candidate" ]; then
         key="$(head -n 1 "$candidate" | tr -d '\r')"
         if is_valid_ssh_pub_key "$key"; then
-          printf '%s\n' "$key"
+          DETECTED_SSH_KEY="$key"
+          DETECTED_SSH_KEY_PATH="$candidate"
           return 0
         fi
       fi
@@ -120,7 +133,8 @@ detect_current_user_ssh_pub_key() {
       [ -f "$candidate" ] || continue
       key="$(head -n 1 "$candidate" | tr -d '\r')"
       if is_valid_ssh_pub_key "$key"; then
-        printf '%s\n' "$key"
+        DETECTED_SSH_KEY="$key"
+        DETECTED_SSH_KEY_PATH="$candidate"
         return 0
       fi
     done
@@ -130,7 +144,12 @@ detect_current_user_ssh_pub_key() {
 }
 
 detected_ssh_key=""
-if detected_ssh_key="$(detect_current_user_ssh_pub_key)"; then
+detected_ssh_key_path=""
+DETECTED_SSH_KEY=""
+DETECTED_SSH_KEY_PATH=""
+if detect_current_user_ssh_pub_key; then
+  detected_ssh_key="$DETECTED_SSH_KEY"
+  detected_ssh_key_path="$DETECTED_SSH_KEY_PATH"
   has_detected_ssh_key=1
 else
   has_detected_ssh_key=0
@@ -141,14 +160,28 @@ trap 'rm -f "$tmp"' EXIT
 saw_coolify_password=0
 saw_encryption_password=0
 saw_ssh_public_key=0
+saw_ssh_public_key_path=0
 while IFS= read -r line || [ -n "$line" ]; do
   case "$line" in
+    SSH_PUBLIC_KEY_PATH=*)
+      saw_ssh_public_key_path=1
+      current="${line#*=}"
+      if [ "$force_ssh_key" -eq 1 ] || [ -z "$current" ] || [[ "$current" == *CHANGE_ME* ]]; then
+        if [ "$has_detected_ssh_key" -eq 1 ]; then
+          echo "SSH_PUBLIC_KEY_PATH=$(format_env_value "$detected_ssh_key_path")" >> "$tmp"
+        else
+          echo "$line" >> "$tmp"
+        fi
+      else
+        echo "$line" >> "$tmp"
+      fi
+      ;;
     SSH_PUBLIC_KEY=*)
       saw_ssh_public_key=1
       current="${line#*=}"
       if [ "$force_ssh_key" -eq 1 ] || [ -z "$current" ] || [[ "$current" == *CHANGE_ME* ]]; then
         if [ "$has_detected_ssh_key" -eq 1 ]; then
-          echo "SSH_PUBLIC_KEY=$detected_ssh_key" >> "$tmp"
+          echo "SSH_PUBLIC_KEY=$(format_env_value "$detected_ssh_key")" >> "$tmp"
         else
           echo "$line" >> "$tmp"
         fi
@@ -189,14 +222,17 @@ if [ "$saw_encryption_password" -eq 0 ]; then
 fi
 
 if [ "$saw_ssh_public_key" -eq 0 ] && [ "$has_detected_ssh_key" -eq 1 ]; then
-  echo "SSH_PUBLIC_KEY=$detected_ssh_key" >> "$tmp"
+  echo "SSH_PUBLIC_KEY=$(format_env_value "$detected_ssh_key")" >> "$tmp"
+fi
+if [ "$saw_ssh_public_key_path" -eq 0 ] && [ "$has_detected_ssh_key" -eq 1 ]; then
+  echo "SSH_PUBLIC_KEY_PATH=$(format_env_value "$detected_ssh_key_path")" >> "$tmp"
 fi
 
 mv "$tmp" "$env_file"
 chmod 600 "$env_file"
 echo "Updated: $env_file"
 if [ "$has_detected_ssh_key" -eq 1 ]; then
-  echo "SSH public key auto-detected and applied when needed."
+  echo "SSH public key and SSH_PUBLIC_KEY_PATH auto-detected and applied when needed."
 else
   echo "No local SSH public key detected; set SSH_PUBLIC_KEY or SSH_PUBLIC_KEY_PATH manually."
 fi

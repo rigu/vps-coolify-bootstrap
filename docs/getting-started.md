@@ -48,8 +48,8 @@ after running PowerShell scripts.
 
 `generate-secrets.*` performs **AUTO-DETECTED** SSH key lookup on your local machine.
 It checks common public key files in `~/.ssh` (for example `id_ed25519.pub`,
-`id_ecdsa.pub`, `id_rsa.pub`, then other `*.pub`) and fills `SSH_PUBLIC_KEY`
-when the current value is empty or still `CHANGE_ME`.
+`id_ecdsa.pub`, `id_rsa.pub`, then other `*.pub`) and fills both
+`SSH_PUBLIC_KEY` and `SSH_PUBLIC_KEY_PATH` when current values are empty or still `CHANGE_ME`.
 If no valid key is found, set `SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_PATH` manually.
 
 ## Bootstrap env quick reference
