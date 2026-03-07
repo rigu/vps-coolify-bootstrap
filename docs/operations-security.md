@@ -23,6 +23,9 @@ Bootstrap also uses:
 - `SECONDARY_SUDO_USER`
 
 Keep both aligned with policy lists.
+`bootstrap-host.sh` enforces this at runtime: every user in `SUDO_USERS`,
+`DOCKER_USERS`, and `COOLIFY_GROUP_USERS` must also exist in `CREATE_USERS`,
+and usernames must match `^[a-z_][a-z0-9_-]*[$]?$`.
 
 ### More than 2 sudo users
 
@@ -38,6 +41,8 @@ COOLIFY_GROUP_USERS=deploy,coolify,ops
 ```
 
 Re-render cloud-init or replay bootstrap to apply.
+Other required variables are omitted for brevity; keep required `CHANGE_ME`
+values (domain, credentials, encryption password, SSH key) fully configured.
 
 Important: extra users beyond the first two can SSH only after `bootstrap-host.sh`
 completes successfully and re-syncs `AllowUsers` from `CREATE_USERS`.
@@ -98,5 +103,13 @@ Configure Docker log retention (`max-size`, `max-file`) and verify host logrotat
 - `cloud-init.generated.yml` contains secrets and must not be committed
 - bootstrap replay resets UFW baseline each run
 - `SSH_KEY_ROTATE=0` appends keys, `SSH_KEY_ROTATE=1` replaces keys
+
+## Input validation rules
+
+- `COOLIFY_ROOT_USERNAME` must match `^[A-Za-z0-9._-]+$`
+- `COOLIFY_ROOT_USER_EMAIL` must be valid email format
+- `COOLIFY_ROOT_USER_PASSWORD` and `USER_PASSWORDS_ENCRYPTION_PASSWORD` must be at least 16 characters
+- `SSH_PORT` must be numeric in range `1-65535`
+- usernames in user lists must match `^[a-z_][a-z0-9_-]*[$]?$` and must not contain `:`
 
 Back to [Docs Home](index.md)

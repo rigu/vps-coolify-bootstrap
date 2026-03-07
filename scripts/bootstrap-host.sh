@@ -56,6 +56,51 @@ if [[ "$COOLIFY_PUBLIC_DOMAIN" =~ [[:space:]/] ]]; then
   exit 1
 fi
 
+if [[ ! "$COOLIFY_ROOT_USER_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; then
+  echo "ERROR: COOLIFY_ROOT_USER_EMAIL must be a valid email format" >&2
+  exit 1
+fi
+
+if [[ ! "$COOLIFY_ROOT_USERNAME" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "ERROR: COOLIFY_ROOT_USERNAME must match ^[A-Za-z0-9._-]+$" >&2
+  exit 1
+fi
+
+for user in $(split_csv_to_lines "$CREATE_USERS"); do
+  if [[ "$user" == *:* ]]; then
+    echo "ERROR: CREATE_USERS contains invalid username (colon not allowed): $user" >&2
+    exit 1
+  fi
+  if ! is_valid_unix_username "$user"; then
+    echo "ERROR: CREATE_USERS contains invalid UNIX username: $user" >&2
+    exit 1
+  fi
+done
+
+validate_user_list_subset() {
+  local list_name="$1"
+  local list_value="$2"
+  local user=""
+  for user in $(split_csv_to_lines "$list_value"); do
+    if [[ "$user" == *:* ]]; then
+      echo "ERROR: ${list_name} contains invalid username (colon not allowed): $user" >&2
+      exit 1
+    fi
+    if ! is_valid_unix_username "$user"; then
+      echo "ERROR: ${list_name} contains invalid UNIX username: $user" >&2
+      exit 1
+    fi
+    if ! csv_contains_value "$CREATE_USERS" "$user"; then
+      echo "ERROR: ${list_name} contains user not present in CREATE_USERS: $user" >&2
+      exit 1
+    fi
+  done
+}
+
+validate_user_list_subset "SUDO_USERS" "$SUDO_USERS"
+validate_user_list_subset "DOCKER_USERS" "$DOCKER_USERS"
+validate_user_list_subset "COOLIFY_GROUP_USERS" "$COOLIFY_GROUP_USERS"
+
 PRIMARY_SUDO_USER="${PRIMARY_SUDO_USER:-}"
 if [[ -z "$PRIMARY_SUDO_USER" ]]; then
   PRIMARY_SUDO_USER="$(split_csv_to_lines "$SUDO_USERS" | head -n1 || true)"
@@ -117,18 +162,23 @@ apply_sudo_policy() {
   policy_file="/etc/sudoers.d/99-bootstrap-sudo-policy"
   tmp_file="$(mktemp)"
 
-  printf '%s ALL=(ALL:ALL) NOPASSWD:ALL\n' "$PRIMARY_SUDO_USER" > "$tmp_file"
-  for user in $(split_csv_to_lines "$SUDO_USERS"); do
-    if [[ "$user" != "$PRIMARY_SUDO_USER" ]]; then
-      printf '%s ALL=(ALL:ALL) ALL\n' "$user" >> "$tmp_file"
-    fi
-  done
+  if ! {
+    printf '%s ALL=(ALL:ALL) NOPASSWD:ALL\n' "$PRIMARY_SUDO_USER" > "$tmp_file"
+    for user in $(split_csv_to_lines "$SUDO_USERS"); do
+      if [[ "$user" != "$PRIMARY_SUDO_USER" ]]; then
+        printf '%s ALL=(ALL:ALL) ALL\n' "$user" >> "$tmp_file"
+      fi
+    done
 
-  chmod 440 "$tmp_file"
-  if command -v visudo >/dev/null 2>&1; then
-    visudo -cf "$tmp_file" >/dev/null
+    chmod 440 "$tmp_file"
+    if command -v visudo >/dev/null 2>&1; then
+      visudo -cf "$tmp_file" >/dev/null
+    fi
+    install -o root -g root -m 440 "$tmp_file" "$policy_file"
+  }; then
+    rm -f "$tmp_file"
+    return 1
   fi
-  install -o root -g root -m 440 "$tmp_file" "$policy_file"
   rm -f "$tmp_file"
 
   # Prevent cloud-init sudoers defaults from overriding long-term policy.

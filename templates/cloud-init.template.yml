@@ -121,6 +121,8 @@ runcmd:
     repo_ref='BOOTSTRAP_REPO_REF_HERE'
 
     if [ -d "$repo_dir/.git" ]; then
+      # Keep origin aligned with repo_url in case env changed since a prior run.
+      git -C "$repo_dir" remote set-url origin "$repo_url"
       if ! git -C "$repo_dir" fetch --depth 1 origin "$repo_ref"; then
         echo "ERROR: failed to fetch $repo_ref from $repo_url" >&2
         exit 1

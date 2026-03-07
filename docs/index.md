@@ -45,4 +45,4 @@ _Last verified: March 7, 2026._
 ## License and Liability
 
 - License: [MIT](../LICENSE)
-- Use at your own risk; see the repository [README disclaimer](../README.md#disclaimer).
+- Use at your own risk; see the repository [README disclaimer](https://github.com/rigu/vps-coolify-bootstrap#disclaimer).

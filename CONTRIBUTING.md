@@ -25,6 +25,16 @@ bash scripts/prepare-cloud-init.sh --help
 bash scripts/generate-secrets.sh --help
 ```
 
+If you modify `.ps1` scripts, also validate PowerShell syntax locally:
+
+```powershell
+$parseErrors = $null
+Get-ChildItem scripts/*.ps1 | ForEach-Object {
+  $null = [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$parseErrors)
+}
+if ($parseErrors) { $parseErrors | ForEach-Object { Write-Error $_.Message }; exit 1 }
+```
+
 4. Update docs when behavior changes.
 5. Open PR with:
    - context/problem

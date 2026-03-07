@@ -90,6 +90,16 @@ fi
 
 changed_count=0
 for user in $(split_csv_to_lines "$CREATE_USERS"); do
+  if [[ "$user" == *:* ]]; then
+    echo "ERROR: CREATE_USERS contains invalid username (colon not allowed): $user" >&2
+    exit 1
+  fi
+
+  if ! is_valid_unix_username "$user"; then
+    echo "ERROR: CREATE_USERS contains invalid UNIX username: $user" >&2
+    exit 1
+  fi
+
   if ! id "$user" >/dev/null 2>&1; then
     echo "ERROR: user declared in CREATE_USERS does not exist: $user" >&2
     exit 1

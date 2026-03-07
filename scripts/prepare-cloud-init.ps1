@@ -47,12 +47,41 @@ if ($sshPortNum -lt 1 -or $sshPortNum -gt 65535) { throw "SSH_PORT must be betwe
 
 $coolifyPublicDomain = [string]$cfg["COOLIFY_PUBLIC_DOMAIN"]
 if ($coolifyPublicDomain -match '[\s/]') { throw "COOLIFY_PUBLIC_DOMAIN must be a hostname without spaces or /." }
+if ($cfg["COOLIFY_ROOT_USER_EMAIL"] -notmatch '^[^\s@]+@[^\s@]+\.[^\s@]+$') { throw "COOLIFY_ROOT_USER_EMAIL must be a valid email format." }
+if ($cfg["COOLIFY_ROOT_USERNAME"] -notmatch '^[A-Za-z0-9._-]+$') { throw "COOLIFY_ROOT_USERNAME must match ^[A-Za-z0-9._-]+$." }
 
 $createUsers = ([string]$cfg["CREATE_USERS"]).Split(",") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 $primarySudoUser = [string]$cfg["PRIMARY_SUDO_USER"]
 $secondarySudoUser = [string]$cfg["SECONDARY_SUDO_USER"]
 if (-not ($createUsers -contains $primarySudoUser)) { throw "PRIMARY_SUDO_USER must be present in CREATE_USERS." }
 if (-not ($createUsers -contains $secondarySudoUser)) { throw "SECONDARY_SUDO_USER must be present in CREATE_USERS." }
+function Test-ValidUnixUsername {
+    param([string]$User)
+    return ($User -match '^[a-z_][a-z0-9_-]*[$]?$')
+}
+
+function Validate-UserListSubset {
+    param(
+        [string]$ListName,
+        [string]$Csv,
+        [string[]]$CreateUsers
+    )
+
+    $users = $Csv.Split(",") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    foreach ($user in $users) {
+        if ($user.Contains(":")) { throw "${ListName} contains invalid username (colon not allowed): $user" }
+        if (-not (Test-ValidUnixUsername -User $user)) { throw "${ListName} contains invalid UNIX username: $user" }
+        if (-not ($CreateUsers -contains $user)) { throw "${ListName} contains user not present in CREATE_USERS: $user" }
+    }
+}
+
+foreach ($user in $createUsers) {
+    if ($user.Contains(":")) { throw "CREATE_USERS contains invalid username (colon not allowed): $user" }
+    if (-not (Test-ValidUnixUsername -User $user)) { throw "CREATE_USERS contains invalid UNIX username: $user" }
+}
+Validate-UserListSubset -ListName "SUDO_USERS" -Csv ([string]$cfg["SUDO_USERS"]) -CreateUsers $createUsers
+Validate-UserListSubset -ListName "DOCKER_USERS" -Csv ([string]$cfg["DOCKER_USERS"]) -CreateUsers $createUsers
+Validate-UserListSubset -ListName "COOLIFY_GROUP_USERS" -Csv ([string]$cfg["COOLIFY_GROUP_USERS"]) -CreateUsers $createUsers
 
 $templatePath = if ($cfg.ContainsKey("TEMPLATE_FILE") -and $cfg["TEMPLATE_FILE"]) { $cfg["TEMPLATE_FILE"] } else { "../templates/cloud-init.template.yml" }
 $outputPath = if ($cfg.ContainsKey("OUTPUT_FILE") -and $cfg["OUTPUT_FILE"]) { $cfg["OUTPUT_FILE"] } else { "../cloud-init.generated.yml" }

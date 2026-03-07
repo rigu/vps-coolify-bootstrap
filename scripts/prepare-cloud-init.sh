@@ -104,6 +104,11 @@ csv_contains_value() {
   return 1
 }
 
+is_valid_unix_username() {
+  local user="$1"
+  [[ "$user" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]
+}
+
 for k in TIMEZONE SSH_PORT PRIMARY_SUDO_USER SECONDARY_SUDO_USER CREATE_USERS SUDO_USERS DOCKER_USERS COOLIFY_GROUP_USERS COOLIFY_PUBLIC_DOMAIN COOLIFY_ROOT_USERNAME COOLIFY_ROOT_USER_EMAIL COOLIFY_ROOT_USER_PASSWORD USER_PASSWORDS_ENCRYPTION_PASSWORD BOOTSTRAP_REPO_URL BOOTSTRAP_REPO_REF; do
   require_key "$k"
 done
@@ -124,6 +129,16 @@ if [[ "${cfg[COOLIFY_PUBLIC_DOMAIN]}" =~ [[:space:]/] ]]; then
   exit 1
 fi
 
+if [[ ! "${cfg[COOLIFY_ROOT_USER_EMAIL]}" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; then
+  echo "ERROR: COOLIFY_ROOT_USER_EMAIL must be a valid email format." >&2
+  exit 1
+fi
+
+if [[ ! "${cfg[COOLIFY_ROOT_USERNAME]}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "ERROR: COOLIFY_ROOT_USERNAME must match ^[A-Za-z0-9._-]+$." >&2
+  exit 1
+fi
+
 if ! csv_contains_value "${cfg[CREATE_USERS]}" "${cfg[PRIMARY_SUDO_USER]}"; then
   echo "ERROR: PRIMARY_SUDO_USER must be present in CREATE_USERS." >&2
   exit 1
@@ -132,6 +147,45 @@ if ! csv_contains_value "${cfg[CREATE_USERS]}" "${cfg[SECONDARY_SUDO_USER]}"; th
   echo "ERROR: SECONDARY_SUDO_USER must be present in CREATE_USERS." >&2
   exit 1
 fi
+
+for user in $(printf '%s\n' "${cfg[CREATE_USERS]}" | tr ',' '\n'); do
+  user="$(trim "$user")"
+  [[ -n "$user" ]] || continue
+  if [[ "$user" == *:* ]]; then
+    echo "ERROR: CREATE_USERS contains invalid username (colon not allowed): $user" >&2
+    exit 1
+  fi
+  if ! is_valid_unix_username "$user"; then
+    echo "ERROR: CREATE_USERS contains invalid UNIX username: $user" >&2
+    exit 1
+  fi
+done
+
+validate_user_csv_subset() {
+  local list_name="$1"
+  local list_value="$2"
+  local user=""
+  for user in $(printf '%s\n' "$list_value" | tr ',' '\n'); do
+    user="$(trim "$user")"
+    [[ -n "$user" ]] || continue
+    if [[ "$user" == *:* ]]; then
+      echo "ERROR: ${list_name} contains invalid username (colon not allowed): $user" >&2
+      exit 1
+    fi
+    if ! is_valid_unix_username "$user"; then
+      echo "ERROR: ${list_name} contains invalid UNIX username: $user" >&2
+      exit 1
+    fi
+    if ! csv_contains_value "${cfg[CREATE_USERS]}" "$user"; then
+      echo "ERROR: ${list_name} contains user not present in CREATE_USERS: $user" >&2
+      exit 1
+    fi
+  done
+}
+
+validate_user_csv_subset "SUDO_USERS" "${cfg[SUDO_USERS]}"
+validate_user_csv_subset "DOCKER_USERS" "${cfg[DOCKER_USERS]}"
+validate_user_csv_subset "COOLIFY_GROUP_USERS" "${cfg[COOLIFY_GROUP_USERS]}"
 
 env_dir="$(cd "$(dirname "$env_file")" && pwd)"
 template_file="${cfg[TEMPLATE_FILE]:-../templates/cloud-init.template.yml}"

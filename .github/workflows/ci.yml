@@ -20,6 +20,21 @@ jobs:
           bash scripts/generate-secrets.sh --help >/dev/null
           bash scripts/prepare-cloud-init.sh --help >/dev/null
 
+      - name: PowerShell syntax check
+        shell: pwsh
+        run: |
+          $parseErrors = @()
+          Get-ChildItem scripts/*.ps1 | ForEach-Object {
+            $null = [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors)
+            if ($errors -and $errors.Count -gt 0) {
+              $parseErrors += "$($_.Name): $($errors | ForEach-Object { $_.Message } | Select-Object -First 1)"
+            }
+          }
+          if ($parseErrors.Count -gt 0) {
+            $parseErrors | ForEach-Object { Write-Error $_ }
+            exit 1
+          }
+
       - name: Basic docs consistency
         run: |
           test -f docs/index.md

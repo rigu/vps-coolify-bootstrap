@@ -41,6 +41,23 @@ Then edit `env/bootstrap.env` and set:
 Default `BOOTSTRAP_REPO_URL`:
 `https://github.com/rigu/vps-coolify-bootstrap.git`
 
+Other configurable defaults:
+
+- `TIMEZONE=UTC`
+- `SSH_PORT=2278`
+- `PRIMARY_SUDO_USER=deploy`
+- `SECONDARY_SUDO_USER=coolify`
+
+See `env/bootstrap.env.example` for all options.
+
+Input validation enforced by scripts:
+
+- `COOLIFY_ROOT_USERNAME` must match `^[A-Za-z0-9._-]+$`
+- `COOLIFY_ROOT_USER_EMAIL` must be valid email format
+- `COOLIFY_ROOT_USER_PASSWORD` and `USER_PASSWORDS_ENCRYPTION_PASSWORD` must be at least 16 characters
+- `SSH_PORT` must be numeric in range `1-65535`
+- usernames in user lists must match `^[a-z_][a-z0-9_-]*[$]?$` and must not contain `:`
+
 ## 2) Generate cloud-init
 
 Linux/macOS:
