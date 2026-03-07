@@ -170,6 +170,30 @@ After first boot, use this checklist:
    Default port is `2222` unless you changed `SSH_PORT`.
    Use `PRIMARY_SUDO_USER` for operational work that needs `sudo`.
 
+   Host key change note (`REMOTE HOST IDENTIFICATION HAS CHANGED`):
+   this usually happens after VPS reprovision/reinstall (new SSH host keys).
+   Verify the new server fingerprint in provider console first:
+
+   ```bash
+   sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+   ```
+
+   If the fingerprint matches what SSH shows, remove the old local key entry and reconnect.
+
+   Windows PowerShell:
+
+   ```powershell
+   ssh-keygen -R "[<SERVER_IP>]:<SSH_PORT>"
+   ssh -p <SSH_PORT> <PRIMARY_SUDO_USER>@<SERVER_IP>
+   ```
+
+   Linux/macOS:
+
+   ```bash
+   ssh-keygen -R "[<SERVER_IP>]:<SSH_PORT>"
+   ssh -p <SSH_PORT> <PRIMARY_SUDO_USER>@<SERVER_IP>
+   ```
+
 3. IMPORTANT: On first login, set a local password for `PRIMARY_SUDO_USER`:
 
    ```bash

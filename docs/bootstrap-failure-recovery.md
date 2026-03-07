@@ -170,6 +170,9 @@ If login fails but provider console works, re-check:
 - `SSH_PORT` value in server env
 - firewall rule for that port (`ufw status`)
 - user presence in `/etc/passwd` and authorized key content
+- `REMOTE HOST IDENTIFICATION HAS CHANGED` warning (Windows/Linux/macOS):
+  verify host fingerprint in provider console (`sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`),
+  then run `ssh-keygen -R "[$SERVER_IP]:$SSH_PORT"` locally and reconnect
 
 ## 9) If replay still fails, capture focused diagnostics
 
