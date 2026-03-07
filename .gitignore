@@ -1,6 +1,4 @@
 # Generated local output
-cloud-init.generated.yml
-env/bootstrap.env
 bootstrap-artifacts/
 *.env
 !*.env.example

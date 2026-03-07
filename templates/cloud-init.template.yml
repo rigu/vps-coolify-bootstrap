@@ -131,6 +131,6 @@ runcmd:
 
 final_message: |
   Bootstrap complete.
-  Verify SSH access first: ssh -p SSH_PORT_HERE PRIMARY_SUDO_USER_HERE@SERVER_IP
+  Verify SSH access first: ssh -p SSH_PORT_HERE PRIMARY_SUDO_USER_HERE@<your-server-ip>
   Coolify URL: https://COOLIFY_PUBLIC_DOMAIN_HERE
   Then complete Coolify onboarding in browser.

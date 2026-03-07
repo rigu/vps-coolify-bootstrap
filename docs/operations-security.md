@@ -43,7 +43,7 @@ DOCKER_USERS=deploy,coolify,ops
 COOLIFY_GROUP_USERS=deploy,coolify,ops
 ```
 
-Re-render cloud-init or replay bootstrap to apply.
+Re-render VPS-Coolify init file or replay bootstrap to apply.
 Other required variables are omitted for brevity; keep required `CHANGE_ME`
 values (domain, credentials, encryption password, SSH key) fully configured.
 
@@ -260,6 +260,7 @@ For production:
 
 References:
 - <https://coolify.io/docs/knowledge-base/server/auto-update>
+- <https://coolify.io/docs/knowledge-base/server/upgrade>
 
 ## Monitoring minimum baseline
 

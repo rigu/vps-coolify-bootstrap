@@ -44,7 +44,7 @@ sudo grep -Rni "error\\|failed\\|traceback" /var/log/cloud-init* 2>/dev/null | t
 ```
 
 Typical root causes:
-- unresolved `CHANGE_ME` values in generated cloud-init
+- unresolved `CHANGE_ME` values in generated VPS-Coolify init file
 - invalid `SSH_PUBLIC_KEY` format
 - clone failure for `BOOTSTRAP_REPO_URL` / `BOOTSTRAP_REPO_REF`
 - transient apt/network failures during bootstrap
@@ -205,7 +205,7 @@ Copy-Item env/bootstrap.env.example bootstrap-artifacts/bootstrap.env
 pwsh -File scripts/generate-secrets.ps1 -EnvFile bootstrap-artifacts/bootstrap.env
 ```
 2. Fill all required values in `bootstrap-artifacts/bootstrap.env` (no `CHANGE_ME`).
-3. Regenerate cloud-init:
+3. Regenerate VPS-Coolify init:
 ```bash
 bash scripts/prepare-vps-coolify-init.sh --env-file bootstrap-artifacts/bootstrap.env --overwrite
 ```

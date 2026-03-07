@@ -46,6 +46,7 @@ jobs:
         run: |
           $parseErrors = @()
           Get-ChildItem scripts/*.ps1 | ForEach-Object {
+            $errors = $null
             $null = [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors)
             if ($errors -and $errors.Count -gt 0) {
               $parseErrors += "$($_.Name): $($errors | ForEach-Object { $_.Message } | Select-Object -First 1)"
