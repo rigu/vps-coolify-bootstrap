@@ -125,6 +125,7 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllLines($envPath, $newLines, $utf8NoBom)
 
 Write-Host "Updated: $envPath"
+Write-Host "WARNING: Env file contains secrets. On shared Windows systems, verify ACLs (for example with icacls)."
 if ($hasDetectedSshKey) {
     Write-Host "SSH public key auto-detected and applied when needed."
 } else {

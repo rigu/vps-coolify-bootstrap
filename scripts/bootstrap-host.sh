@@ -26,6 +26,16 @@ for v in SSH_PORT SSH_PUBLIC_KEY CREATE_USERS SUDO_USERS DOCKER_USERS COOLIFY_GR
   require_var "$v"
 done
 
+if [[ ! "$SSH_PORT" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: SSH_PORT must be numeric (1-65535)" >&2
+  exit 1
+fi
+ssh_port_num=$((10#$SSH_PORT))
+if (( ssh_port_num < 1 || ssh_port_num > 65535 )); then
+  echo "ERROR: SSH_PORT must be between 1 and 65535" >&2
+  exit 1
+fi
+
 if (( ${#COOLIFY_ROOT_USER_PASSWORD} < 16 )); then
   echo "ERROR: COOLIFY_ROOT_USER_PASSWORD must be at least 16 chars" >&2
   exit 1

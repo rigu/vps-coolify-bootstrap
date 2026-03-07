@@ -39,6 +39,9 @@ COOLIFY_GROUP_USERS=deploy,coolify,ops
 
 Re-render cloud-init or replay bootstrap to apply.
 
+Important: extra users beyond the first two can SSH only after `bootstrap-host.sh`
+completes successfully and re-syncs `AllowUsers` from `CREATE_USERS`.
+
 ## Post-onboarding security (required)
 
 Docker-published ports can bypass UFW because Docker writes iptables rules directly.

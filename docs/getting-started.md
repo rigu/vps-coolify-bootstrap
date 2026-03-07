@@ -22,6 +22,9 @@ Copy-Item env/bootstrap.env.example env/bootstrap.env
 pwsh -File scripts/generate-secrets.ps1 -EnvFile env/bootstrap.env
 ```
 
+On shared Windows systems, verify ACLs for generated secret files
+(`env/bootstrap.env`, `cloud-init.generated.yml`) after running PowerShell scripts.
+
 Generate-secrets scripts auto-detect the current user SSH public key and fill `SSH_PUBLIC_KEY` when it is empty or still `CHANGE_ME`.
 
 Then edit `env/bootstrap.env` and set:

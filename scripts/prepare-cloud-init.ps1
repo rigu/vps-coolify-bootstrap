@@ -40,6 +40,20 @@ foreach ($k in @(
     }
 }
 
+$sshPort = [string]$cfg["SSH_PORT"]
+if ($sshPort -notmatch '^\d+$') { throw "SSH_PORT must be numeric (1-65535)." }
+$sshPortNum = [int]$sshPort
+if ($sshPortNum -lt 1 -or $sshPortNum -gt 65535) { throw "SSH_PORT must be between 1 and 65535." }
+
+$coolifyPublicDomain = [string]$cfg["COOLIFY_PUBLIC_DOMAIN"]
+if ($coolifyPublicDomain -match '[\s/]') { throw "COOLIFY_PUBLIC_DOMAIN must be a hostname without spaces or /." }
+
+$createUsers = ([string]$cfg["CREATE_USERS"]).Split(",") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+$primarySudoUser = [string]$cfg["PRIMARY_SUDO_USER"]
+$secondarySudoUser = [string]$cfg["SECONDARY_SUDO_USER"]
+if (-not ($createUsers -contains $primarySudoUser)) { throw "PRIMARY_SUDO_USER must be present in CREATE_USERS." }
+if (-not ($createUsers -contains $secondarySudoUser)) { throw "SECONDARY_SUDO_USER must be present in CREATE_USERS." }
+
 $templatePath = if ($cfg.ContainsKey("TEMPLATE_FILE") -and $cfg["TEMPLATE_FILE"]) { $cfg["TEMPLATE_FILE"] } else { "../templates/cloud-init.template.yml" }
 $outputPath = if ($cfg.ContainsKey("OUTPUT_FILE") -and $cfg["OUTPUT_FILE"]) { $cfg["OUTPUT_FILE"] } else { "../cloud-init.generated.yml" }
 if (-not [System.IO.Path]::IsPathRooted($templatePath)) { $templatePath = Join-Path (Split-Path -Parent $envPath) $templatePath }
@@ -132,3 +146,4 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $size = (Get-Item -LiteralPath $outputPath).Length
 if ($size -gt 32768) { throw "Generated cloud-init is ${size} bytes (>32768 Hetzner limit)." }
 Write-Host "Generated: $outputPath"
+Write-Host "WARNING: Generated cloud-init contains secrets. On shared Windows systems, verify ACLs (for example with icacls)."

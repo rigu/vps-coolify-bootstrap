@@ -92,9 +92,46 @@ require_key() {
   fi
 }
 
+csv_contains_value() {
+  local csv="$1"
+  local needle="$2"
+  local item=""
+  IFS=',' read -r -a _items <<< "$csv"
+  for item in "${_items[@]}"; do
+    item="$(trim "$item")"
+    [[ "$item" == "$needle" ]] && return 0
+  done
+  return 1
+}
+
 for k in TIMEZONE SSH_PORT PRIMARY_SUDO_USER SECONDARY_SUDO_USER CREATE_USERS SUDO_USERS DOCKER_USERS COOLIFY_GROUP_USERS COOLIFY_PUBLIC_DOMAIN COOLIFY_ROOT_USERNAME COOLIFY_ROOT_USER_EMAIL COOLIFY_ROOT_USER_PASSWORD USER_PASSWORDS_ENCRYPTION_PASSWORD BOOTSTRAP_REPO_URL BOOTSTRAP_REPO_REF; do
   require_key "$k"
 done
+
+ssh_port="${cfg[SSH_PORT]}"
+if [[ ! "$ssh_port" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: SSH_PORT must be numeric (1-65535)." >&2
+  exit 1
+fi
+ssh_port_num=$((10#$ssh_port))
+if (( ssh_port_num < 1 || ssh_port_num > 65535 )); then
+  echo "ERROR: SSH_PORT must be between 1 and 65535." >&2
+  exit 1
+fi
+
+if [[ "${cfg[COOLIFY_PUBLIC_DOMAIN]}" =~ [[:space:]/] ]]; then
+  echo "ERROR: COOLIFY_PUBLIC_DOMAIN must be a hostname without spaces or /." >&2
+  exit 1
+fi
+
+if ! csv_contains_value "${cfg[CREATE_USERS]}" "${cfg[PRIMARY_SUDO_USER]}"; then
+  echo "ERROR: PRIMARY_SUDO_USER must be present in CREATE_USERS." >&2
+  exit 1
+fi
+if ! csv_contains_value "${cfg[CREATE_USERS]}" "${cfg[SECONDARY_SUDO_USER]}"; then
+  echo "ERROR: SECONDARY_SUDO_USER must be present in CREATE_USERS." >&2
+  exit 1
+fi
 
 env_dir="$(cd "$(dirname "$env_file")" && pwd)"
 template_file="${cfg[TEMPLATE_FILE]:-../templates/cloud-init.template.yml}"

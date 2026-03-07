@@ -52,8 +52,13 @@ if [ ! -f "$env_file" ]; then
   exit 1
 fi
 
+if ! command -v openssl >/dev/null 2>&1; then
+  echo "ERROR: openssl is required for secret generation." >&2
+  exit 1
+fi
+
 pw_gen() {
-  od -An -N12 -tx1 /dev/urandom | tr -d ' \n'
+  openssl rand -hex 12
 }
 
 is_valid_ssh_pub_key() {
@@ -128,6 +133,7 @@ else
 fi
 
 tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
 saw_coolify_password=0
 saw_encryption_password=0
 saw_ssh_public_key=0
