@@ -28,6 +28,15 @@ If `pwsh` is not installed:
 powershell -ExecutionPolicy Bypass -File .\scripts\generate-secrets.ps1 -EnvFile env/bootstrap.env
 ```
 
+Install PowerShell 7 (`pwsh`) on Windows (optional but recommended):
+
+```powershell
+winget install --id Microsoft.PowerShell --source winget
+```
+
+If `winget` is unavailable, install from:
+<https://github.com/PowerShell/PowerShell/releases/latest>
+
 On shared Windows systems, verify ACLs for generated secret files
 (`env/bootstrap.env`, `cloud-init.generated.yml`) after running PowerShell scripts.
 

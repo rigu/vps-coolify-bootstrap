@@ -191,6 +191,12 @@ pwsh -File scripts/generate-secrets.ps1 -EnvFile env/bootstrap.env
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\generate-secrets.ps1 -EnvFile env/bootstrap.env
 ```
+   Optional: install PowerShell 7 (`pwsh`) with:
+```powershell
+winget install --id Microsoft.PowerShell --source winget
+```
+   If `winget` is unavailable, use:
+   <https://github.com/PowerShell/PowerShell/releases/latest>
 2. Fill all required values in `env/bootstrap.env` (no `CHANGE_ME`).
 3. Regenerate cloud-init:
 ```bash

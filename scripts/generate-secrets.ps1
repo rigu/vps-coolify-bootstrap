@@ -41,9 +41,9 @@ function Get-DetectedSshPublicKey {
     if ($env:USERPROFILE -and $env:USERPROFILE -ne $HOME) { $homes += $env:USERPROFILE }
     $homes = $homes | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
 
-    foreach ($home in $homes) {
+    foreach ($homeDir in $homes) {
         foreach ($name in @("id_ed25519.pub", "id_ecdsa.pub", "id_rsa.pub")) {
-            $path = Join-Path $home ".ssh/$name"
+            $path = Join-Path $homeDir ".ssh/$name"
             if (Test-Path -LiteralPath $path -PathType Leaf) {
                 $key = (Get-Content -LiteralPath $path -TotalCount 1).Trim()
                 if (Test-ValidSshPublicKey -Key $key) { return $key }
@@ -51,8 +51,8 @@ function Get-DetectedSshPublicKey {
         }
     }
 
-    foreach ($home in $homes) {
-        $sshDir = Join-Path $home ".ssh"
+    foreach ($homeDir in $homes) {
+        $sshDir = Join-Path $homeDir ".ssh"
         if (-not (Test-Path -LiteralPath $sshDir -PathType Container)) { continue }
         foreach ($file in Get-ChildItem -LiteralPath $sshDir -Filter "*.pub" -File -ErrorAction SilentlyContinue) {
             $key = (Get-Content -LiteralPath $file.FullName -TotalCount 1).Trim()
