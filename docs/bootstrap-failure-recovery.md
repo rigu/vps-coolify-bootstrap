@@ -182,19 +182,27 @@ Use this only if server state is inconsistent or unrecoverable.
 cp env/bootstrap.env.example env/bootstrap.env
 bash scripts/generate-secrets.sh --env-file env/bootstrap.env
 ```
-   Windows PowerShell alternative:
+   Windows PowerShell alternative (`pwsh` preferred, `powershell` fallback):
 ```powershell
 Copy-Item env/bootstrap.env.example env/bootstrap.env
 pwsh -File scripts/generate-secrets.ps1 -EnvFile env/bootstrap.env
+```
+   If `pwsh` is not installed:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\generate-secrets.ps1 -EnvFile env/bootstrap.env
 ```
 2. Fill all required values in `env/bootstrap.env` (no `CHANGE_ME`).
 3. Regenerate cloud-init:
 ```bash
 bash scripts/prepare-cloud-init.sh --env-file env/bootstrap.env --overwrite
 ```
-   Windows PowerShell alternative:
+   Windows PowerShell alternative (`pwsh` preferred, `powershell` fallback):
 ```powershell
 pwsh -File scripts/prepare-cloud-init.ps1 -EnvFile env/bootstrap.env -Overwrite
+```
+   If `pwsh` is not installed:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\prepare-cloud-init.ps1 -EnvFile env/bootstrap.env -Overwrite
 ```
 4. Verify generated file is placeholder-free:
 ```bash

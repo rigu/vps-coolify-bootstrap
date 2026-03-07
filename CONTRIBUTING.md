@@ -35,6 +35,8 @@ Get-ChildItem scripts/*.ps1 | ForEach-Object {
 if ($parseErrors) { $parseErrors | ForEach-Object { Write-Error $_.Message }; exit 1 }
 ```
 
+Run the same block in `pwsh` (PowerShell 7) or `powershell` (Windows PowerShell 5.x).
+
 4. Update docs when behavior changes.
 5. Open PR with:
    - context/problem

@@ -15,11 +15,17 @@ cp env/bootstrap.env.example env/bootstrap.env
 bash scripts/generate-secrets.sh --env-file env/bootstrap.env
 ```
 
-Windows PowerShell:
+Windows PowerShell (`pwsh` preferred, `powershell` fallback):
 
 ```powershell
 Copy-Item env/bootstrap.env.example env/bootstrap.env
 pwsh -File scripts/generate-secrets.ps1 -EnvFile env/bootstrap.env
+```
+
+If `pwsh` is not installed:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\generate-secrets.ps1 -EnvFile env/bootstrap.env
 ```
 
 On shared Windows systems, verify ACLs for generated secret files
@@ -66,10 +72,16 @@ Linux/macOS:
 bash scripts/prepare-cloud-init.sh --env-file env/bootstrap.env --overwrite
 ```
 
-PowerShell:
+PowerShell (`pwsh` preferred, `powershell` fallback):
 
 ```powershell
 pwsh -File scripts/prepare-cloud-init.ps1 -EnvFile env/bootstrap.env -Overwrite
+```
+
+If `pwsh` is not installed:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\prepare-cloud-init.ps1 -EnvFile env/bootstrap.env -Overwrite
 ```
 
 Generated output defaults to `cloud-init.generated.yml`.
