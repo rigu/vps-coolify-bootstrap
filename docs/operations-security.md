@@ -73,11 +73,16 @@ the vault. This is by design: `PRIMARY_SUDO_USER` is the operational
 recovery account.
 
 To retrieve passwords for other users, log in as `PRIMARY_SUDO_USER` and
-decrypt:
+run this recommended sequence (reads the exact password from server
+`bootstrap.env` and preserves it through `sudo`):
 
 ```bash
-export USER_PASSWORDS_ENCRYPTION_PASSWORD="<value-from-bootstrap.env>"
-sudo openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+export USER_PASSWORDS_ENCRYPTION_PASSWORD="$(
+  sudo sed -n "s/^USER_PASSWORDS_ENCRYPTION_PASSWORD=//p" /etc/vps-coolify-bootstrap/bootstrap.env | tr -d "'\r"
+)"
+
+sudo env USER_PASSWORDS_ENCRYPTION_PASSWORD="$USER_PASSWORDS_ENCRYPTION_PASSWORD" \
+  openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
   -in /etc/vps-coolify-bootstrap/user-passwords.enc \
   -pass env:USER_PASSWORDS_ENCRYPTION_PASSWORD
 ```

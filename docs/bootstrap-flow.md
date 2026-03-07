@@ -60,11 +60,15 @@ User account passwords are not pre-generated locally during env preparation.
 - Coolify URL printed by bootstrap: `https://<COOLIFY_PUBLIC_DOMAIN>`
 - Encrypted credential vault: `/etc/vps-coolify-bootstrap/user-passwords.enc`
 
-To decrypt on the server (must be run as `PRIMARY_SUDO_USER`, who has passwordless sudo):
+To decrypt on the server (must be run as `PRIMARY_SUDO_USER`, who has passwordless sudo), use the recommended sequence below:
 
 ```bash
-export USER_PASSWORDS_ENCRYPTION_PASSWORD="<value-from-bootstrap.env>"
-sudo openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+export USER_PASSWORDS_ENCRYPTION_PASSWORD="$(
+  sudo sed -n "s/^USER_PASSWORDS_ENCRYPTION_PASSWORD=//p" /etc/vps-coolify-bootstrap/bootstrap.env | tr -d "'\r"
+)"
+
+sudo env USER_PASSWORDS_ENCRYPTION_PASSWORD="$USER_PASSWORDS_ENCRYPTION_PASSWORD" \
+  openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
   -in /etc/vps-coolify-bootstrap/user-passwords.enc \
   -pass env:USER_PASSWORDS_ENCRYPTION_PASSWORD
 ```

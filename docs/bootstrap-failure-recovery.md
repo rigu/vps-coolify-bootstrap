@@ -232,8 +232,12 @@ provider console. Other sudo users cannot decrypt because they need their
 password for `sudo`, and their password is inside this vault.
 
 ```bash
-export USER_PASSWORDS_ENCRYPTION_PASSWORD="<value-from-bootstrap.env>"
-sudo openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+export USER_PASSWORDS_ENCRYPTION_PASSWORD="$(
+  sudo sed -n "s/^USER_PASSWORDS_ENCRYPTION_PASSWORD=//p" /etc/vps-coolify-bootstrap/bootstrap.env | tr -d "'\r"
+)"
+
+sudo env USER_PASSWORDS_ENCRYPTION_PASSWORD="$USER_PASSWORDS_ENCRYPTION_PASSWORD" \
+  openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
   -in /etc/vps-coolify-bootstrap/user-passwords.enc \
   -pass env:USER_PASSWORDS_ENCRYPTION_PASSWORD
 ```
