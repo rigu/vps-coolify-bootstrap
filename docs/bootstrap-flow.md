@@ -45,8 +45,9 @@ flowchart TD
   N --> O[Apply UFW rules and enable fail2ban + unattended-upgrades]
   O --> P[Install Coolify if missing]
   P --> Q[Apply sudo/docker/coolify groups + sudo policy]
-  Q --> R[SSH login on hardened port]
-  R --> S[Finish Coolify onboarding]
+  Q --> R[Apply DOCKER-USER guards for 6001/6002 unless explicitly allowed]
+  R --> S[SSH login on hardened port]
+  S --> T[Finish Coolify onboarding]
 ```
 
 ## Runtime outputs

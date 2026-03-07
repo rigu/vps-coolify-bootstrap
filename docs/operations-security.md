@@ -83,6 +83,19 @@ sudo docker ps --format 'table {{.Names}}\t{{.Ports}}'
 
 Pay special attention to Coolify internal ports `6001` and `6002`; they should not be public unless explicitly required.
 
+Bootstrap default behavior:
+
+- if `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS=0` (default), bootstrap adds
+  `DOCKER-USER` guard rules to block public ingress to `6001/6002`
+- if `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS=1`, bootstrap skips those guards
+
+Check effective rules:
+
+```bash
+sudo iptables -S DOCKER-USER
+sudo ip6tables -S DOCKER-USER 2>/dev/null || true
+```
+
 Mitigation options:
 
 - explicit `DOCKER-USER` chain rules

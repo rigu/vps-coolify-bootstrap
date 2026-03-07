@@ -109,6 +109,8 @@ if ([string]$cfg["COOLIFY_ROOT_USER_PASSWORD"].Length -lt 16) { throw "COOLIFY_R
 if ([string]$cfg["USER_PASSWORDS_ENCRYPTION_PASSWORD"].Length -lt 16) { throw "USER_PASSWORDS_ENCRYPTION_PASSWORD must be at least 16 characters." }
 $sshKeyRotate = if ($cfg.ContainsKey("SSH_KEY_ROTATE") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SSH_KEY_ROTATE"])) { [string]$cfg["SSH_KEY_ROTATE"] } else { "0" }
 if ($sshKeyRotate -ne "0" -and $sshKeyRotate -ne "1") { throw "SSH_KEY_ROTATE must be 0 or 1." }
+$allowPublicCoolifyRealtimePorts = if ($cfg.ContainsKey("ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS"])) { [string]$cfg["ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS"] } else { "0" }
+if ($allowPublicCoolifyRealtimePorts -ne "0" -and $allowPublicCoolifyRealtimePorts -ne "1") { throw "ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS must be 0 or 1." }
 
 foreach ($v in @(
     [string]$cfg["COOLIFY_ROOT_USERNAME"],
@@ -154,6 +156,7 @@ $map = [ordered]@{
     "SUDO_USERS_HERE" = [string]$cfg["SUDO_USERS"]
     "DOCKER_USERS_HERE" = [string]$cfg["DOCKER_USERS"]
     "COOLIFY_GROUP_USERS_HERE" = [string]$cfg["COOLIFY_GROUP_USERS"]
+    "ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS_HERE" = [string]$allowPublicCoolifyRealtimePorts
     "COOLIFY_PUBLIC_DOMAIN_HERE" = [string]$cfg["COOLIFY_PUBLIC_DOMAIN"]
     "COOLIFY_ROOT_USERNAME_HERE" = [string]$cfg["COOLIFY_ROOT_USERNAME"]
     "COOLIFY_ROOT_USER_EMAIL_HERE" = [string]$cfg["COOLIFY_ROOT_USER_EMAIL"]

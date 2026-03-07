@@ -139,6 +139,12 @@ if [[ "$SSH_KEY_ROTATE" != "0" && "$SSH_KEY_ROTATE" != "1" ]]; then
   exit 1
 fi
 
+ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS="${ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS:-0}"
+if [[ "$ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS" != "0" && "$ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS" != "1" ]]; then
+  echo "ERROR: ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS must be 0 or 1" >&2
+  exit 1
+fi
+
 ensure_user_exists() {
   local user="$1"
   if ! id "$user" >/dev/null 2>&1; then
@@ -189,6 +195,89 @@ sync_sshd_allowusers() {
     return 1
   fi
   rm -f "$tmp_cfg"
+}
+
+cleanup_stale_sshd_port22_listeners() {
+  local service_main_pid=""
+  local pid=""
+  local comm=""
+  local cgroup_info=""
+  local -a listener_pids=()
+
+  if [[ "$SSH_PORT" == "22" ]]; then
+    return 0
+  fi
+
+  if ! command -v ss >/dev/null 2>&1; then
+    return 0
+  fi
+
+  service_main_pid="$(systemctl show -p MainPID --value ssh.service 2>/dev/null || true)"
+  mapfile -t listener_pids < <(ss -lntp '( sport = :22 )' 2>/dev/null | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u)
+
+  for pid in "${listener_pids[@]}"; do
+    [[ -n "$pid" && -d "/proc/$pid" ]] || continue
+    comm="$(cat "/proc/$pid/comm" 2>/dev/null || true)"
+    [[ "$comm" == "sshd" ]] || continue
+
+    if [[ "$service_main_pid" =~ ^[0-9]+$ ]] && [[ "$pid" == "$service_main_pid" ]]; then
+      continue
+    fi
+
+    cgroup_info="$(tr '\n' ' ' < "/proc/$pid/cgroup" 2>/dev/null || true)"
+    if [[ "$cgroup_info" == *"ssh.service"* ]]; then
+      continue
+    fi
+
+    echo "WARNING: terminating stale sshd listener on port 22 (pid=$pid)."
+    kill "$pid" 2>/dev/null || true
+  done
+
+  sleep 1
+  if ss -lnt '( sport = :22 )' 2>/dev/null | grep -q ':22'; then
+    echo "WARNING: port 22 is still listening after stale-listener cleanup."
+    echo "WARNING: inspect ssh.socket and SSH config fragments for extra listeners."
+  fi
+}
+
+add_docker_user_rule_if_missing() {
+  local table_bin="$1"
+  shift
+  if ! "$table_bin" -C DOCKER-USER "$@" >/dev/null 2>&1; then
+    "$table_bin" -I DOCKER-USER 1 "$@"
+  fi
+}
+
+apply_coolify_realtime_port_guards() {
+  if [[ "$ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS" == "1" ]]; then
+    echo "INFO: ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS=1, skipping DOCKER-USER guards for 6001/6002."
+    return 0
+  fi
+
+  if ! command -v iptables >/dev/null 2>&1; then
+    echo "WARNING: iptables is not available; cannot enforce DOCKER-USER guards for 6001/6002."
+    return 0
+  fi
+
+  if ! iptables -nL DOCKER-USER >/dev/null 2>&1; then
+    echo "WARNING: DOCKER-USER chain is unavailable; cannot enforce guards for 6001/6002."
+    return 0
+  fi
+
+  # Drop public forwarded traffic to Coolify realtime ports by default.
+  add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -j DROP
+  add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -s 127.0.0.1/32 -j RETURN
+  add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -s 10.0.0.0/8 -j RETURN
+  add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -s 172.16.0.0/12 -j RETURN
+  add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -s 192.168.0.0/16 -j RETURN
+  add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -s 100.64.0.0/10 -j RETURN
+
+  if command -v ip6tables >/dev/null 2>&1 && ip6tables -nL DOCKER-USER >/dev/null 2>&1; then
+    add_docker_user_rule_if_missing ip6tables -p tcp -m multiport --dports 6001,6002 -j DROP
+    add_docker_user_rule_if_missing ip6tables -p tcp -m multiport --dports 6001,6002 -s ::1/128 -j RETURN
+    add_docker_user_rule_if_missing ip6tables -p tcp -m multiport --dports 6001,6002 -s fc00::/7 -j RETURN
+    add_docker_user_rule_if_missing ip6tables -p tcp -m multiport --dports 6001,6002 -s fe80::/10 -j RETURN
+  fi
 }
 
 apply_sudo_policy() {
@@ -253,6 +342,7 @@ systemctl daemon-reload
 sshd -t
 systemctl enable --now ssh.service
 systemctl restart ssh.service
+cleanup_stale_sshd_port22_listeners
 
 # Firewall hardening.
 # This intentionally resets UFW to the bootstrap baseline.
@@ -314,10 +404,17 @@ if getent group docker >/dev/null 2>&1; then
   done
 fi
 
+apply_coolify_realtime_port_guards
+
 # Docker published ports bypass UFW because Docker writes iptables rules directly.
 if command -v ss >/dev/null 2>&1 && ss -tuln | awk '{print $4}' | grep -Eq '[:.]6001$|[:.]6002$'; then
   echo "WARNING: port 6001 and/or 6002 is listening on host."
-  echo "WARNING: verify Docker/Coolify exposure and restrict unintended public access."
+  if [[ "$ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS" == "1" ]]; then
+    echo "WARNING: realtime ports are intentionally public by configuration."
+  else
+    echo "WARNING: DOCKER-USER guards were applied to block public ingress to 6001/6002."
+    echo "WARNING: verify effective policy with: sudo iptables -S DOCKER-USER"
+  fi
 fi
 
 echo "Coolify public URL: https://${COOLIFY_PUBLIC_DOMAIN}"
