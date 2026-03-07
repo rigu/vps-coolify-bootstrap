@@ -101,11 +101,42 @@ Use `cloud-init.generated.yml` as user-data in your VPS provider.
 
 At first boot, cloud-init clones `BOOTSTRAP_REPO_URL` at `BOOTSTRAP_REPO_REF` and runs `scripts/bootstrap-host.sh`.
 
-After first boot:
+After first boot, use this checklist:
 
-- connect using the configured SSH port (default `2222`)
-- open `https://<COOLIFY_PUBLIC_DOMAIN>` and finish Coolify onboarding
-- deploy app stacks from private/project repositories
+1. Wait for cloud-init/bootstrap to finish on the server (provider console):
+
+   ```bash
+   sudo cloud-init status --wait
+   sudo tail -n 200 /var/log/cloud-init-output.log
+   ```
+
+2. Connect by SSH from your machine using configured values from `env/bootstrap.env`:
+
+   ```bash
+   ssh -p <SSH_PORT> <PRIMARY_SUDO_USER>@<SERVER_IP>
+   ```
+
+   Default port is `2222` unless you changed `SSH_PORT`.
+
+3. Validate host baseline after login:
+
+   ```bash
+   whoami
+   id
+   sudo ufw status verbose
+   sudo systemctl status ssh --no-pager
+   sudo docker ps
+   ```
+
+4. Open Coolify and complete onboarding:
+
+   Use `https://<COOLIFY_PUBLIC_DOMAIN>`.
+   Log in with `COOLIFY_ROOT_USERNAME` / `COOLIFY_ROOT_USER_EMAIL` and `COOLIFY_ROOT_USER_PASSWORD` from your env file.
+
+5. Deploy workloads from private/project repositories:
+
+   In Coolify, create/select a Project, connect your Git provider, pick repository + branch, configure runtime env vars, then deploy.
+   Verify deployment health, logs, and exposed domains before sending production traffic.
 
 ## 4) Replay bootstrap policy (idempotent)
 
