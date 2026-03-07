@@ -59,7 +59,7 @@ Default `BOOTSTRAP_REPO_URL`:
 Other configurable defaults:
 
 - `TIMEZONE=UTC`
-- `SSH_PORT=2278`
+- `SSH_PORT=2222`
 - `PRIMARY_SUDO_USER=deploy`
 - `SECONDARY_SUDO_USER=coolify`
 
@@ -103,7 +103,7 @@ At first boot, cloud-init clones `BOOTSTRAP_REPO_URL` at `BOOTSTRAP_REPO_REF` an
 
 After first boot:
 
-- connect using the configured SSH port (default `2278`)
+- connect using the configured SSH port (default `2222`)
 - open `https://<COOLIFY_PUBLIC_DOMAIN>` and finish Coolify onboarding
 - deploy app stacks from private/project repositories
 
