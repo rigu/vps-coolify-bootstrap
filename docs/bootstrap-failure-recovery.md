@@ -1,3 +1,9 @@
+---
+layout: page
+title: Bootstrap Failure Recovery
+description: Step-by-step runbook to recover failed first-boot cloud-init/bootstrap execution.
+---
+
 # Bootstrap Failure Recovery
 
 Use this runbook when first-boot cloud-init did not finish successfully.
@@ -207,3 +213,5 @@ sudo openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
   -in /etc/vps-coolify-bootstrap/user-passwords.enc \
   -pass env:USER_PASSWORDS_ENCRYPTION_PASSWORD
 ```
+
+Back to [Docs Home](index.md)

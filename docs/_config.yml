@@ -1,0 +1,16 @@
+title: VPS Coolify Bootstrap
+description: Production-ready VPS bootstrap for Coolify on Ubuntu 24.04 with cloud-init, security hardening, and recovery runbooks.
+url: https://rigu.github.io
+baseurl: /vps-coolify-bootstrap
+theme: minima
+markdown: kramdown
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
+header_pages:
+  - index.md
+  - getting-started.md
+  - bootstrap-flow.md
+  - operations-security.md
+  - bootstrap-failure-recovery.md
+  - github-promotion.md

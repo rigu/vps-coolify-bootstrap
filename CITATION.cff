@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+title: "VPS Coolify Bootstrap"
+message: "If you use this project, please cite it using this metadata."
+type: software
+authors:
+  - family-names: "Rigu"
+repository-code: "https://github.com/rigu/vps-coolify-bootstrap"
+url: "https://github.com/rigu/vps-coolify-bootstrap"
+license: "MIT"
+abstract: "Production-ready VPS bootstrap for Coolify on Ubuntu 24.04 using cloud-init, host hardening, and recovery runbooks."
+keywords:
+  - coolify
+  - cloud-init
+  - ubuntu
+  - vps
+  - devops

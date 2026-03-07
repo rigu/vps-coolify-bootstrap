@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-label="Bootstrap overview diagram">
+  <defs>
+    <style>
+      .bg { fill: #0b1320; }
+      .card { fill: #13223a; stroke: #3c6ea8; stroke-width: 2; rx: 14; }
+      .title { fill: #f2f6ff; font: 700 22px sans-serif; }
+      .text { fill: #dbe8ff; font: 500 16px sans-serif; }
+      .arrow { stroke: #87b3ff; stroke-width: 3; fill: none; marker-end: url(#m); }
+      .muted { fill: #9bb8e8; font: 500 14px sans-serif; }
+    </style>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#87b3ff"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1200" height="420"/>
+  <text x="40" y="52" class="title">VPS Coolify Bootstrap Flow</text>
+  <text x="40" y="82" class="muted">Ubuntu 24.04 • cloud-init • hardened SSH/UFW/fail2ban • encrypted password vault</text>
+
+  <rect class="card" x="40" y="130" width="250" height="170"/>
+  <text x="62" y="168" class="text">1. Prepare env</text>
+  <text x="62" y="198" class="muted">generate-secrets</text>
+  <text x="62" y="222" class="muted">SSH key auto-detect</text>
+  <text x="62" y="246" class="muted">set domain + users</text>
+
+  <rect class="card" x="340" y="130" width="250" height="170"/>
+  <text x="362" y="168" class="text">2. Render cloud-init</text>
+  <text x="362" y="198" class="muted">prepare-cloud-init</text>
+  <text x="362" y="222" class="muted">template + env</text>
+  <text x="362" y="246" class="muted">generated user-data</text>
+
+  <rect class="card" x="640" y="130" width="250" height="170"/>
+  <text x="662" y="168" class="text">3. First boot</text>
+  <text x="662" y="198" class="muted">clone bootstrap repo</text>
+  <text x="662" y="222" class="muted">run bootstrap-host.sh</text>
+  <text x="662" y="246" class="muted">install Coolify</text>
+
+  <rect class="card" x="940" y="130" width="220" height="170"/>
+  <text x="962" y="168" class="text">4. Operate safely</text>
+  <text x="962" y="198" class="muted">verify exposed ports</text>
+  <text x="962" y="222" class="muted">monitor + backups</text>
+  <text x="962" y="246" class="muted">replay idempotent</text>
+
+  <path class="arrow" d="M 290 215 L 330 215"/>
+  <path class="arrow" d="M 590 215 L 630 215"/>
+  <path class="arrow" d="M 890 215 L 930 215"/>
+</svg>
