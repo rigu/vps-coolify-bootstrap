@@ -47,6 +47,28 @@ values (domain, credentials, encryption password, SSH key) fully configured.
 Important: extra users beyond the first two can SSH only after `bootstrap-host.sh`
 completes successfully and re-syncs `AllowUsers` from `CREATE_USERS`.
 
+### Password vault access
+
+Generated user passwords are stored encrypted at
+`/etc/vps-coolify-bootstrap/user-passwords.enc`. Decrypting requires `sudo`.
+
+Only `PRIMARY_SUDO_USER` has passwordless sudo (`NOPASSWD:ALL`). All other
+sudo users need their password to run `sudo` — but their password is inside
+the vault. This is by design: `PRIMARY_SUDO_USER` is the operational
+recovery account.
+
+To retrieve passwords for other users, log in as `PRIMARY_SUDO_USER` and
+decrypt:
+
+```bash
+export USER_PASSWORDS_ENCRYPTION_PASSWORD="<value-from-bootstrap.env>"
+sudo openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+  -in /etc/vps-coolify-bootstrap/user-passwords.enc \
+  -pass env:USER_PASSWORDS_ENCRYPTION_PASSWORD
+```
+
+Alternative: use the provider web console as root.
+
 ## Post-onboarding security (required)
 
 Docker-published ports can bypass UFW because Docker writes iptables rules directly.

@@ -50,14 +50,6 @@ write_files:
       net.ipv6.conf.all.accept_source_route=0
       net.ipv6.conf.default.accept_source_route=0
 
-  - path: /etc/systemd/system/ssh.socket.d/override.conf
-    permissions: "0644"
-    content: |
-      [Socket]
-      ListenStream=
-      ListenStream=SSH_PORT_HERE
-      FreeBind=yes
-
   - path: /etc/ssh/sshd_config.d/10-bootstrap-hardening.conf
     permissions: "0644"
     content: |

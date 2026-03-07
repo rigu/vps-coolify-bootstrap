@@ -11,8 +11,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$script_dir/common.sh"
 
-# shellcheck disable=SC1090
-source "$ENV_FILE"
+load_env_file_strict "$ENV_FILE"
 
 require_var() {
   local name="$1"
@@ -110,6 +109,16 @@ PRIMARY_SUDO_USER="${PRIMARY_SUDO_USER:-deploy}"
 
 if [[ -z "$PRIMARY_SUDO_USER" ]]; then
   echo "ERROR: PRIMARY_SUDO_USER resolved to empty value" >&2
+  exit 1
+fi
+
+if ! is_valid_unix_username "$PRIMARY_SUDO_USER"; then
+  echo "ERROR: PRIMARY_SUDO_USER is not a valid UNIX username: $PRIMARY_SUDO_USER" >&2
+  exit 1
+fi
+
+if [[ -n "$SECONDARY_SUDO_USER" ]] && ! is_valid_unix_username "$SECONDARY_SUDO_USER"; then
+  echo "ERROR: SECONDARY_SUDO_USER is not a valid UNIX username: $SECONDARY_SUDO_USER" >&2
   exit 1
 fi
 
@@ -229,9 +238,21 @@ d /run/sshd 0755 root root -
 TMP
 systemd-tmpfiles --create /etc/tmpfiles.d/sshd.conf
 
+# Ubuntu 24.04 defaults to ssh.socket (systemd socket activation).
+# Socket activation + sshd_config Port directive can conflict, causing sshd
+# to not listen on the custom port. Disable socket activation and use the
+# classic ssh.service for reliable custom-port operation.
+systemctl daemon-reload
+systemctl disable --now ssh.socket 2>/dev/null || true
+rm -f /etc/systemd/system/ssh.socket.d/override.conf
+if [[ -d /etc/systemd/system/ssh.socket.d ]] && \
+   [[ -z "$(ls -A /etc/systemd/system/ssh.socket.d 2>/dev/null)" ]]; then
+  rmdir /etc/systemd/system/ssh.socket.d 2>/dev/null || true
+fi
+systemctl daemon-reload
 sshd -t
-systemctl restart ssh.socket
-systemctl restart ssh
+systemctl enable --now ssh.service
+systemctl restart ssh.service
 
 # Firewall hardening.
 # This intentionally resets UFW to the bootstrap baseline.

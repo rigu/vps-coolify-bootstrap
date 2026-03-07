@@ -12,8 +12,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck python3-yaml
+
       - name: Bash syntax check
         run: bash -n scripts/*.sh
+
+      - name: ShellCheck
+        run: shellcheck scripts/*.sh
+
+      - name: YAML parse checks
+        run: |
+          python3 - <<'PY'
+          import yaml
+          from pathlib import Path
+
+          for rel in ("templates/cloud-init.template.yml", "docs/_config.yml"):
+              path = Path(rel)
+              with path.open("r", encoding="utf-8") as f:
+                  yaml.safe_load(f)
+          print("YAML parse checks passed")
+          PY
 
       - name: Script help checks
         run: |

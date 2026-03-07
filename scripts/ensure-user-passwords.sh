@@ -12,8 +12,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$script_dir/common.sh"
 
-# shellcheck disable=SC1090
-source "$ENV_FILE"
+load_env_file_strict "$ENV_FILE"
 
 require_var() {
   local name="$1"

@@ -12,7 +12,7 @@ The sequence is explicit and safe to execute end-to-end.
 ## 0) Preparation (do not skip)
 
 1. Keep provider web console access open (rescue path if SSH is broken).
-2. Run recovery as `root` or with `sudo`.
+2. Run recovery as `root` (provider console) or as `PRIMARY_SUDO_USER` (passwordless `sudo`).
 3. Keep local source of truth ready:
    - local repo: `public-vps-coolify-bootstrap`
    - local env file: `env/bootstrap.env`
@@ -59,7 +59,7 @@ secondary_user="${secondary_user:-coolify}"
 id "$primary_user" || true
 id "$secondary_user" || true
 command -v docker || true
-sudo systemctl is-active ssh.socket ssh fail2ban unattended-upgrades || true
+sudo systemctl is-active ssh.service fail2ban unattended-upgrades || true
 sudo ufw status verbose || true
 ```
 
@@ -136,7 +136,7 @@ after recovery with `ss -tulpen` and `docker ps --format 'table {{.Names}}\t{{.P
 ## 7) Validate recovery on server
 
 ```bash
-sudo systemctl is-active ssh.socket ssh fail2ban unattended-upgrades
+sudo systemctl is-active ssh.service fail2ban unattended-upgrades
 sudo ufw status verbose
 sudo docker ps --format 'table {{.Names}}\t{{.Status}}'
 primary_user="$(sudo sed -n 's/^PRIMARY_SUDO_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
@@ -146,7 +146,7 @@ getent group sudo docker coolify
 ```
 
 Expected:
-- SSH services active
+- SSH service active (not socket-activated)
 - UFW enabled and allowing configured SSH port + `80/443`
 - Docker available
 - Coolify container running (name usually `coolify`)
@@ -220,6 +220,10 @@ fi
 6. Re-validate using Steps 1, 7, and 8.
 
 ## Decrypt generated user credentials (when needed)
+
+Must be run as `PRIMARY_SUDO_USER` (who has passwordless sudo) or root via
+provider console. Other sudo users cannot decrypt because they need their
+password for `sudo`, and their password is inside this vault.
 
 ```bash
 export USER_PASSWORDS_ENCRYPTION_PASSWORD="<value-from-bootstrap.env>"

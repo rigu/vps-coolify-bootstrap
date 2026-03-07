@@ -117,6 +117,7 @@ After first boot, use this checklist:
    ```
 
    Default port is `2222` unless you changed `SSH_PORT`.
+   Use `PRIMARY_SUDO_USER` for operational work that needs `sudo`.
 
 3. Validate host baseline after login:
 
@@ -146,6 +147,7 @@ sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-
 
 Notes:
 
+- run replay as `PRIMARY_SUDO_USER` (passwordless sudo) or as `root` via provider console
 - replay resets UFW to baseline each time
 - replay re-syncs SSH `AllowUsers` from `CREATE_USERS`
 - replay enforces sudo policy and group memberships

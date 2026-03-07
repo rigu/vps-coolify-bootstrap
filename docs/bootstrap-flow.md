@@ -41,7 +41,7 @@ flowchart TD
   J --> K[Set/rotate user passwords if needed]
   K --> L[Write encrypted vault /etc/vps-coolify-bootstrap/user-passwords.enc]
   L --> M[Sync SSH AllowUsers from CREATE_USERS]
-  M --> N[Validate/restart SSH on configured port]
+  M --> N[Disable ssh.socket, enable ssh.service, validate + restart]
   N --> O[Apply UFW rules and enable fail2ban + unattended-upgrades]
   O --> P[Install Coolify if missing]
   P --> Q[Apply sudo/docker/coolify groups + sudo policy]
@@ -56,7 +56,7 @@ flowchart TD
 - encrypted credential vault:
   - `/etc/vps-coolify-bootstrap/user-passwords.enc`
 
-To decrypt on server:
+To decrypt on server (must be run as `PRIMARY_SUDO_USER` who has passwordless sudo):
 
 ```bash
 export USER_PASSWORDS_ENCRYPTION_PASSWORD="<value-from-bootstrap.env>"
@@ -64,5 +64,9 @@ sudo openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
   -in /etc/vps-coolify-bootstrap/user-passwords.enc \
   -pass env:USER_PASSWORDS_ENCRYPTION_PASSWORD
 ```
+
+Note: other sudo users require their password to run `sudo`, but their
+password is inside this vault. Only `PRIMARY_SUDO_USER` (passwordless sudo)
+or root via provider console can decrypt it.
 
 Back to [Docs Home](index.md)
