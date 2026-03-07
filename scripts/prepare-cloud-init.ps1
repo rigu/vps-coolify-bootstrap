@@ -54,6 +54,8 @@ if ($cfg["COOLIFY_ROOT_USERNAME"] -notmatch '^[A-Za-z0-9._-]+$') { throw "COOLIF
 $createUsers = ([string]$cfg["CREATE_USERS"]).Split(",") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 $primarySudoUser = [string]$cfg["PRIMARY_SUDO_USER"]
 $secondarySudoUser = [string]$cfg["SECONDARY_SUDO_USER"]
+if ($primarySudoUser -notmatch '^[a-z_][a-z0-9_-]*[$]?$') { throw "PRIMARY_SUDO_USER contains invalid UNIX username: $primarySudoUser" }
+if ($secondarySudoUser -notmatch '^[a-z_][a-z0-9_-]*[$]?$') { throw "SECONDARY_SUDO_USER contains invalid UNIX username: $secondarySudoUser" }
 if (-not ($createUsers -contains $primarySudoUser)) { throw "PRIMARY_SUDO_USER must be present in CREATE_USERS." }
 if (-not ($createUsers -contains $secondarySudoUser)) { throw "SECONDARY_SUDO_USER must be present in CREATE_USERS." }
 function Test-ValidUnixUsername {

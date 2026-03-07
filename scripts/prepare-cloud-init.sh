@@ -144,6 +144,15 @@ if [[ ! "${cfg[COOLIFY_ROOT_USERNAME]}" =~ ^[A-Za-z0-9._-]+$ ]]; then
   exit 1
 fi
 
+if ! is_valid_unix_username "${cfg[PRIMARY_SUDO_USER]}"; then
+  echo "ERROR: PRIMARY_SUDO_USER contains invalid UNIX username: ${cfg[PRIMARY_SUDO_USER]}" >&2
+  exit 1
+fi
+if ! is_valid_unix_username "${cfg[SECONDARY_SUDO_USER]}"; then
+  echo "ERROR: SECONDARY_SUDO_USER contains invalid UNIX username: ${cfg[SECONDARY_SUDO_USER]}" >&2
+  exit 1
+fi
+
 if ! csv_contains_value "${cfg[CREATE_USERS]}" "${cfg[PRIMARY_SUDO_USER]}"; then
   echo "ERROR: PRIMARY_SUDO_USER must be present in CREATE_USERS." >&2
   exit 1
