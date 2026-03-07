@@ -15,7 +15,7 @@
 
   <rect class="bg" x="0" y="0" width="1200" height="420"/>
   <text x="40" y="52" class="title">VPS Coolify Bootstrap Flow</text>
-  <text x="40" y="82" class="muted">Ubuntu 24.04 • cloud-init • hardened SSH/UFW/fail2ban • encrypted password vault</text>
+  <text x="40" y="82" class="muted">Ubuntu 24.04 • VPS-Coolify init • hardened SSH/UFW/fail2ban • encrypted password vault</text>
 
   <rect class="card" x="40" y="130" width="250" height="170"/>
   <text x="62" y="168" class="text">1. Prepare env</text>
@@ -24,8 +24,8 @@
   <text x="62" y="246" class="muted">set domain + users</text>
 
   <rect class="card" x="340" y="130" width="250" height="170"/>
-  <text x="362" y="168" class="text">2. Render cloud-init</text>
-  <text x="362" y="198" class="muted">prepare-cloud-init</text>
+  <text x="362" y="168" class="text">2. Render VPS-Coolify init</text>
+  <text x="362" y="198" class="muted">prepare-vps-coolify-init</text>
   <text x="362" y="222" class="muted">template + env</text>
   <text x="362" y="246" class="muted">generated user-data</text>
 
