@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$EnvFile = "env/bootstrap.env",
+    [string]$EnvFile = "bootstrap-artifacts/bootstrap.env",
     [switch]$Overwrite
 )
 
@@ -87,7 +87,7 @@ Validate-UserListSubset -ListName "DOCKER_USERS" -Csv ([string]$cfg["DOCKER_USER
 Validate-UserListSubset -ListName "COOLIFY_GROUP_USERS" -Csv ([string]$cfg["COOLIFY_GROUP_USERS"]) -CreateUsers $createUsers
 
 $templatePath = if ($cfg.ContainsKey("TEMPLATE_FILE") -and $cfg["TEMPLATE_FILE"]) { $cfg["TEMPLATE_FILE"] } else { "../templates/cloud-init.template.yml" }
-$outputPath = if ($cfg.ContainsKey("OUTPUT_FILE") -and $cfg["OUTPUT_FILE"]) { $cfg["OUTPUT_FILE"] } else { "../cloud-init.generated.yml" }
+$outputPath = if ($cfg.ContainsKey("OUTPUT_FILE") -and $cfg["OUTPUT_FILE"]) { $cfg["OUTPUT_FILE"] } else { "../bootstrap-artifacts/vps-coolify-init.generated.yml" }
 if (-not [System.IO.Path]::IsPathRooted($templatePath)) { $templatePath = Join-Path (Split-Path -Parent $envPath) $templatePath }
 if (-not [System.IO.Path]::IsPathRooted($outputPath)) { $outputPath = Join-Path (Split-Path -Parent $envPath) $outputPath }
 if (-not (Test-Path -LiteralPath $templatePath -PathType Leaf)) { throw "Template file not found: $templatePath" }
@@ -177,9 +177,14 @@ if ((Test-Path -LiteralPath $outputPath -PathType Leaf) -and -not $Overwrite) {
     throw "Output file exists: $outputPath (use -Overwrite)."
 }
 
+$outputDir = Split-Path -Parent $outputPath
+if ($outputDir -and -not (Test-Path -LiteralPath $outputDir -PathType Container)) {
+    New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+}
+
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($outputPath, $content, $utf8NoBom)
 $size = (Get-Item -LiteralPath $outputPath).Length
-if ($size -gt 32768) { throw "Generated cloud-init is ${size} bytes (>32768 Hetzner limit)." }
+if ($size -gt 32768) { throw "Generated VPS-Coolify init file is ${size} bytes (>32768 Hetzner cloud-init user-data limit)." }
 Write-Host "Generated: $outputPath"
-Write-Host "WARNING: Generated cloud-init contains secrets. On shared Windows systems, verify ACLs (for example with icacls)."
+Write-Host "WARNING: Generated VPS-Coolify init file contains secrets. On shared Windows systems, verify ACLs (for example with icacls)."

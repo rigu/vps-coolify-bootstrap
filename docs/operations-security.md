@@ -6,6 +6,9 @@ description: Production operations guidance for post-bootstrap hardening, monito
 
 # Operations and Security
 
+This page covers post-bootstrap operational tasks. Read sections based on your
+current task (user policy, replay, hardening, updates, monitoring).
+
 ## User and group policy
 
 `env/bootstrap.env.example` policy lists:
@@ -81,6 +84,126 @@ sudo openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
 
 Alternative: use the provider web console as root.
 
+## Bootstrap env reference
+
+Use this section when you need detailed runtime behavior for `bootstrap.env`
+variables beyond the quick reference in Getting Started.
+
+### A) Auto-resolved on host
+
+- `PRIMARY_SUDO_USER`
+  - When: bootstrap/replay runtime, before sudo policy is written
+  - How: if empty, resolved from first `SUDO_USERS` entry; fallback `deploy`
+  - Must change: NO
+- `SSH_KEY_ROTATE`
+  - When: runtime during SSH key synchronization
+  - How: default `0` appends key; `1` replaces `authorized_keys`
+  - Must change: NO
+- `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS`
+  - When: runtime during `DOCKER-USER` guard application
+  - How: default `0` blocks public ingress to `6001/6002`; `1` skips guards
+  - Must change: NO
+
+### B) Coolify admin variables
+
+- `COOLIFY_PUBLIC_DOMAIN`
+  - When: used by bootstrap output and onboarding flow
+  - How: validated as hostname
+  - Must change: YES
+- `COOLIFY_ROOT_USERNAME`
+  - When: passed to Coolify installer
+  - How: installer environment variable
+  - Must change: YES
+- `COOLIFY_ROOT_USER_EMAIL`
+  - When: passed to Coolify installer and used as login identifier
+  - How: installer environment variable, email format validated
+  - Must change: YES
+- `COOLIFY_ROOT_USER_PASSWORD`
+  - When: local generation before provisioning if placeholder/empty
+  - How: **AUTO-GENERATED** by `generate-secrets.*` only when value is empty/`CHANGE_ME` (`openssl rand -hex 12` in Bash)
+  - Must change: NO
+
+### C) Server user variables
+
+- `SSH_PUBLIC_KEY` / `SSH_PUBLIC_KEY_PATH`
+  - When: local prepare step and host bootstrap key installation
+  - How: **AUTO-DETECTED** if a valid key exists on your machine (`~/.ssh/*.pub`); otherwise set `SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_PATH` manually
+  - Must change: YES (valid key required)
+- `SSH_PORT`
+  - When: bootstrap/replay SSH hardening
+  - How: applied via `sshd_config.d` and service restart
+  - Must change: NO
+- `SECONDARY_SUDO_USER`, `CREATE_USERS`, `SUDO_USERS`, `DOCKER_USERS`, `COOLIFY_GROUP_USERS`
+  - When: runtime user/group reconciliation
+  - How: validated subsets and applied memberships/policy
+  - Must change: NO unless team model differs
+- `TIMEZONE`
+  - When: early cloud-init
+  - How: applied as system timezone
+  - Must change: NO
+
+### D) Generated passwords and secrets
+
+- `USER_PASSWORDS_ENCRYPTION_PASSWORD`
+  - When: local generation before provisioning if placeholder/empty
+  - How: **AUTO-GENERATED** by `generate-secrets.*` only when value is empty/`CHANGE_ME` (`openssl rand -hex 16` in Bash)
+  - Must change: NO after secure generation
+- account passwords for users in `CREATE_USERS`
+  - When: host runtime in `ensure-user-passwords.sh`
+  - How: set only for locked/unset accounts, then encrypted to `/etc/vps-coolify-bootstrap/user-passwords.enc`
+  - Must change: YES for `PRIMARY_SUDO_USER` on first login (`sudo passwd "$(whoami)"`)
+
+## Replay bootstrap policy (idempotent)
+
+Run:
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env
+```
+
+Use replay to re-apply baseline policy from server-side `bootstrap.env` without
+reprovisioning.
+
+When to run replay:
+
+- after changing policy values (`SSH_PORT`, users, sudo/group lists)
+- after partial first-boot execution
+- after emergency manual fixes that may have introduced drift
+- after updating bootstrap scripts and wanting to apply new safeguards
+
+What replay does not do:
+
+- it does not deploy application workloads
+- it does not remove Docker volumes/databases
+- it does not replace SSH keys unless `SSH_KEY_ROTATE=1`
+- it does not rotate already-set (unlocked) account passwords; it only sets passwords for locked/unset accounts
+
+What replay enforces:
+
+- SSH hardening (`sshd_config`, `AllowUsers`, service state)
+- sudo policy (`PRIMARY_SUDO_USER` passwordless by default)
+- user/group memberships (`sudo`, `docker`, `coolify`)
+- password generation for locked/unset users in `CREATE_USERS` and encrypted vault update
+- UFW baseline (`SSH_PORT`, `80`, `443`)
+- `fail2ban` and `unattended-upgrades`
+- `DOCKER-USER` guards for `6001/6002` unless `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS=1`
+
+Operational notes:
+
+- run replay as `PRIMARY_SUDO_USER` or root via provider console
+- replay resets UFW baseline; re-apply custom rules after replay
+- replay restarts SSH service; keep provider console open
+- replay can terminate stale `sshd` listeners on `22` when `SSH_PORT` is not `22`
+
+Quick verification after replay:
+
+```bash
+sudo systemctl is-active ssh.service fail2ban unattended-upgrades
+sudo ufw status verbose
+sudo ss -lntp | grep -E ':(22|6001|6002|8000)\b' || true
+sudo iptables -S DOCKER-USER | grep -E '6001|6002' || true
+```
+
 ## Post-onboarding security (required)
 
 Docker-published ports can bypass UFW because Docker writes iptables rules directly.
@@ -124,6 +247,9 @@ For production apps behind Coolify/Traefik, apply at least:
 - `Referrer-Policy`
 - `Content-Security-Policy` (app-specific)
 
+Reference:
+- <https://doc.traefik.io/traefik-hub/api-gateway/secure/middleware/headers>
+
 ## Coolify update strategy
 
 For production:
@@ -131,6 +257,9 @@ For production:
 - disable auto-updates in Coolify
 - schedule upgrades in maintenance windows
 - validate backup + rollback before upgrade
+
+References:
+- <https://coolify.io/docs/knowledge-base/server/auto-update>
 
 ## Monitoring minimum baseline
 
@@ -147,16 +276,13 @@ Configure Docker log retention (`max-size`, `max-file`) and verify host logrotat
 ## Known operational notes
 
 - minimum `COOLIFY_ROOT_USER_PASSWORD` length: 16
-- `cloud-init.generated.yml` contains secrets and must not be committed
+- `bootstrap-artifacts/vps-coolify-init.generated.yml` contains secrets and must not be committed
 - bootstrap replay resets UFW baseline each run
 - `SSH_KEY_ROTATE=0` appends keys, `SSH_KEY_ROTATE=1` replaces keys
 
 ## Input validation rules
 
-- `COOLIFY_ROOT_USERNAME` must match `^[A-Za-z0-9._-]+$`
-- `COOLIFY_ROOT_USER_EMAIL` must be valid email format
-- `COOLIFY_ROOT_USER_PASSWORD` and `USER_PASSWORDS_ENCRYPTION_PASSWORD` must be at least 16 characters
-- `SSH_PORT` must be numeric in range `1-65535`
-- usernames in user lists must match `^[a-z_][a-z0-9_-]*[$]?$` and must not contain `:`
+See [Getting Started](getting-started.md#1-prepare-env-values) for the
+authoritative validation rules and required input format.
 
 Back to [Docs Home](index.md)

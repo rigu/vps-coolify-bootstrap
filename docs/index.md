@@ -29,6 +29,7 @@ Production-ready public bootstrap for **Coolify on Ubuntu 24.04 LTS**.
 ## Repository Layout
 
 - `env/` env templates
+- `bootstrap-artifacts/` local generated secrets and cloud-init output (not committed)
 - `scripts/` bootstrap + helper scripts (Bash + PowerShell)
 - `templates/` `cloud-init.template.yml`
 - `docs/` operational runbooks and documentation

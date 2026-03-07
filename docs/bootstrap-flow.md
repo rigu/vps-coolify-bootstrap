@@ -6,17 +6,19 @@ description: Detailed first-boot execution order, cloud-init behavior, and boots
 
 # Bootstrap Flow
 
-## What the cloud-init YAML does
+## What the VPS-Coolify init YAML does
 
-`prepare-cloud-init.sh` or `prepare-cloud-init.ps1` renders `cloud-init.generated.yml` from:
+`prepare-cloud-init.sh` or `prepare-cloud-init.ps1` renders
+`bootstrap-artifacts/vps-coolify-init.generated.yml` from:
 
 - `templates/cloud-init.template.yml`
-- `env/bootstrap.env`
+- `bootstrap-artifacts/bootstrap.env`
 
 On first boot, cloud-init:
 
 1. sets timezone and runs package update/upgrade
 2. creates initial users (`PRIMARY_SUDO_USER`, `SECONDARY_SUDO_USER`) and SSH key
+   (additional users from `CREATE_USERS` are created later by `bootstrap-host.sh`)
 3. disables root SSH login and SSH password auth
 4. installs baseline packages (`curl`, `git`, `openssl`, `ufw`, `fail2ban`, `unattended-upgrades`, ...)
 5. writes hardening and runtime files
@@ -28,24 +30,24 @@ On first boot, cloud-init:
 
 ```mermaid
 flowchart TD
-  A[Prepare env/bootstrap.env + generate secrets] --> B[Render cloud-init.generated.yml]
-  B --> C[Create Ubuntu 24 VPS with cloud-init user-data]
+  A[Prepare env + secrets] --> B[Render VPS-Coolify init]
+  B --> C[Provision Ubuntu 24 VPS]
   C --> D[cloud-init first boot]
-  D --> E[Install baseline packages + write hardening files + bootstrap env]
+  D --> E[Install packages + write baseline files]
   E --> F[Clone BOOTSTRAP_REPO_URL at BOOTSTRAP_REPO_REF]
   F --> G[Apply sysctl --system]
   G --> H[Run scripts/bootstrap-host.sh]
-  H --> H1[Validate inputs: usernames/email/domain/passwords/SSH key + subset checks]
-  H1 --> I[Ensure CREATE_USERS exist + SSH keys]
+  H --> H1[Validate inputs]
+  H1 --> I[Ensure users + SSH keys]
   I --> J[Run ensure-user-passwords.sh]
   J --> K[Set/rotate user passwords if needed]
   K --> L[Write encrypted vault /etc/vps-coolify-bootstrap/user-passwords.enc]
   L --> M[Sync SSH AllowUsers from CREATE_USERS]
-  M --> N[Disable ssh.socket, enable ssh.service, validate + restart + cleanup stale port-22 listeners]
+  M --> N[Switch to ssh.service + validate + cleanup :22]
   N --> O[Apply UFW rules and enable fail2ban + unattended-upgrades]
   O --> P[Install Coolify if missing]
-  P --> Q[Apply sudo/docker/coolify groups + sudo policy]
-  Q --> R[Apply DOCKER-USER guards for 6001/6002 unless explicitly allowed]
+  P --> Q[Apply groups + sudo policy]
+  Q --> R[Apply DOCKER-USER guards for 6001/6002]
   R --> S[SSH login on hardened port]
   S --> T[Finish Coolify onboarding]
 ```

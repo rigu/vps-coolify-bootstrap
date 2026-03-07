@@ -6,6 +6,8 @@ description: Practical checklist to improve repository discoverability on GitHub
 
 # GitHub Promotion Checklist
 
+Maintainer note: this page is for repository maintainers, not server operators.
+
 This checklist complements repository files and requires some GitHub UI settings.
 
 ## 1) Configure repository About (GitHub UI)

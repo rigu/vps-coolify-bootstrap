@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Render cloud-init from template + env file.
+Render VPS-Coolify init (cloud-init user-data) from template + env file.
 
 Usage:
   scripts/prepare-cloud-init.sh [--env-file <path>] [--overwrite]
@@ -32,7 +32,7 @@ resolve_path() {
   fi
 }
 
-env_file="env/bootstrap.env"
+env_file="bootstrap-artifacts/bootstrap.env"
 overwrite=0
 
 while [[ $# -gt 0 ]]; do
@@ -209,7 +209,7 @@ fi
 
 env_dir="$(cd "$(dirname "$env_file")" && pwd)"
 template_file="${cfg[TEMPLATE_FILE]:-../templates/cloud-init.template.yml}"
-output_file="${cfg[OUTPUT_FILE]:-../cloud-init.generated.yml}"
+output_file="${cfg[OUTPUT_FILE]:-../bootstrap-artifacts/vps-coolify-init.generated.yml}"
 template_path="$(resolve_path "$template_file" "$env_dir")"
 output_path="$(resolve_path "$output_file" "$env_dir")"
 
@@ -279,6 +279,8 @@ if [[ -f "$output_path" && "$overwrite" -ne 1 ]]; then
   exit 1
 fi
 
+mkdir -p "$(dirname "$output_path")"
+
 content="$(cat "$template_path")"
 content="${content//TIMEZONE_HERE/${cfg[TIMEZONE]}}"
 content="${content//SSH_PORT_HERE/${cfg[SSH_PORT]}}"
@@ -312,7 +314,7 @@ chmod 600 "$output_path"
 
 size="$(wc -c < "$output_path" | tr -d '[:space:]')"
 if (( size > 32768 )); then
-  echo "ERROR: Generated cloud-init is ${size} bytes (>32768 Hetzner limit)." >&2
+  echo "ERROR: Generated VPS-Coolify init file is ${size} bytes (>32768 Hetzner cloud-init user-data limit)." >&2
   exit 1
 fi
 

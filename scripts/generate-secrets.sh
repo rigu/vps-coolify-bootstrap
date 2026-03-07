@@ -11,7 +11,7 @@ Usage:
 USAGE
 }
 
-env_file="env/bootstrap.env"
+env_file="bootstrap-artifacts/bootstrap.env"
 force_password=0
 force_encryption_password=0
 force_ssh_key=0
@@ -48,7 +48,7 @@ done
 
 if [ ! -f "$env_file" ]; then
   echo "ERROR: Env file not found: $env_file" >&2
-  echo "Create it first from env/bootstrap.env.example" >&2
+  echo "Create it first from env/bootstrap.env.example (for example in bootstrap-artifacts/bootstrap.env)" >&2
   exit 1
 fi
 

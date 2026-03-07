@@ -20,16 +20,19 @@ Production-ready **VPS bootstrap for Coolify on Ubuntu 24.04 LTS** with cloud-in
 
 ## Quick Start
 
+Prerequisites: Git, Bash (or PowerShell), OpenSSL, and a VPS provider account.
+
 1. Prepare env + secrets:
 ```bash
-cp env/bootstrap.env.example env/bootstrap.env
-bash scripts/generate-secrets.sh --env-file env/bootstrap.env
+mkdir -p bootstrap-artifacts
+cp env/bootstrap.env.example bootstrap-artifacts/bootstrap.env
+bash scripts/generate-secrets.sh --env-file bootstrap-artifacts/bootstrap.env
 ```
-2. Generate cloud-init:
+2. Generate VPS-Coolify init file:
 ```bash
-bash scripts/prepare-cloud-init.sh --env-file env/bootstrap.env --overwrite
+bash scripts/prepare-cloud-init.sh --env-file bootstrap-artifacts/bootstrap.env --overwrite
 ```
-3. Provision VPS using `cloud-init.generated.yml` as user-data.
+3. Provision VPS using `bootstrap-artifacts/vps-coolify-init.generated.yml` as cloud-init user-data.
 
 ## Documentation (GitHub Pages)
 

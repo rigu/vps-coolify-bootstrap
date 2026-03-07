@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$EnvFile = "env/bootstrap.env",
+    [string]$EnvFile = "bootstrap-artifacts/bootstrap.env",
     [switch]$ForcePassword,
     [switch]$ForceEncryptionPassword,
     [switch]$ForceSshKey
@@ -12,7 +12,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $envPath = if ([System.IO.Path]::IsPathRooted($EnvFile)) { $EnvFile } else { Join-Path $repoRoot $EnvFile }
 if (-not (Test-Path -LiteralPath $envPath -PathType Leaf)) {
-    throw "Env file not found: $envPath`nCreate it first from env/bootstrap.env.example"
+    throw "Env file not found: $envPath`nCreate it first from env/bootstrap.env.example (for example in bootstrap-artifacts/bootstrap.env)"
 }
 
 function New-RandomSecret {

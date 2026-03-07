@@ -15,7 +15,7 @@ The sequence is explicit and safe to execute end-to-end.
 2. Run recovery as `root` (provider console) or as `PRIMARY_SUDO_USER` (passwordless `sudo`).
 3. Keep local source of truth ready:
    - local repo: `public-vps-coolify-bootstrap`
-   - local env file: `env/bootstrap.env`
+   - local env file: `bootstrap-artifacts/bootstrap.env`
 4. Set shell variables on your machine for faster copy/paste:
 
 ```bash
@@ -52,6 +52,7 @@ Typical root causes:
 ## 3) Validate minimum host baseline
 
 ```bash
+# Extract PRIMARY/SECONDARY sudo users from server-side bootstrap env.
 primary_user="$(sudo sed -n 's/^PRIMARY_SUDO_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
 secondary_user="$(sudo sed -n 's/^SECONDARY_SUDO_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
 primary_user="${primary_user:-deploy}"
@@ -91,11 +92,15 @@ sudo test -f /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh && echo "scrip
 Required server env path:
 - `/etc/vps-coolify-bootstrap/bootstrap.env`
 
-If missing or incorrect, recreate it from your local `env/bootstrap.env` values.
+If missing or incorrect, recreate it from your local `bootstrap-artifacts/bootstrap.env` values.
 Then verify required keys on server:
 
 ```bash
-sudo awk -F= '/^(SSH_PORT|PRIMARY_SUDO_USER|SECONDARY_SUDO_USER|SSH_PUBLIC_KEY|CREATE_USERS|SUDO_USERS|DOCKER_USERS|COOLIFY_GROUP_USERS|COOLIFY_PUBLIC_DOMAIN|ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS|COOLIFY_ROOT_USERNAME|COOLIFY_ROOT_USER_EMAIL|COOLIFY_ROOT_USER_PASSWORD|USER_PASSWORDS_ENCRYPTION_PASSWORD)=/{print $1"=<set>"}' /etc/vps-coolify-bootstrap/bootstrap.env
+sudo awk -F= '
+/^(SSH_PORT|PRIMARY_SUDO_USER|SECONDARY_SUDO_USER|SSH_PUBLIC_KEY|CREATE_USERS|SUDO_USERS|DOCKER_USERS|COOLIFY_GROUP_USERS|COOLIFY_PUBLIC_DOMAIN|ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS|COOLIFY_ROOT_USERNAME|COOLIFY_ROOT_USER_EMAIL|COOLIFY_ROOT_USER_PASSWORD|USER_PASSWORDS_ENCRYPTION_PASSWORD)=/ {
+  print $1"=<set>"
+}
+' /etc/vps-coolify-bootstrap/bootstrap.env
 ```
 
 Hard checks before replay:
@@ -118,19 +123,18 @@ Run:
 sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env
 ```
 
-This script is idempotent and will:
+This script is idempotent and executes the following actions in order:
 - create/repair users and SSH keys
-- enforce SSH runtime/config checks
+- set passwords for users in `CREATE_USERS` if account password was locked/unset
+- store generated credentials encrypted in `/etc/vps-coolify-bootstrap/user-passwords.enc`
 - sync `AllowUsers` from `CREATE_USERS`
+- enforce SSH runtime/config checks
 - terminate stale `sshd` listeners on `22` when `SSH_PORT` is not `22`
 - reset/apply UFW baseline rules (`SSH_PORT`, `80`, `443`)
 - enable `fail2ban` and `unattended-upgrades`
 - install/start Coolify if missing
-- enforce sudo/docker/coolify group memberships
-- write sudo policy (passwordless only for primary sudo user by default)
+- enforce sudo/docker/coolify memberships and sudo policy (passwordless only for primary sudo user by default)
 - apply `DOCKER-USER` guards for `6001/6002` unless `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS=1`
-- set passwords for users in `CREATE_USERS` if account password was locked/unset
-- store generated credentials encrypted in `/etc/vps-coolify-bootstrap/user-passwords.enc`
 
 Important: Docker-published ports can bypass UFW rules. Validate exposed ports
 after recovery with `ss -tulpen` and `docker ps --format 'table {{.Names}}\t{{.Ports}}'`.
@@ -182,46 +186,40 @@ Fix the specific failing cause, then rerun Step 6.
 
 Use this only if server state is inconsistent or unrecoverable.
 
+PowerShell note for this section:
+- Prefer `pwsh -File ...`
+- If `pwsh` is unavailable, run the same script with `powershell -ExecutionPolicy Bypass -File ...`
+- Optional install (`pwsh`): `winget install --id Microsoft.PowerShell --source winget`
+- If `winget` is unavailable: <https://github.com/PowerShell/PowerShell/releases/latest>
+
 1. On local machine, reset to clean env baseline:
 ```bash
-cp env/bootstrap.env.example env/bootstrap.env
-bash scripts/generate-secrets.sh --env-file env/bootstrap.env
+mkdir -p bootstrap-artifacts
+cp env/bootstrap.env.example bootstrap-artifacts/bootstrap.env
+bash scripts/generate-secrets.sh --env-file bootstrap-artifacts/bootstrap.env
 ```
-   Windows PowerShell alternative (`pwsh` preferred, `powershell` fallback):
+   Windows PowerShell:
 ```powershell
-Copy-Item env/bootstrap.env.example env/bootstrap.env
-pwsh -File scripts/generate-secrets.ps1 -EnvFile env/bootstrap.env
+New-Item -ItemType Directory -Path bootstrap-artifacts -Force | Out-Null
+Copy-Item env/bootstrap.env.example bootstrap-artifacts/bootstrap.env
+pwsh -File scripts/generate-secrets.ps1 -EnvFile bootstrap-artifacts/bootstrap.env
 ```
-   If `pwsh` is not installed:
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\generate-secrets.ps1 -EnvFile env/bootstrap.env
-```
-   Optional: install PowerShell 7 (`pwsh`) with:
-```powershell
-winget install --id Microsoft.PowerShell --source winget
-```
-   If `winget` is unavailable, use:
-   <https://github.com/PowerShell/PowerShell/releases/latest>
-2. Fill all required values in `env/bootstrap.env` (no `CHANGE_ME`).
+2. Fill all required values in `bootstrap-artifacts/bootstrap.env` (no `CHANGE_ME`).
 3. Regenerate cloud-init:
 ```bash
-bash scripts/prepare-cloud-init.sh --env-file env/bootstrap.env --overwrite
+bash scripts/prepare-cloud-init.sh --env-file bootstrap-artifacts/bootstrap.env --overwrite
 ```
-   Windows PowerShell alternative (`pwsh` preferred, `powershell` fallback):
+   Windows PowerShell:
 ```powershell
-pwsh -File scripts/prepare-cloud-init.ps1 -EnvFile env/bootstrap.env -Overwrite
-```
-   If `pwsh` is not installed:
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\prepare-cloud-init.ps1 -EnvFile env/bootstrap.env -Overwrite
+pwsh -File scripts/prepare-cloud-init.ps1 -EnvFile bootstrap-artifacts/bootstrap.env -Overwrite
 ```
 4. Verify generated file is placeholder-free:
 ```bash
-if grep -n "CHANGE_ME\\|_HERE" cloud-init.generated.yml; then
+if grep -n "CHANGE_ME\\|_HERE" bootstrap-artifacts/vps-coolify-init.generated.yml; then
   echo "fix placeholders before provisioning"
 fi
 ```
-5. Recreate VPS with `cloud-init.generated.yml` as user-data.
+5. Recreate VPS with `bootstrap-artifacts/vps-coolify-init.generated.yml` as cloud-init user-data.
 6. Re-validate using Steps 1, 7, and 8.
 
 ## Decrypt generated user credentials (when needed)
