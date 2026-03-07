@@ -1,0 +1,137 @@
+#cloud-config
+timezone: TIMEZONE_HERE
+package_update: true
+package_upgrade: true
+
+users:
+  - name: PRIMARY_SUDO_USER_HERE
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ["ALL=(ALL:ALL) NOPASSWD:ALL"]
+    ssh_authorized_keys:
+      - SSH_PUBLIC_KEY_HERE
+
+  - name: SECONDARY_SUDO_USER_HERE
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ["ALL=(ALL:ALL) ALL"]
+    ssh_authorized_keys:
+      - SSH_PUBLIC_KEY_HERE
+
+ssh_pwauth: false
+disable_root: true
+
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - openssl
+  - python3
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+
+write_files:
+  - path: /etc/sysctl.d/99-hardening.conf
+    permissions: "0644"
+    content: |
+      net.ipv4.ip_forward=1
+      net.ipv4.conf.all.rp_filter=1
+      net.ipv4.conf.default.rp_filter=1
+      net.ipv4.conf.all.accept_redirects=0
+      net.ipv4.conf.default.accept_redirects=0
+      net.ipv4.conf.all.send_redirects=0
+      net.ipv4.conf.default.send_redirects=0
+      net.ipv4.conf.all.accept_source_route=0
+      net.ipv4.conf.default.accept_source_route=0
+      net.ipv4.tcp_syncookies=1
+
+  - path: /etc/systemd/system/ssh.socket.d/override.conf
+    permissions: "0644"
+    content: |
+      [Socket]
+      ListenStream=
+      ListenStream=SSH_PORT_HERE
+      FreeBind=yes
+
+  - path: /etc/ssh/sshd_config.d/10-bootstrap-hardening.conf
+    permissions: "0644"
+    content: |
+      Port SSH_PORT_HERE
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      ChallengeResponseAuthentication no
+      PermitEmptyPasswords no
+      PubkeyAuthentication yes
+      X11Forwarding no
+      AllowAgentForwarding no
+      AllowTcpForwarding local
+      PermitTunnel no
+      GatewayPorts no
+      MaxAuthTries 3
+      LoginGraceTime 30
+      ClientAliveInterval 300
+      ClientAliveCountMax 2
+      AllowUsers PRIMARY_SUDO_USER_HERE SECONDARY_SUDO_USER_HERE
+
+  - path: /etc/fail2ban/jail.d/10-bootstrap-sshd.local
+    permissions: "0644"
+    content: |
+      [DEFAULT]
+      backend = systemd
+      banaction = ufw
+      bantime = 1h
+      findtime = 10m
+      maxretry = 5
+      bantime.increment = true
+      bantime.factor = 2
+      bantime.maxtime = 7d
+
+      [sshd]
+      enabled = true
+      port = SSH_PORT_HERE
+
+  - path: /etc/vps-coolify-bootstrap/bootstrap.env
+    permissions: "0600"
+    content: |
+      SSH_PORT=SSH_PORT_HERE
+      PRIMARY_SUDO_USER='PRIMARY_SUDO_USER_HERE'
+      SECONDARY_SUDO_USER='SECONDARY_SUDO_USER_HERE'
+      SSH_PUBLIC_KEY='SSH_PUBLIC_KEY_HERE'
+      SSH_KEY_ROTATE=SSH_KEY_ROTATE_HERE
+      CREATE_USERS=CREATE_USERS_HERE
+      SUDO_USERS=SUDO_USERS_HERE
+      DOCKER_USERS=DOCKER_USERS_HERE
+      COOLIFY_GROUP_USERS=COOLIFY_GROUP_USERS_HERE
+      COOLIFY_PUBLIC_DOMAIN='COOLIFY_PUBLIC_DOMAIN_HERE'
+      COOLIFY_ROOT_USERNAME='COOLIFY_ROOT_USERNAME_HERE'
+      COOLIFY_ROOT_USER_EMAIL='COOLIFY_ROOT_USER_EMAIL_HERE'
+      COOLIFY_ROOT_USER_PASSWORD='COOLIFY_ROOT_USER_PASSWORD_HERE'
+      USER_PASSWORDS_ENCRYPTION_PASSWORD='USER_PASSWORDS_ENCRYPTION_PASSWORD_HERE'
+
+runcmd:
+  - |
+    repo_dir="/opt/vps-coolify-bootstrap"
+    repo_url='BOOTSTRAP_REPO_URL_HERE'
+    repo_ref='BOOTSTRAP_REPO_REF_HERE'
+
+    if [ -d "$repo_dir/.git" ]; then
+      if ! git -C "$repo_dir" fetch --depth 1 origin "$repo_ref"; then
+        echo "ERROR: failed to fetch $repo_ref from $repo_url" >&2
+        exit 1
+      fi
+      git -C "$repo_dir" checkout --force FETCH_HEAD
+    else
+      rm -rf "$repo_dir"
+      git clone --depth 1 --branch "$repo_ref" "$repo_url" "$repo_dir"
+    fi
+
+    sysctl --system
+    bash "$repo_dir/scripts/bootstrap-host.sh" /etc/vps-coolify-bootstrap/bootstrap.env
+
+final_message: |
+  Bootstrap complete.
+  Verify SSH access first: ssh -p SSH_PORT_HERE PRIMARY_SUDO_USER_HERE@SERVER_IP
+  Coolify URL: https://COOLIFY_PUBLIC_DOMAIN_HERE
+  Then complete Coolify onboarding in browser.

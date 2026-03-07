@@ -1,0 +1,14 @@
+# Generated local output
+cloud-init.generated.yml
+env/bootstrap.env
+*.env
+!*.env.example
+*.enc
+*.pem
+*.key
+
+# Python cache
+__pycache__/
+*.pyc
+
+.idea/
