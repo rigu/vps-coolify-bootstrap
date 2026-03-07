@@ -206,9 +206,9 @@ Safe run checklist:
 
 ```bash
 sudo systemctl is-active ssh.service fail2ban unattended-upgrades
-sudo ss -lntp | egrep ':(22|<SSH_PORT>|6001|6002|8000)\b' || true
+sudo ss -lntp | grep -E ':(22|<SSH_PORT>|6001|6002|8000)\b' || true
 sudo ufw status verbose
-sudo iptables -S DOCKER-USER | egrep '6001|6002' || true
+sudo iptables -S DOCKER-USER | grep -E '6001|6002' || true
 ```
 
 Examples:
@@ -237,8 +237,8 @@ ssh -p <NEW_SSH_PORT> <PRIMARY_SUDO_USER>@<SERVER_IP>
 4. Lock down Coolify realtime ports: keep `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS=0`, run replay, then confirm guard rules exist:
 
 ```bash
-sudo iptables -S DOCKER-USER | egrep '6001|6002'
-sudo ip6tables -S DOCKER-USER 2>/dev/null | egrep '6001|6002' || true
+sudo iptables -S DOCKER-USER | grep -E '6001|6002'
+sudo ip6tables -S DOCKER-USER 2>/dev/null | grep -E '6001|6002' || true
 ```
 
 Back to [Docs Home](index.md)

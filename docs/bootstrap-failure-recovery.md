@@ -95,7 +95,7 @@ If missing or incorrect, recreate it from your local `env/bootstrap.env` values.
 Then verify required keys on server:
 
 ```bash
-sudo awk -F= '/^(SSH_PORT|PRIMARY_SUDO_USER|SECONDARY_SUDO_USER|SSH_PUBLIC_KEY|CREATE_USERS|SUDO_USERS|DOCKER_USERS|COOLIFY_GROUP_USERS|COOLIFY_PUBLIC_DOMAIN|COOLIFY_ROOT_USERNAME|COOLIFY_ROOT_USER_EMAIL|COOLIFY_ROOT_USER_PASSWORD|USER_PASSWORDS_ENCRYPTION_PASSWORD)=/{print $1"=<set>"}' /etc/vps-coolify-bootstrap/bootstrap.env
+sudo awk -F= '/^(SSH_PORT|PRIMARY_SUDO_USER|SECONDARY_SUDO_USER|SSH_PUBLIC_KEY|CREATE_USERS|SUDO_USERS|DOCKER_USERS|COOLIFY_GROUP_USERS|COOLIFY_PUBLIC_DOMAIN|ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS|COOLIFY_ROOT_USERNAME|COOLIFY_ROOT_USER_EMAIL|COOLIFY_ROOT_USER_PASSWORD|USER_PASSWORDS_ENCRYPTION_PASSWORD)=/{print $1"=<set>"}' /etc/vps-coolify-bootstrap/bootstrap.env
 ```
 
 Hard checks before replay:
@@ -141,8 +141,8 @@ after recovery with `ss -tulpen` and `docker ps --format 'table {{.Names}}\t{{.P
 sudo systemctl is-active ssh.service fail2ban unattended-upgrades
 sudo ufw status verbose
 sudo docker ps --format 'table {{.Names}}\t{{.Status}}'
-sudo iptables -S DOCKER-USER | egrep '6001|6002' || true
-sudo ip6tables -S DOCKER-USER 2>/dev/null | egrep '6001|6002' || true
+sudo iptables -S DOCKER-USER | grep -E '6001|6002' || true
+sudo ip6tables -S DOCKER-USER 2>/dev/null | grep -E '6001|6002' || true
 primary_user="$(sudo sed -n 's/^PRIMARY_SUDO_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
 primary_user="${primary_user:-deploy}"
 id "$primary_user" || true

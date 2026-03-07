@@ -41,7 +41,7 @@ flowchart TD
   J --> K[Set/rotate user passwords if needed]
   K --> L[Write encrypted vault /etc/vps-coolify-bootstrap/user-passwords.enc]
   L --> M[Sync SSH AllowUsers from CREATE_USERS]
-  M --> N[Disable ssh.socket, enable ssh.service, validate + restart]
+  M --> N[Disable ssh.socket, enable ssh.service, validate + restart + cleanup stale port-22 listeners]
   N --> O[Apply UFW rules and enable fail2ban + unattended-upgrades]
   O --> P[Install Coolify if missing]
   P --> Q[Apply sudo/docker/coolify groups + sudo policy]

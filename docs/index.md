@@ -13,6 +13,7 @@ Production-ready public bootstrap for **Coolify on Ubuntu 24.04 LTS**.
 - cloud-init-based first-boot provisioning
 - hardened SSH baseline (`AllowUsers`, no password auth, custom port)
 - UFW baseline + fail2ban + unattended upgrades
+- `DOCKER-USER` guards for Coolify realtime ports (`6001/6002`) by default
 - deterministic env-driven render flow (Bash + PowerShell)
 - encrypted server-side user password vault
 - explicit first-boot failure recovery runbook
