@@ -122,11 +122,13 @@ This script is idempotent and will:
 - create/repair users and SSH keys
 - enforce SSH runtime/config checks
 - sync `AllowUsers` from `CREATE_USERS`
+- terminate stale `sshd` listeners on `22` when `SSH_PORT` is not `22`
 - reset/apply UFW baseline rules (`SSH_PORT`, `80`, `443`)
 - enable `fail2ban` and `unattended-upgrades`
 - install/start Coolify if missing
 - enforce sudo/docker/coolify group memberships
 - write sudo policy (passwordless only for primary sudo user by default)
+- apply `DOCKER-USER` guards for `6001/6002` unless `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS=1`
 - set passwords for users in `CREATE_USERS` if account password was locked/unset
 - store generated credentials encrypted in `/etc/vps-coolify-bootstrap/user-passwords.enc`
 
@@ -139,6 +141,8 @@ after recovery with `ss -tulpen` and `docker ps --format 'table {{.Names}}\t{{.P
 sudo systemctl is-active ssh.service fail2ban unattended-upgrades
 sudo ufw status verbose
 sudo docker ps --format 'table {{.Names}}\t{{.Status}}'
+sudo iptables -S DOCKER-USER | egrep '6001|6002' || true
+sudo ip6tables -S DOCKER-USER 2>/dev/null | egrep '6001|6002' || true
 primary_user="$(sudo sed -n 's/^PRIMARY_SUDO_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
 primary_user="${primary_user:-deploy}"
 id "$primary_user" || true
@@ -150,6 +154,7 @@ Expected:
 - UFW enabled and allowing configured SSH port + `80/443`
 - Docker available
 - Coolify container running (name usually `coolify`)
+- `DOCKER-USER` rules present for `6001/6002` unless explicitly disabled by env
 
 ## 8) Validate remote access from your machine
 
