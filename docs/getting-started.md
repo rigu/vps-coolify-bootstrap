@@ -59,7 +59,7 @@ For full behavior details and replay implications, see:
 
 ### A) Auto-resolved on host
 
-| Variable | Runtime behavior | Must change |
+| Variable | Runtime behavior | Required to set? |
 |---|---|---|
 | `PRIMARY_SUDO_USER` | If empty, resolved from the first `SUDO_USERS` value; falls back to `deploy` | NO |
 | `SSH_KEY_ROTATE` | Default `0`: append SSH key; `1`: replace `authorized_keys` | NO |
@@ -67,7 +67,7 @@ For full behavior details and replay implications, see:
 
 ### B) Coolify admin variables
 
-| Variable | Runtime behavior | Must change |
+| Variable | Runtime behavior | Required to set? |
 |---|---|---|
 | `COOLIFY_PUBLIC_DOMAIN` | Public URL/domain used for onboarding and output | YES |
 | `COOLIFY_ROOT_USERNAME` | Passed to Coolify installer | YES |
@@ -76,7 +76,7 @@ For full behavior details and replay implications, see:
 
 ### C) Server user variables
 
-| Variable | Runtime behavior | Must change |
+| Variable | Runtime behavior | Required to set? |
 |---|---|---|
 | `SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_PATH` | Required for SSH access; **AUTO-DETECTED** if a valid key exists on your machine, otherwise set manually | YES |
 | `SSH_PORT` | Applied in SSH config and service restart flow | NO |
@@ -86,7 +86,7 @@ For full behavior details and replay implications, see:
 
 ### D) Generated passwords and secrets
 
-| Variable | Runtime behavior | Must change |
+| Variable | Runtime behavior | Required to set? |
 |---|---|---|
 | `USER_PASSWORDS_ENCRYPTION_PASSWORD` | **AUTO-GENERATED** locally only when value is empty/`CHANGE_ME` (`openssl rand -hex 16`); used to encrypt user vault | NO |
 | account passwords for `CREATE_USERS` | `ensure-user-passwords.sh` runs on the VPS host during bootstrap/replay (not as a local pre-generation step), sets passwords only for locked/unset users, then stores them encrypted in `/etc/vps-coolify-bootstrap/user-passwords.enc` | YES (set local password for `PRIMARY_SUDO_USER` on first login) |
