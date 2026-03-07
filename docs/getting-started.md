@@ -125,7 +125,17 @@ After first boot, use this checklist:
    Default port is `2222` unless you changed `SSH_PORT`.
    Use `PRIMARY_SUDO_USER` for operational work that needs `sudo`.
 
-3. Validate host baseline after login:
+3. IMPORTANT: On first login, set a local password for `PRIMARY_SUDO_USER`:
+
+   ```bash
+   sudo passwd "$(whoami)"
+   ```
+
+   Do this before handing operational access to other admins.
+   `PRIMARY_SUDO_USER` has passwordless sudo by policy, but a local password is
+   still required for emergency recovery paths (for example console login).
+
+4. Validate host baseline after login:
 
    ```bash
    whoami
@@ -135,12 +145,12 @@ After first boot, use this checklist:
    sudo docker ps
    ```
 
-4. Open Coolify and complete onboarding:
+5. Open Coolify and complete onboarding:
 
    Use `https://<COOLIFY_PUBLIC_DOMAIN>`.
    Log in with `COOLIFY_ROOT_USERNAME` / `COOLIFY_ROOT_USER_EMAIL` and `COOLIFY_ROOT_USER_PASSWORD` from your env file.
 
-5. Deploy workloads from private/project repositories:
+6. Deploy workloads from private/project repositories:
 
    In Coolify, create/select a Project, connect your Git provider, pick repository + branch, configure runtime env vars, then deploy.
    Verify deployment health, logs, and exposed domains before sending production traffic.

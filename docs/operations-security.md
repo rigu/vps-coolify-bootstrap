@@ -47,6 +47,18 @@ values (domain, credentials, encryption password, SSH key) fully configured.
 Important: extra users beyond the first two can SSH only after `bootstrap-host.sh`
 completes successfully and re-syncs `AllowUsers` from `CREATE_USERS`.
 
+### First-login password hardening
+
+On the first SSH login as `PRIMARY_SUDO_USER`, set a local account password:
+
+```bash
+sudo passwd "$(whoami)"
+```
+
+`PRIMARY_SUDO_USER` has passwordless sudo for operations, but setting a local
+password is still required for emergency/recovery flows (for example provider
+console access when SSH key auth is unavailable).
+
 ### Password vault access
 
 Generated user passwords are stored encrypted at
