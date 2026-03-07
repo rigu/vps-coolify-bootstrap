@@ -39,7 +39,7 @@ jobs:
       - name: Script help checks
         run: |
           bash scripts/generate-secrets.sh --help >/dev/null
-          bash scripts/prepare-cloud-init.sh --help >/dev/null
+          bash scripts/prepare-vps-coolify-init.sh --help >/dev/null
 
       - name: PowerShell syntax check
         shell: pwsh

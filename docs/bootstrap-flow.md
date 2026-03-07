@@ -8,7 +8,7 @@ description: Detailed first-boot execution order, cloud-init behavior, and boots
 
 ## What the VPS-Coolify init YAML does
 
-`prepare-cloud-init.sh` or `prepare-cloud-init.ps1` renders
+`prepare-vps-coolify-init.sh` or `prepare-vps-coolify-init.ps1` renders
 `bootstrap-artifacts/vps-coolify-init.generated.yml` from:
 
 - `templates/cloud-init.template.yml`

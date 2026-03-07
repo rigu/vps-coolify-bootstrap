@@ -6,14 +6,14 @@
 [![Latest Release](https://img.shields.io/github/v/release/rigu/vps-coolify-bootstrap)](https://github.com/rigu/vps-coolify-bootstrap/releases)
 [![Last Commit](https://img.shields.io/github/last-commit/rigu/vps-coolify-bootstrap)](https://github.com/rigu/vps-coolify-bootstrap/commits/main)
 
-Production-ready **VPS bootstrap for Coolify on Ubuntu 24.04 LTS** with cloud-init, SSH hardening, UFW baseline, fail2ban, unattended upgrades, user password vault encryption, and replay-safe bootstrap scripts.
+Production-ready **VPS bootstrap for Coolify on Ubuntu 24.04 LTS** with VPS-Coolify init user-data, SSH hardening, UFW baseline, fail2ban, unattended upgrades, user password vault encryption, and replay-safe bootstrap scripts.
 
 ![Bootstrap Overview](docs/assets/bootstrap-overview.svg)
 
 ## Why this repo
 
 - secure-by-default baseline for first boot
-- reproducible cloud-init rendering from env templates
+- reproducible VPS-Coolify init rendering from env templates
 - Linux/macOS + PowerShell support for operators
 - explicit recovery runbook for failed first boot
 - public/generic templates with no private data
@@ -30,9 +30,9 @@ bash scripts/generate-secrets.sh --env-file bootstrap-artifacts/bootstrap.env
 ```
 2. Generate VPS-Coolify init file:
 ```bash
-bash scripts/prepare-cloud-init.sh --env-file bootstrap-artifacts/bootstrap.env --overwrite
+bash scripts/prepare-vps-coolify-init.sh --env-file bootstrap-artifacts/bootstrap.env --overwrite
 ```
-3. Provision VPS using `bootstrap-artifacts/vps-coolify-init.generated.yml` as cloud-init user-data.
+3. Provision VPS using `bootstrap-artifacts/vps-coolify-init.generated.yml` as VPS-Coolify init user-data.
 
 ## Documentation (GitHub Pages)
 

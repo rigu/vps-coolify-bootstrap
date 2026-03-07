@@ -207,11 +207,11 @@ pwsh -File scripts/generate-secrets.ps1 -EnvFile bootstrap-artifacts/bootstrap.e
 2. Fill all required values in `bootstrap-artifacts/bootstrap.env` (no `CHANGE_ME`).
 3. Regenerate cloud-init:
 ```bash
-bash scripts/prepare-cloud-init.sh --env-file bootstrap-artifacts/bootstrap.env --overwrite
+bash scripts/prepare-vps-coolify-init.sh --env-file bootstrap-artifacts/bootstrap.env --overwrite
 ```
    Windows PowerShell:
 ```powershell
-pwsh -File scripts/prepare-cloud-init.ps1 -EnvFile bootstrap-artifacts/bootstrap.env -Overwrite
+pwsh -File scripts/prepare-vps-coolify-init.ps1 -EnvFile bootstrap-artifacts/bootstrap.env -Overwrite
 ```
 4. Verify generated file is placeholder-free:
 ```bash

@@ -117,13 +117,13 @@ listeners outside `ssh.service`.
 Linux/macOS:
 
 ```bash
-bash scripts/prepare-cloud-init.sh --env-file bootstrap-artifacts/bootstrap.env --overwrite
+bash scripts/prepare-vps-coolify-init.sh --env-file bootstrap-artifacts/bootstrap.env --overwrite
 ```
 
 PowerShell:
 
 ```powershell
-pwsh -File scripts/prepare-cloud-init.ps1 -EnvFile bootstrap-artifacts/bootstrap.env -Overwrite
+pwsh -File scripts/prepare-vps-coolify-init.ps1 -EnvFile bootstrap-artifacts/bootstrap.env -Overwrite
 ```
 
 Generated output defaults to `bootstrap-artifacts/vps-coolify-init.generated.yml`.

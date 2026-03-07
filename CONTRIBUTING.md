@@ -22,7 +22,7 @@ Do not include:
 ```bash
 bash -n scripts/*.sh
 shellcheck scripts/*.sh
-bash scripts/prepare-cloud-init.sh --help
+bash scripts/prepare-vps-coolify-init.sh --help
 bash scripts/generate-secrets.sh --help
 ```
 
