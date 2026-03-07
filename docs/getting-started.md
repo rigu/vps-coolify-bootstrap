@@ -46,7 +46,7 @@ On shared Windows systems, verify ACLs for generated secret files
 (`bootstrap-artifacts/bootstrap.env`, `bootstrap-artifacts/vps-coolify-init.generated.yml`)
 after running PowerShell scripts.
 
-`generate-secrets.*` attempts **AUTO-DETECTED** SSH key discovery on your local machine.
+`generate-secrets.*` performs **AUTO-DETECTED** SSH key lookup on your local machine.
 It checks common public key files in `~/.ssh` (for example `id_ed25519.pub`,
 `id_ecdsa.pub`, `id_rsa.pub`, then other `*.pub`) and fills `SSH_PUBLIC_KEY`
 when the current value is empty or still `CHANGE_ME`.
@@ -61,8 +61,8 @@ For full behavior details and replay implications, see:
 
 | Variable | Runtime behavior | Must change |
 |---|---|---|
-| `PRIMARY_SUDO_USER` | If empty, resolved from first `SUDO_USERS` value, fallback `deploy` | NO |
-| `SSH_KEY_ROTATE` | Default `0` append SSH key, `1` replace `authorized_keys` | NO |
+| `PRIMARY_SUDO_USER` | If empty, resolved from the first `SUDO_USERS` value; falls back to `deploy` | NO |
+| `SSH_KEY_ROTATE` | Default `0`: append SSH key; `1`: replace `authorized_keys` | NO |
 | `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS` | Default `0` blocks public `6001/6002`, `1` skips guards | NO |
 
 ### B) Coolify admin variables
@@ -144,7 +144,7 @@ How to apply it at VPS creation time (example: Hetzner Cloud):
 If your provider has no user-data/cloud-init field:
 
 1. Check provider API/CLI first; many providers support user-data there even if the UI does not.
-2. If user-data is not available at all, use provider console access and run bootstrap manually on the host.
+2. If user-data is not available at all, use provider console access and run the bootstrap manually on the host.
 3. Create `/etc/vps-coolify-bootstrap/bootstrap.env` from your local `bootstrap-artifacts/bootstrap.env`.
 4. Clone this repo to `/opt/vps-coolify-bootstrap`.
 5. Run `sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env`.
@@ -198,7 +198,7 @@ After first boot, use this checklist:
 
 6. Deploy workloads from private/project repositories:
 
-   In Coolify, create/select a Project, connect your Git provider, pick repository + branch, configure runtime env vars, then deploy.
+   In Coolify, create or select a Project, connect your Git provider, pick a repository and branch, configure runtime environment variables, then deploy.
    Verify deployment health, logs, and exposed domains before sending production traffic.
 
 ## 4) Advanced operations

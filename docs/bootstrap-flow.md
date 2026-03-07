@@ -16,8 +16,8 @@ description: Detailed first-boot execution order, cloud-init behavior, and boots
 
 On first boot, cloud-init:
 
-1. sets timezone and runs package update/upgrade
-2. creates initial users (`PRIMARY_SUDO_USER`, `SECONDARY_SUDO_USER`) and SSH key
+1. sets the timezone and runs package update/upgrade
+2. creates initial users (`PRIMARY_SUDO_USER`, `SECONDARY_SUDO_USER`) and the SSH key
    (additional users from `CREATE_USERS` are created later by `bootstrap-host.sh`)
 3. disables root SSH login and SSH password auth
 4. installs baseline packages (`curl`, `git`, `openssl`, `ufw`, `fail2ban`, `unattended-upgrades`, ...)
@@ -57,12 +57,10 @@ User account passwords are not pre-generated locally during env preparation.
 
 ## Runtime outputs
 
-- Coolify URL printed by bootstrap:
-  - `https://<COOLIFY_PUBLIC_DOMAIN>`
-- encrypted credential vault:
-  - `/etc/vps-coolify-bootstrap/user-passwords.enc`
+- Coolify URL printed by bootstrap: `https://<COOLIFY_PUBLIC_DOMAIN>`
+- Encrypted credential vault: `/etc/vps-coolify-bootstrap/user-passwords.enc`
 
-To decrypt on server (must be run as `PRIMARY_SUDO_USER` who has passwordless sudo):
+To decrypt on the server (must be run as `PRIMARY_SUDO_USER`, who has passwordless sudo):
 
 ```bash
 export USER_PASSWORDS_ENCRYPTION_PASSWORD="<value-from-bootstrap.env>"

@@ -6,7 +6,7 @@ description: Step-by-step runbook to recover failed first-boot cloud-init/bootst
 
 # Bootstrap Failure Recovery
 
-Use this runbook when first-boot cloud-init did not finish successfully.
+Use this runbook when first-boot cloud-init does not finish successfully.
 The sequence is explicit and safe to execute end-to-end.
 
 ## 0) Preparation (do not skip)
@@ -32,7 +32,7 @@ sudo cloud-init status --long
 sudo cloud-init query --all | head -n 40
 ```
 
-If status is `done`, cloud-init finished and you should troubleshoot service-level issues instead.
+If status is `done`, cloud-init finished, and you should troubleshoot service-level issues instead.
 If status is `error` or still not complete, continue.
 
 ## 2) Collect first error evidence
@@ -64,7 +64,7 @@ sudo systemctl is-active ssh.service fail2ban unattended-upgrades || true
 sudo ufw status verbose || true
 ```
 
-If core services are missing/inactive, continue with manual bootstrap replay.
+If core services are missing or inactive, continue with manual bootstrap replay.
 
 ## 4) Ensure bootstrap repo exists on server
 
@@ -125,7 +125,7 @@ sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-
 
 This script is idempotent and executes the following actions in order:
 - create/repair users and SSH keys
-- during this on-host replay, set passwords for users in `CREATE_USERS` if account password was locked/unset (not a local pre-generation step)
+- during this on-host replay, set passwords for `CREATE_USERS` accounts that are currently locked/unset (not a local pre-generation step)
 - store generated credentials encrypted in `/etc/vps-coolify-bootstrap/user-passwords.enc`
 - sync `AllowUsers` from `CREATE_USERS`
 - enforce SSH runtime/config checks
@@ -133,7 +133,7 @@ This script is idempotent and executes the following actions in order:
 - reset/apply UFW baseline rules (`SSH_PORT`, `80`, `443`)
 - enable `fail2ban` and `unattended-upgrades`
 - install/start Coolify if missing
-- enforce sudo/docker/coolify memberships and sudo policy (passwordless only for primary sudo user by default)
+- enforce sudo/docker/coolify memberships and sudo policy (passwordless only for `PRIMARY_SUDO_USER` by default)
 - apply `DOCKER-USER` guards for `6001/6002` unless `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS=1`
 
 Important: Docker-published ports can bypass UFW rules. Validate exposed ports
@@ -219,7 +219,7 @@ if grep -n "CHANGE_ME\\|_HERE" bootstrap-artifacts/vps-coolify-init.generated.ym
   echo "fix placeholders before provisioning"
 fi
 ```
-5. Recreate VPS and paste `bootstrap-artifacts/vps-coolify-init.generated.yml` into the provider user-data/cloud-init field during server creation (first boot execution). If provider UI has no such field, use provider API/CLI for user-data or run manual bootstrap from provider console as described in Getting Started.
+5. Recreate the VPS and paste `bootstrap-artifacts/vps-coolify-init.generated.yml` into the provider user-data/cloud-init field during server creation (first-boot execution). If the provider UI has no such field, use provider API/CLI for user-data or run manual bootstrap from the provider console as described in Getting Started.
 6. Re-validate using Steps 1, 7, and 8.
 
 ## Decrypt generated user credentials (when needed)

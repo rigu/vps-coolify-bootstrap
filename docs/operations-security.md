@@ -6,7 +6,7 @@ description: Production operations guidance for post-bootstrap hardening, monito
 
 # Operations and Security
 
-This page covers post-bootstrap operational tasks. Read sections based on your
+This page covers post-bootstrap operational tasks. Read the sections relevant to your
 current task (user policy, replay, hardening, updates, monitoring).
 
 ## User and group policy
@@ -30,7 +30,7 @@ Keep both aligned with policy lists.
 `DOCKER_USERS`, and `COOLIFY_GROUP_USERS` must also exist in `CREATE_USERS`,
 and usernames must match `^[a-z_][a-z0-9_-]*[$]?$`.
 
-### More than 2 sudo users
+### More than two sudo users
 
 Example:
 
@@ -43,7 +43,7 @@ DOCKER_USERS=deploy,coolify,ops
 COOLIFY_GROUP_USERS=deploy,coolify,ops
 ```
 
-Re-render VPS-Coolify init file or replay bootstrap to apply.
+Re-render the VPS-Coolify init file or replay bootstrap to apply changes.
 Other required variables are omitted for brevity; keep required `CHANGE_ME`
 values (domain, credentials, encryption password, SSH key) fully configured.
 
@@ -126,7 +126,7 @@ variables beyond the quick reference in Getting Started.
 ### C) Server user variables
 
 - `SSH_PUBLIC_KEY` / `SSH_PUBLIC_KEY_PATH`
-  - When: local prepare step and host bootstrap key installation
+  - When: local preparation step and host bootstrap key installation
   - How: **AUTO-DETECTED** if a valid key exists on your machine (`~/.ssh/*.pub`); otherwise set `SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_PATH` manually
   - Must change: YES (valid key required)
 - `SSH_PORT`
@@ -184,7 +184,7 @@ What replay enforces:
 - SSH hardening (`sshd_config`, `AllowUsers`, service state)
 - sudo policy (`PRIMARY_SUDO_USER` passwordless by default)
 - user/group memberships (`sudo`, `docker`, `coolify`)
-- on-host password generation for locked/unset users in `CREATE_USERS` (during replay/bootstrap) and encrypted vault update
+- on-host password generation for locked/unset users in `CREATE_USERS` (during bootstrap/replay) and encrypted vault update
 - UFW baseline (`SSH_PORT`, `80`, `443`)
 - `fail2ban` and `unattended-upgrades`
 - `DOCKER-USER` guards for `6001/6002` unless `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS=1`
@@ -257,7 +257,7 @@ For production:
 
 - disable auto-updates in Coolify
 - schedule upgrades in maintenance windows
-- validate backup + rollback before upgrade
+- validate backup and rollback plans before upgrade
 
 References:
 - <https://coolify.io/docs/knowledge-base/server/auto-update>
