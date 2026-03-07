@@ -149,8 +149,8 @@ variables beyond the quick reference in Getting Started.
   - How: **AUTO-GENERATED** by `generate-secrets.*` only when value is empty/`CHANGE_ME` (`openssl rand -hex 16` in Bash)
   - Must change: NO after secure generation
 - account passwords for users in `CREATE_USERS`
-  - When: host runtime in `ensure-user-passwords.sh`
-  - How: set only for locked/unset accounts, then encrypted to `/etc/vps-coolify-bootstrap/user-passwords.enc`
+  - When: during bootstrap/replay runtime on the VPS host in `ensure-user-passwords.sh`
+  - How: not pre-generated locally; set only for locked/unset accounts, then encrypted to `/etc/vps-coolify-bootstrap/user-passwords.enc`
   - Must change: YES for `PRIMARY_SUDO_USER` on first login (`sudo passwd "$(whoami)"`)
 
 ## Replay bootstrap policy (idempotent)
@@ -177,13 +177,14 @@ What replay does not do:
 - it does not remove Docker volumes/databases
 - it does not replace SSH keys unless `SSH_KEY_ROTATE=1`
 - it does not rotate already-set (unlocked) account passwords; it only sets passwords for locked/unset accounts
+- it does not pre-generate server user account passwords locally before bootstrap
 
 What replay enforces:
 
 - SSH hardening (`sshd_config`, `AllowUsers`, service state)
 - sudo policy (`PRIMARY_SUDO_USER` passwordless by default)
 - user/group memberships (`sudo`, `docker`, `coolify`)
-- password generation for locked/unset users in `CREATE_USERS` and encrypted vault update
+- on-host password generation for locked/unset users in `CREATE_USERS` (during replay/bootstrap) and encrypted vault update
 - UFW baseline (`SSH_PORT`, `80`, `443`)
 - `fail2ban` and `unattended-upgrades`
 - `DOCKER-USER` guards for `6001/6002` unless `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS=1`

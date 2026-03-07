@@ -89,7 +89,7 @@ For full behavior details and replay implications, see:
 | Variable | Runtime behavior | Must change |
 |---|---|---|
 | `USER_PASSWORDS_ENCRYPTION_PASSWORD` | **AUTO-GENERATED** locally only when value is empty/`CHANGE_ME` (`openssl rand -hex 16`); used to encrypt user vault | NO |
-| account passwords for `CREATE_USERS` | `ensure-user-passwords.sh` sets passwords for locked/unset users, stores encrypted in `/etc/vps-coolify-bootstrap/user-passwords.enc` | YES (set local password for `PRIMARY_SUDO_USER` on first login) |
+| account passwords for `CREATE_USERS` | `ensure-user-passwords.sh` runs on the VPS host during bootstrap/replay (not as a local pre-generation step), sets passwords only for locked/unset users, then stores them encrypted in `/etc/vps-coolify-bootstrap/user-passwords.enc` | YES (set local password for `PRIMARY_SUDO_USER` on first login) |
 
 Other bootstrap source variables (usually unchanged):
 - `BOOTSTRAP_REPO_URL=https://github.com/rigu/vps-coolify-bootstrap.git`
@@ -131,6 +131,24 @@ Generated output defaults to `bootstrap-artifacts/vps-coolify-init.generated.yml
 ## 3) Provision VPS
 
 Use `bootstrap-artifacts/vps-coolify-init.generated.yml` as cloud-init user-data in your VPS provider.
+
+How to apply it at VPS creation time (example: Hetzner Cloud):
+
+1. Start a new server creation flow and select Ubuntu 24.04.
+2. In the create-server form, open the `Cloud config` / `User data` section.
+3. Open `bootstrap-artifacts/vps-coolify-init.generated.yml` locally and copy the full file content (including the first line `#cloud-config`).
+4. Paste that content into the provider `User data` field before clicking create.
+5. Create the server. This init file is executed on first boot.
+6. Important: adding/changing user-data after the VPS was already created does not apply retroactively to that existing server.
+
+If your provider has no user-data/cloud-init field:
+
+1. Check provider API/CLI first; many providers support user-data there even if the UI does not.
+2. If user-data is not available at all, use provider console access and run bootstrap manually on the host.
+3. Create `/etc/vps-coolify-bootstrap/bootstrap.env` from your local `bootstrap-artifacts/bootstrap.env`.
+4. Clone this repo to `/opt/vps-coolify-bootstrap`.
+5. Run `sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env`.
+6. For this manual path, follow the full validation checklist below and the recovery runbook.
 
 At first boot, cloud-init clones `BOOTSTRAP_REPO_URL` at `BOOTSTRAP_REPO_REF` and runs `scripts/bootstrap-host.sh`.
 

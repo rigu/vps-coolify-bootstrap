@@ -52,6 +52,9 @@ flowchart TD
   S --> T[Finish Coolify onboarding]
 ```
 
+Important: `ensure-user-passwords.sh` runs on the VPS host during bootstrap/replay.
+User account passwords are not pre-generated locally during env preparation.
+
 ## Runtime outputs
 
 - Coolify URL printed by bootstrap:

@@ -125,7 +125,7 @@ sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-
 
 This script is idempotent and executes the following actions in order:
 - create/repair users and SSH keys
-- set passwords for users in `CREATE_USERS` if account password was locked/unset
+- during this on-host replay, set passwords for users in `CREATE_USERS` if account password was locked/unset (not a local pre-generation step)
 - store generated credentials encrypted in `/etc/vps-coolify-bootstrap/user-passwords.enc`
 - sync `AllowUsers` from `CREATE_USERS`
 - enforce SSH runtime/config checks
@@ -219,7 +219,7 @@ if grep -n "CHANGE_ME\\|_HERE" bootstrap-artifacts/vps-coolify-init.generated.ym
   echo "fix placeholders before provisioning"
 fi
 ```
-5. Recreate VPS with `bootstrap-artifacts/vps-coolify-init.generated.yml` as cloud-init user-data.
+5. Recreate VPS and paste `bootstrap-artifacts/vps-coolify-init.generated.yml` into the provider user-data/cloud-init field during server creation (first boot execution). If provider UI has no such field, use provider API/CLI for user-data or run manual bootstrap from provider console as described in Getting Started.
 6. Re-validate using Steps 1, 7, and 8.
 
 ## Decrypt generated user credentials (when needed)
