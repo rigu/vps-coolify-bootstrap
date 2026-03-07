@@ -16,7 +16,7 @@ if (-not (Test-Path -LiteralPath $envPath -PathType Leaf)) {
 }
 
 function New-RandomSecret {
-    param([int]$Length = 24)
+    param([ValidateSet(24, 32)][int]$Length = 24)
 
     $byteLen = [int][Math]::Ceiling($Length / 2.0)
     $bytes = New-Object byte[] $byteLen
@@ -88,7 +88,7 @@ foreach ($line in Get-Content -LiteralPath $envPath) {
         $sawCoolifyPassword = $true
         $current = $line.Substring("COOLIFY_ROOT_USER_PASSWORD=".Length)
         if ($ForcePassword -or [string]::IsNullOrWhiteSpace($current) -or $current -match "CHANGE_ME") {
-            $newLines.Add("COOLIFY_ROOT_USER_PASSWORD=$(New-RandomSecret)")
+            $newLines.Add("COOLIFY_ROOT_USER_PASSWORD=$(New-RandomSecret -Length 24)")
         } else {
             $newLines.Add($line)
         }
@@ -99,7 +99,7 @@ foreach ($line in Get-Content -LiteralPath $envPath) {
         $sawEncryptionPassword = $true
         $current = $line.Substring("USER_PASSWORDS_ENCRYPTION_PASSWORD=".Length)
         if ($ForceEncryptionPassword -or [string]::IsNullOrWhiteSpace($current) -or $current -match "CHANGE_ME") {
-            $newLines.Add("USER_PASSWORDS_ENCRYPTION_PASSWORD=$(New-RandomSecret)")
+            $newLines.Add("USER_PASSWORDS_ENCRYPTION_PASSWORD=$(New-RandomSecret -Length 32)")
         } else {
             $newLines.Add($line)
         }
@@ -110,11 +110,11 @@ foreach ($line in Get-Content -LiteralPath $envPath) {
 }
 
 if (-not $sawCoolifyPassword) {
-    $newLines.Add("COOLIFY_ROOT_USER_PASSWORD=$(New-RandomSecret)")
+    $newLines.Add("COOLIFY_ROOT_USER_PASSWORD=$(New-RandomSecret -Length 24)")
 }
 
 if (-not $sawEncryptionPassword) {
-    $newLines.Add("USER_PASSWORDS_ENCRYPTION_PASSWORD=$(New-RandomSecret)")
+    $newLines.Add("USER_PASSWORDS_ENCRYPTION_PASSWORD=$(New-RandomSecret -Length 32)")
 }
 
 if (-not $sawSshPublicKey -and $hasDetectedSshKey) {

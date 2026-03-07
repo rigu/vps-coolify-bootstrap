@@ -102,10 +102,27 @@ validate_user_list_subset "DOCKER_USERS" "$DOCKER_USERS"
 validate_user_list_subset "COOLIFY_GROUP_USERS" "$COOLIFY_GROUP_USERS"
 
 PRIMARY_SUDO_USER="${PRIMARY_SUDO_USER:-}"
+SECONDARY_SUDO_USER="${SECONDARY_SUDO_USER:-}"
 if [[ -z "$PRIMARY_SUDO_USER" ]]; then
   PRIMARY_SUDO_USER="$(split_csv_to_lines "$SUDO_USERS" | head -n1 || true)"
 fi
 PRIMARY_SUDO_USER="${PRIMARY_SUDO_USER:-deploy}"
+
+if [[ -z "$PRIMARY_SUDO_USER" ]]; then
+  echo "ERROR: PRIMARY_SUDO_USER resolved to empty value" >&2
+  exit 1
+fi
+
+if ! csv_contains_value "$CREATE_USERS" "$PRIMARY_SUDO_USER"; then
+  echo "ERROR: PRIMARY_SUDO_USER must be present in CREATE_USERS: $PRIMARY_SUDO_USER" >&2
+  exit 1
+fi
+
+if [[ -n "$SECONDARY_SUDO_USER" ]] && ! csv_contains_value "$CREATE_USERS" "$SECONDARY_SUDO_USER"; then
+  echo "ERROR: SECONDARY_SUDO_USER must be present in CREATE_USERS: $SECONDARY_SUDO_USER" >&2
+  exit 1
+fi
+
 SSH_KEY_ROTATE="${SSH_KEY_ROTATE:-0}"
 
 if [[ "$SSH_KEY_ROTATE" != "0" && "$SSH_KEY_ROTATE" != "1" ]]; then
@@ -143,17 +160,26 @@ ensure_ssh_key() {
 sync_sshd_allowusers() {
   local allow_users
   local sshd_cfg
+  local tmp_cfg
   sshd_cfg="/etc/ssh/sshd_config.d/10-bootstrap-hardening.conf"
   allow_users="$(split_csv_to_lines "$CREATE_USERS" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
   [[ -n "$allow_users" ]] || return 0
 
-  if [[ -f "$sshd_cfg" ]]; then
-    if grep -q '^AllowUsers ' "$sshd_cfg"; then
-      sed -i "s/^AllowUsers .*/AllowUsers ${allow_users}/" "$sshd_cfg"
-    else
-      printf 'AllowUsers %s\n' "$allow_users" >> "$sshd_cfg"
-    fi
+  if [[ ! -f "$sshd_cfg" ]]; then
+    echo "ERROR: SSH hardening config not found: $sshd_cfg" >&2
+    return 1
   fi
+
+  tmp_cfg="$(mktemp)"
+  if ! {
+    grep -v '^AllowUsers ' "$sshd_cfg" > "$tmp_cfg" || true
+    printf 'AllowUsers %s\n' "$allow_users" >> "$tmp_cfg"
+    install -o root -g root -m 644 "$tmp_cfg" "$sshd_cfg"
+  }; then
+    rm -f "$tmp_cfg"
+    return 1
+  fi
+  rm -f "$tmp_cfg"
 }
 
 apply_sudo_policy() {

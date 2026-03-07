@@ -124,6 +124,11 @@ if (( ssh_port_num < 1 || ssh_port_num > 65535 )); then
   exit 1
 fi
 
+if [[ ! "${cfg[TIMEZONE]}" =~ ^[A-Za-z0-9_+./-]+$ ]]; then
+  echo "ERROR: TIMEZONE contains invalid characters." >&2
+  exit 1
+fi
+
 if [[ "${cfg[COOLIFY_PUBLIC_DOMAIN]}" =~ [[:space:]/] ]]; then
   echo "ERROR: COOLIFY_PUBLIC_DOMAIN must be a hostname without spaces or /." >&2
   exit 1
@@ -218,7 +223,7 @@ if [[ "$ssh_public_key" == *$'\n'* ]] || [[ ! "$ssh_public_key" =~ ^ssh-(ed25519
   exit 1
 fi
 
-for v in "$ssh_public_key" "${cfg[COOLIFY_PUBLIC_DOMAIN]}" "${cfg[COOLIFY_ROOT_USERNAME]}" "${cfg[COOLIFY_ROOT_USER_EMAIL]}" "${cfg[COOLIFY_ROOT_USER_PASSWORD]}" "${cfg[BOOTSTRAP_REPO_URL]}" "${cfg[BOOTSTRAP_REPO_REF]}"; do
+for v in "$ssh_public_key" "${cfg[TIMEZONE]}" "${cfg[COOLIFY_PUBLIC_DOMAIN]}" "${cfg[COOLIFY_ROOT_USERNAME]}" "${cfg[COOLIFY_ROOT_USER_EMAIL]}" "${cfg[COOLIFY_ROOT_USER_PASSWORD]}" "${cfg[BOOTSTRAP_REPO_URL]}" "${cfg[BOOTSTRAP_REPO_REF]}"; do
   if [[ "$v" == *"'"* ]]; then
     echo "ERROR: Values used in template must not contain single quotes (')." >&2
     exit 1

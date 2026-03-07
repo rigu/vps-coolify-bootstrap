@@ -44,6 +44,7 @@ $sshPort = [string]$cfg["SSH_PORT"]
 if ($sshPort -notmatch '^\d+$') { throw "SSH_PORT must be numeric (1-65535)." }
 $sshPortNum = [int]$sshPort
 if ($sshPortNum -lt 1 -or $sshPortNum -gt 65535) { throw "SSH_PORT must be between 1 and 65535." }
+if ([string]$cfg["TIMEZONE"] -notmatch '^[A-Za-z0-9_+./-]+$') { throw "TIMEZONE contains invalid characters." }
 
 $coolifyPublicDomain = [string]$cfg["COOLIFY_PUBLIC_DOMAIN"]
 if ($coolifyPublicDomain -match '[\s/]') { throw "COOLIFY_PUBLIC_DOMAIN must be a hostname without spaces or /." }
@@ -127,6 +128,7 @@ foreach ($v in @(
 
 foreach ($v in @(
     [string]$ssh,
+    [string]$cfg["TIMEZONE"],
     [string]$cfg["COOLIFY_PUBLIC_DOMAIN"],
     [string]$cfg["COOLIFY_ROOT_USERNAME"],
     [string]$cfg["COOLIFY_ROOT_USER_EMAIL"],

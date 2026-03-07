@@ -57,8 +57,12 @@ if ! command -v openssl >/dev/null 2>&1; then
   exit 1
 fi
 
-pw_gen() {
+pw_gen_password() {
   openssl rand -hex 12
+}
+
+pw_gen_encryption_password() {
+  openssl rand -hex 16
 }
 
 is_valid_ssh_pub_key() {
@@ -156,7 +160,7 @@ while IFS= read -r line || [ -n "$line" ]; do
       saw_coolify_password=1
       current="${line#*=}"
       if [ "$force_password" -eq 1 ] || [ -z "$current" ] || [[ "$current" == *CHANGE_ME* ]]; then
-        echo "COOLIFY_ROOT_USER_PASSWORD=$(pw_gen)" >> "$tmp"
+        echo "COOLIFY_ROOT_USER_PASSWORD=$(pw_gen_password)" >> "$tmp"
       else
         echo "$line" >> "$tmp"
       fi
@@ -165,7 +169,7 @@ while IFS= read -r line || [ -n "$line" ]; do
       saw_encryption_password=1
       current="${line#*=}"
       if [ "$force_encryption_password" -eq 1 ] || [ -z "$current" ] || [[ "$current" == *CHANGE_ME* ]]; then
-        echo "USER_PASSWORDS_ENCRYPTION_PASSWORD=$(pw_gen)" >> "$tmp"
+        echo "USER_PASSWORDS_ENCRYPTION_PASSWORD=$(pw_gen_encryption_password)" >> "$tmp"
       else
         echo "$line" >> "$tmp"
       fi
@@ -177,11 +181,11 @@ while IFS= read -r line || [ -n "$line" ]; do
 done < "$env_file"
 
 if [ "$saw_coolify_password" -eq 0 ]; then
-  echo "COOLIFY_ROOT_USER_PASSWORD=$(pw_gen)" >> "$tmp"
+  echo "COOLIFY_ROOT_USER_PASSWORD=$(pw_gen_password)" >> "$tmp"
 fi
 
 if [ "$saw_encryption_password" -eq 0 ]; then
-  echo "USER_PASSWORDS_ENCRYPTION_PASSWORD=$(pw_gen)" >> "$tmp"
+  echo "USER_PASSWORDS_ENCRYPTION_PASSWORD=$(pw_gen_encryption_password)" >> "$tmp"
 fi
 
 if [ "$saw_ssh_public_key" -eq 0 ] && [ "$has_detected_ssh_key" -eq 1 ]; then
