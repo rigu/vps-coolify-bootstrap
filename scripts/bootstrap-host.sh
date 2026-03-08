@@ -495,10 +495,16 @@ harden_coolify_compose_ports() {
   cp "$base_compose" "$backup_base"
   cp "$prod_compose" "$backup_prod"
 
-  set +e
-  python3 "$hardener_py" "$base_compose" "$prod_compose"
-  result=$?
-  set -e
+  # hardener returns:
+  # - 0: no changes
+  # - 10: changes applied
+  # - 20: unsupported format
+  # Capture non-zero codes without triggering ERR trap.
+  if python3 "$hardener_py" "$base_compose" "$prod_compose"; then
+    result=0
+  else
+    result=$?
+  fi
 
   case "$result" in
     0)
