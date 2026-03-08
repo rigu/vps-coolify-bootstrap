@@ -249,8 +249,10 @@ Runtime sync behavior:
   - remove those keys from Coolify `.env`
 - when `CLOSE_COOLIFY_REALTIME_PORTS=true`, bootstrap also hardens
   Coolify compose files automatically:
-  - remove `${APP_PORT:-8000}:8080` publish rule from
-    `/data/coolify/source/docker-compose.yml`
+  - remove canonical `8000->8080` publish rules
+    (`${APP_PORT:-8000}:8080` / `8000:8080`) from both
+    `/data/coolify/source/docker-compose.yml` and
+    `/data/coolify/source/docker-compose.prod.yml`
   - replace Soketi public `ports` mapping in
     `/data/coolify/source/docker-compose.prod.yml` with internal
     `expose: "6001"/"6002"`

@@ -84,7 +84,8 @@ Bootstrap enforces:
 - requires `COOLIFY_REALTIME_DOMAIN` (non-empty, non-placeholder)
 - writes `PUSHER_HOST=<domain>`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https`
 - hardens Coolify compose files:
-  - removes `${APP_PORT:-8000}:8080` publish in `docker-compose.yml`
+  - removes canonical `8000->8080` publish rules
+    (`${APP_PORT:-8000}:8080` / `8000:8080`) in base/prod compose files
   - converts Soketi public `ports` into internal `expose` in `docker-compose.prod.yml`
 - adds `DOCKER-USER` guards to drop public forwarded traffic to `6001/6002`
   with localhost/private network allow exceptions

@@ -183,7 +183,7 @@ after recovery with `ss -tulpen` and `docker ps --format 'table {{.Names}}\t{{.P
 sudo systemctl is-active ssh.service fail2ban unattended-upgrades
 sudo ufw status verbose
 sudo docker ps --format 'table {{.Names}}\t{{.Status}}'
-sudo grep -nE '\$\{APP_PORT:-8000\}:8080|\$\{SOKETI_PORT:-6001\}:6001|6002:6002' /data/coolify/source/docker-compose.yml /data/coolify/source/docker-compose.prod.yml || true
+sudo grep -nE '(:8080|\\$\\{SOKETI_PORT:-6001\\}:6001|6002:6002)' /data/coolify/source/docker-compose.yml /data/coolify/source/docker-compose.prod.yml || true
 sudo iptables -S DOCKER-USER | grep -E '6001|6002' || true
 sudo ip6tables -S DOCKER-USER 2>/dev/null | grep -E '6001|6002' || true
 devops_user="$(sudo sed -n 's/^DEVOPS_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
@@ -200,7 +200,7 @@ Expected:
 - Coolify container running (name usually `coolify`)
 - Coolify localhost server (id `0`) uses `COOLIFY_SUDO_NOPASSWD_USER` and configured `SSH_PORT`
 - `DOCKER-USER` rules present for `6001/6002` when `CLOSE_COOLIFY_REALTIME_PORTS=true`
-- when `CLOSE_COOLIFY_REALTIME_PORTS=true`, Coolify compose no longer publishes `${APP_PORT:-8000}:8080` and Soketi `6001/6002` public `ports`
+- when `CLOSE_COOLIFY_REALTIME_PORTS=true`, Coolify compose no longer publishes host `*:8080` bindings and Soketi `6001/6002` public `ports`
 
 ## 8) Validate remote access from your machine
 

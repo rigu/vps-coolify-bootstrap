@@ -315,7 +315,8 @@ Detailed behavior and mode-by-mode guidance:
    - `PUSHER_PORT=443`
    - `PUSHER_SCHEME=https`
 3. Bootstrap hardens Coolify compose files:
-   - removes `${APP_PORT:-8000}:8080` publish from `/data/coolify/source/docker-compose.yml`
+   - removes canonical `8000->8080` publish rules (`${APP_PORT:-8000}:8080` / `8000:8080`)
+     from `/data/coolify/source/docker-compose.yml` and `/data/coolify/source/docker-compose.prod.yml`
    - replaces Soketi public `ports` mapping with internal `expose` in `/data/coolify/source/docker-compose.prod.yml`
    - redeploys Coolify compose stack
 4. Bootstrap restarts `coolify` and `coolify-realtime` containers if `PUSHER_*` values changed.
@@ -331,7 +332,7 @@ Compose invariants:
 Check effective rules:
 
 ```bash
-sudo grep -nE '\$\{APP_PORT:-8000\}:8080|\$\{SOKETI_PORT:-6001\}:6001|6002:6002' /data/coolify/source/docker-compose.yml /data/coolify/source/docker-compose.prod.yml || true
+sudo grep -nE '(:8080|\\$\\{SOKETI_PORT:-6001\\}:6001|6002:6002)' /data/coolify/source/docker-compose.yml /data/coolify/source/docker-compose.prod.yml || true
 sudo iptables -S DOCKER-USER
 sudo ip6tables -S DOCKER-USER 2>/dev/null || true
 ```

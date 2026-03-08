@@ -2,7 +2,7 @@
 """Harden Coolify compose port exposure for production bootstrap.
 
 Behavior:
-- Removes APP_PORT->8080 publish line from docker-compose.yml when present.
+- Removes canonical APP_PORT/8000->8080 publish lines from both compose files.
 - Converts Soketi 6001/6002 public ports block to expose-only in docker-compose.prod.yml.
 
 Exit codes:
@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 from datetime import datetime, timezone
 
-APP_PORT_PUBLISH = re.compile(r'(?m)^[ \t]*-\s*"\$\{APP_PORT:-8000\}:8080"\s*\n?')
+APP_PORT_PUBLISH = re.compile(r'(?m)^[ \t]*-\s*"(?:\$\{APP_PORT:-8000\}|8000):8080"\s*\n?')
 ANY_8080_PUBLISH = re.compile(r'(?m)^[ \t]*-\s*"[^"\n]*:8080"\s*$')
 
 SOKETI_PUBLIC_PORTS_BLOCK = re.compile(
@@ -51,25 +51,33 @@ def harden_compose(base_path: Path, prod_path: Path) -> int:
     changed = False
 
     new_base_text, base_replacements = APP_PORT_PUBLISH.subn("", base_text)
+    new_prod_text, prod_8080_replacements = APP_PORT_PUBLISH.subn("", prod_text)
+
     if base_replacements > 0:
         changed = True
-    else:
-        # If APP_PORT pattern is absent, tolerate already-hardened state only when
-        # there is no remaining 8080 publish binding.
-        if ANY_8080_PUBLISH.search(base_text):
-            unknown_patterns.append(
-                "unrecognized 8080 publish rule in docker-compose.yml"
-            )
+    if prod_8080_replacements > 0:
+        changed = True
+
+    # If canonical APP_PORT/8000 publish patterns are absent, tolerate
+    # already-hardened state only when there is no remaining 8080 publish rule.
+    if ANY_8080_PUBLISH.search(new_base_text):
+        unknown_patterns.append(
+            "unrecognized 8080 publish rule in docker-compose.yml"
+        )
+    if ANY_8080_PUBLISH.search(new_prod_text):
+        unknown_patterns.append(
+            "unrecognized 8080 publish rule in docker-compose.prod.yml"
+        )
 
     new_prod_text, prod_replacements = SOKETI_PUBLIC_PORTS_BLOCK.subn(
-        '\\1expose:\\n\\1  - "6001"\\n\\1  - "6002"\\n', prod_text
+        '\\1expose:\\n\\1  - "6001"\\n\\1  - "6002"\\n', new_prod_text
     )
     if prod_replacements > 0:
         changed = True
     else:
         # If canonical public block is absent, accept only expose-only state.
-        if not SOKETI_EXPOSE_BLOCK.search(prod_text) and (
-            ANY_6001_PUBLISH.search(prod_text) or ANY_6002_PUBLISH.search(prod_text)
+        if not SOKETI_EXPOSE_BLOCK.search(new_prod_text) and (
+            ANY_6001_PUBLISH.search(new_prod_text) or ANY_6002_PUBLISH.search(new_prod_text)
         ):
             unknown_patterns.append(
                 "unrecognized 6001/6002 publish rules in docker-compose.prod.yml"
@@ -85,7 +93,9 @@ def harden_compose(base_path: Path, prod_path: Path) -> int:
         _write_text(base_path, new_base_text)
         _write_text(prod_path, new_prod_text)
         if base_replacements > 0:
-            _log("SUCCESS", "Removed APP_PORT:8000 binding from docker-compose.yml", sys.stdout)
+            _log("SUCCESS", "Removed APP_PORT/8000:8080 binding from docker-compose.yml", sys.stdout)
+        if prod_8080_replacements > 0:
+            _log("SUCCESS", "Removed APP_PORT/8000:8080 binding from docker-compose.prod.yml", sys.stdout)
         if prod_replacements > 0:
             _log("SUCCESS", "Converted Soketi ports to expose-only in docker-compose.prod.yml", sys.stdout)
         return 10

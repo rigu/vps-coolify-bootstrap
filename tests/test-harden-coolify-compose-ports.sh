@@ -32,6 +32,9 @@ YAML
 
   cat > "$prod" <<'YAML'
 services:
+  coolify:
+    ports:
+      - "${APP_PORT:-8000}:8080"
   coolify-realtime:
     ports:
       - "${SOKETI_PORT:-6001}:6001"
@@ -41,6 +44,7 @@ YAML
   status="$(run_hardener "$base" "$prod")"
   assert_eq "10" "$status" "hardener should return 10 when it applies file changes"
   assert_file_not_contains "$base" '\$\{APP_PORT:-8000\}:8080' "APP_PORT publish should be removed"
+  assert_file_not_contains "$prod" '\$\{APP_PORT:-8000\}:8080' "APP_PORT publish should be removed from prod compose too"
   assert_file_contains "$prod" '^\s*expose:\s*$' "Soketi ports block should be converted to expose"
   assert_file_contains "$prod" '"6001"' "expose 6001 must exist"
   assert_file_contains "$prod" '"6002"' "expose 6002 must exist"
@@ -102,6 +106,36 @@ YAML
   rm -rf "$tmpdir"
 }
 
+test_rejects_unrecognized_8080_publish_rule_in_prod() {
+  local tmpdir base prod status
+  tmpdir="$(mktemp -d)"
+  base="$tmpdir/docker-compose.yml"
+  prod="$tmpdir/docker-compose.prod.yml"
+
+  cat > "$base" <<'YAML'
+services:
+  coolify:
+    expose:
+      - "8080"
+YAML
+
+  cat > "$prod" <<'YAML'
+services:
+  coolify:
+    ports:
+      - "127.0.0.1:8000:8080"
+  coolify-realtime:
+    expose:
+      - "6001"
+      - "6002"
+YAML
+
+  status="$(run_hardener "$base" "$prod")"
+  assert_eq "20" "$status" "hardener should return 20 for unsupported 8080 publish formats in prod compose"
+
+  rm -rf "$tmpdir"
+}
+
 test_rejects_unrecognized_soketi_publish_rules() {
   local tmpdir base prod status
   tmpdir="$(mktemp -d)"
@@ -132,6 +166,7 @@ YAML
 run_test "harden-coolify-compose-ports applies expected compose transformations" test_applies_expected_transformations
 run_test "harden-coolify-compose-ports returns 0 when already hardened" test_returns_zero_when_already_hardened
 run_test "harden-coolify-compose-ports rejects unknown 8080 mapping" test_rejects_unrecognized_8080_publish_rule
+run_test "harden-coolify-compose-ports rejects unknown 8080 mapping in prod compose" test_rejects_unrecognized_8080_publish_rule_in_prod
 run_test "harden-coolify-compose-ports rejects unknown 6001/6002 mapping" test_rejects_unrecognized_soketi_publish_rules
 
 report_and_exit

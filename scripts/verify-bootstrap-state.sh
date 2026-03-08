@@ -308,10 +308,11 @@ base_compose="/data/coolify/source/docker-compose.yml"
 prod_compose="/data/coolify/source/docker-compose.prod.yml"
 if [[ -f "$base_compose" && -f "$prod_compose" ]]; then
   if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
-    if grep -Eq '^[[:space:]]*-[[:space:]]*"\$\{APP_PORT:-8000\}:8080"' "$base_compose"; then
-      fail "Coolify base compose still publishes APP_PORT:8000 (expected removed when CLOSE_COOLIFY_REALTIME_PORTS=true)"
+    if grep -Eq '^[[:space:]]*-[[:space:]]*"[^"]*:8080"' "$base_compose" \
+      || grep -Eq '^[[:space:]]*-[[:space:]]*"[^"]*:8080"' "$prod_compose"; then
+      fail "Coolify compose still publishes 8080 via host port mapping (expected removed when CLOSE_COOLIFY_REALTIME_PORTS=true)"
     else
-      pass "Coolify base compose does not publish APP_PORT:8000"
+      pass "Coolify compose does not publish 8080 via host port mapping"
     fi
     if grep -Eq '^([[:space:]]*)ports:[[:space:]]*$' "$prod_compose" \
       && grep -Eq '^[[:space:]]*-[[:space:]]*"\$\{SOKETI_PORT:-6001\}:6001"' "$prod_compose" \

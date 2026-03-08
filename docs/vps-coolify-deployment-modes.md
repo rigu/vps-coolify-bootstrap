@@ -126,7 +126,8 @@ For deep behavior, risks, graphs, and update commands, see:
    - requires `COOLIFY_REALTIME_DOMAIN`
    - bootstrap sets `PUSHER_HOST`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https`
    - bootstrap hardens Coolify compose ports:
-     - removes `${APP_PORT:-8000}:8080` publish
+     - removes canonical `8000->8080` publish rules
+       (`${APP_PORT:-8000}:8080` / `8000:8080`) from base/prod compose files
      - converts Soketi `ports` publish to internal `expose` for `6001/6002`
    - bootstrap enforces `DOCKER-USER` guards for `6001/6002`
    - routing to `443` is app-level via `PUSHER_*`; direct public `6001/6002` is blocked by compose hardening + guards
