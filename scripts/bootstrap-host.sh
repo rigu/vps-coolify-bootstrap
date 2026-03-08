@@ -342,7 +342,18 @@ cleanup_stale_sshd_port22_listeners() {
   fi
 
   service_main_pid="$(systemctl show -p MainPID --value ssh.service 2>/dev/null || true)"
-  mapfile -t listener_pids < <(ss -lntp '( sport = :22 )' 2>/dev/null | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u)
+  # Parse listener PIDs without grep exit-code side effects when no :22
+  # listener exists (empty result is expected and should not trigger ERR trap).
+  mapfile -t listener_pids < <(
+    ss -lntp '( sport = :22 )' 2>/dev/null \
+      | awk '{
+          while (match($0, /pid=[0-9]+/)) {
+            print substr($0, RSTART + 4, RLENGTH - 4)
+            $0 = substr($0, RSTART + RLENGTH)
+          }
+        }' \
+      | sort -u
+  )
 
   for pid in "${listener_pids[@]}"; do
     [[ -n "$pid" && -d "/proc/$pid" ]] || continue
