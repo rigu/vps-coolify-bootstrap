@@ -276,11 +276,19 @@ if [[ -n "$coolify_realtime_domain" ]] && [[ "$coolify_realtime_domain" == *"CHA
   echo "ERROR: COOLIFY_REALTIME_DOMAIN must not contain CHANGE_ME placeholder." >&2
   exit 1
 fi
-if [[ "$close_coolify_realtime_ports" == "true" ]] && [[ -z "$coolify_realtime_domain" ]]; then
-  echo "ERROR: COOLIFY_REALTIME_DOMAIN is required when CLOSE_COOLIFY_REALTIME_PORTS=true." >&2
+cfg[COOLIFY_REALTIME_DOMAIN]="$coolify_realtime_domain"
+
+effective_coolify_realtime_domain="$coolify_realtime_domain"
+if [[ "$close_coolify_realtime_ports" == "true" ]] && [[ -z "$effective_coolify_realtime_domain" ]]; then
+  effective_coolify_realtime_domain="${cfg[COOLIFY_PUBLIC_DOMAIN]}"
+  if [[ -n "$effective_coolify_realtime_domain" ]]; then
+    echo "WARNING: COOLIFY_REALTIME_DOMAIN is empty. Closed realtime mode will use COOLIFY_PUBLIC_DOMAIN (${effective_coolify_realtime_domain})." >&2
+  fi
+fi
+if [[ "$close_coolify_realtime_ports" == "true" ]] && [[ -z "$effective_coolify_realtime_domain" ]]; then
+  echo "ERROR: Closed realtime mode requires domain via COOLIFY_REALTIME_DOMAIN or COOLIFY_PUBLIC_DOMAIN." >&2
   exit 1
 fi
-cfg[COOLIFY_REALTIME_DOMAIN]="$coolify_realtime_domain"
 
 env_dir="$(cd "$(dirname "$env_file")" && pwd)"
 template_file="${cfg[TEMPLATE_FILE]:-../templates/vps-init.template.yml}"

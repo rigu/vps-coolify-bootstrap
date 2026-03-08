@@ -94,7 +94,7 @@ test_warns_and_generates_without_ssh_key() {
   rm -rf "$tmpdir"
 }
 
-test_close_ports_true_requires_realtime_domain() {
+test_close_ports_true_falls_back_to_public_domain() {
   local tmpdir env_file out_file key_file
   tmpdir="$(mktemp -d)"
   env_file="$tmpdir/bootstrap.env"
@@ -103,7 +103,9 @@ test_close_ports_true_requires_realtime_domain() {
   make_key_file "$key_file"
   write_valid_env "$env_file" "$out_file" "$key_file" "true" "" "ops"
 
-  assert_failure "prepare script should fail when CLOSE_COOLIFY_REALTIME_PORTS=true and COOLIFY_REALTIME_DOMAIN is empty" bash "$script" --env-file "$env_file"
+  bash "$script" --env-file "$env_file" >/dev/null
+  assert_file_contains "$out_file" 'CLOSE_COOLIFY_REALTIME_PORTS=true' "close=true should be preserved"
+  assert_file_contains "$out_file" "COOLIFY_REALTIME_DOMAIN=''" "empty realtime domain should remain explicit in rendered env"
   rm -rf "$tmpdir"
 }
 
@@ -265,7 +267,7 @@ test_missing_devops_user_defaults_to_devops() {
 
 run_test "prepare-vps-coolify-init generates valid YAML with SSH key" test_generates_valid_output_with_key_and_user_list_delimiters
 run_test "prepare-vps-coolify-init warns but succeeds without SSH key" test_warns_and_generates_without_ssh_key
-run_test "prepare-vps-coolify-init enforces realtime domain when closing ports" test_close_ports_true_requires_realtime_domain
+run_test "prepare-vps-coolify-init closed mode falls back to COOLIFY_PUBLIC_DOMAIN when realtime domain is empty" test_close_ports_true_falls_back_to_public_domain
 run_test "prepare-vps-coolify-init rejects placeholder realtime domain in closed mode" test_close_ports_true_rejects_placeholder_realtime_domain
 run_test "prepare-vps-coolify-init maps legacy ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS" test_legacy_allow_public_mapping
 run_test "prepare-vps-coolify-init enforces --overwrite" test_requires_overwrite_when_output_exists

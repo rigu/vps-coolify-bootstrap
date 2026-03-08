@@ -21,12 +21,13 @@ Usage:
 
 Modes:
   public  -> CLOSE_COOLIFY_REALTIME_PORTS=false
-  closed  -> CLOSE_COOLIFY_REALTIME_PORTS=true (requires effective realtime domain)
+  closed  -> CLOSE_COOLIFY_REALTIME_PORTS=true (uses COOLIFY_REALTIME_DOMAIN, or falls back to COOLIFY_PUBLIC_DOMAIN)
 
 Examples:
   sudo bash scripts/update-realtime-mode.sh --mode public --clear-domain
   sudo bash scripts/update-realtime-mode.sh --mode public --domain realtime.example.com
   sudo bash scripts/update-realtime-mode.sh --mode closed --domain realtime.example.com
+  sudo bash scripts/update-realtime-mode.sh --mode closed
 
 Behavior:
   - Updates /etc/vps-coolify-bootstrap/bootstrap.env (or --env-file path).
@@ -119,6 +120,7 @@ esac
 load_env_file_strict "$ENV_FILE"
 
 current_domain="${COOLIFY_REALTIME_DOMAIN:-}"
+current_public_domain="${COOLIFY_PUBLIC_DOMAIN:-}"
 
 if (( CLEAR_DOMAIN == 1 )) && [[ -n "$DOMAIN" ]]; then
   bootstrap_error "--domain and --clear-domain are mutually exclusive."
@@ -147,8 +149,12 @@ if [[ -n "$effective_domain" ]]; then
   fi
 fi
 
-if [[ "$MODE" == "closed" ]] && [[ -z "$effective_domain" ]]; then
-  bootstrap_error "closed mode requires realtime domain. Set --domain <hostname> or configure COOLIFY_REALTIME_DOMAIN first."
+effective_runtime_domain="$effective_domain"
+if [[ "$MODE" == "closed" ]] && [[ -z "$effective_runtime_domain" ]]; then
+  effective_runtime_domain="$current_public_domain"
+fi
+if [[ "$MODE" == "closed" ]] && [[ -z "$effective_runtime_domain" ]]; then
+  bootstrap_error "closed mode requires domain via --domain, COOLIFY_REALTIME_DOMAIN, or COOLIFY_PUBLIC_DOMAIN."
   exit 1
 fi
 
@@ -160,7 +166,7 @@ fi
 
 # Keep the env format used by template-generated server file (single quotes).
 set_env_kv "$ENV_FILE" "COOLIFY_REALTIME_DOMAIN" "'${effective_domain}'"
-bootstrap_success "Updated realtime policy in $ENV_FILE (mode=${MODE}, domain=${effective_domain:-<empty>})."
+bootstrap_success "Updated realtime policy in $ENV_FILE (mode=${MODE}, configured_domain=${effective_domain:-<empty>}, effective_domain=${effective_runtime_domain:-<empty>})."
 
 if (( NO_REPLAY == 1 )); then
   bootstrap_warn "Skipping replay (--no-replay). Run bootstrap-host.sh manually to apply changes."

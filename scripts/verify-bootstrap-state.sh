@@ -36,6 +36,12 @@ esac
 
 COOLIFY_SUDO_NOPASSWD_USER="${COOLIFY_SUDO_NOPASSWD_USER:-coolify}"
 DEVOPS_USER="${DEVOPS_USER:-devops}"
+COOLIFY_REALTIME_DOMAIN="${COOLIFY_REALTIME_DOMAIN:-}"
+COOLIFY_PUBLIC_DOMAIN="${COOLIFY_PUBLIC_DOMAIN:-}"
+EFFECTIVE_COOLIFY_REALTIME_DOMAIN="$COOLIFY_REALTIME_DOMAIN"
+if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]] && [[ -z "$EFFECTIVE_COOLIFY_REALTIME_DOMAIN" ]]; then
+  EFFECTIVE_COOLIFY_REALTIME_DOMAIN="$COOLIFY_PUBLIC_DOMAIN"
+fi
 
 managed_users_csv="$DEVOPS_USER"
 managed_users_csv="$(csv_append_unique "$managed_users_csv" "$COOLIFY_SUDO_NOPASSWD_USER")"
@@ -263,11 +269,20 @@ else
   warn "Coolify env file missing: $coolify_env"
 fi
 
-if [[ -n "${COOLIFY_REALTIME_DOMAIN:-}" ]]; then
-  if [[ "$env_pusher_host" == "$COOLIFY_REALTIME_DOMAIN" ]]; then
-    pass "PUSHER_HOST matches COOLIFY_REALTIME_DOMAIN (${COOLIFY_REALTIME_DOMAIN})"
+if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]] && [[ -z "$EFFECTIVE_COOLIFY_REALTIME_DOMAIN" ]]; then
+  fail "closed realtime mode requires effective domain via COOLIFY_REALTIME_DOMAIN or COOLIFY_PUBLIC_DOMAIN"
+fi
+
+if [[ -n "${EFFECTIVE_COOLIFY_REALTIME_DOMAIN:-}" ]]; then
+  expected_realtime_source="COOLIFY_REALTIME_DOMAIN"
+  if [[ -z "$COOLIFY_REALTIME_DOMAIN" ]]; then
+    expected_realtime_source="COOLIFY_PUBLIC_DOMAIN fallback"
+  fi
+
+  if [[ "$env_pusher_host" == "$EFFECTIVE_COOLIFY_REALTIME_DOMAIN" ]]; then
+    pass "PUSHER_HOST matches effective realtime domain (${EFFECTIVE_COOLIFY_REALTIME_DOMAIN}, source=${expected_realtime_source})"
   else
-    fail "PUSHER_HOST is ${env_pusher_host:-<empty>} (expected ${COOLIFY_REALTIME_DOMAIN})"
+    fail "PUSHER_HOST is ${env_pusher_host:-<empty>} (expected ${EFFECTIVE_COOLIFY_REALTIME_DOMAIN}, source=${expected_realtime_source})"
   fi
   if [[ "$env_pusher_port" == "443" ]]; then
     pass "PUSHER_PORT is 443 for dedicated realtime host"
@@ -289,10 +304,10 @@ if [[ -n "${COOLIFY_REALTIME_DOMAIN:-}" ]]; then
       warn "no local listener detected on port 443; verify reverse-proxy readiness"
     fi
     if command -v getent >/dev/null 2>&1; then
-      if getent ahosts "$COOLIFY_REALTIME_DOMAIN" >/dev/null 2>&1; then
-        pass "DNS resolution works for COOLIFY_REALTIME_DOMAIN (${COOLIFY_REALTIME_DOMAIN})"
+      if getent ahosts "$EFFECTIVE_COOLIFY_REALTIME_DOMAIN" >/dev/null 2>&1; then
+        pass "DNS resolution works for effective realtime domain (${EFFECTIVE_COOLIFY_REALTIME_DOMAIN})"
       else
-        warn "DNS resolution failed for COOLIFY_REALTIME_DOMAIN (${COOLIFY_REALTIME_DOMAIN})"
+        warn "DNS resolution failed for effective realtime domain (${EFFECTIVE_COOLIFY_REALTIME_DOMAIN})"
       fi
     fi
   fi

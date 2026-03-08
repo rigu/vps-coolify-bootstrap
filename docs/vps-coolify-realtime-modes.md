@@ -14,10 +14,10 @@ It also includes operational update procedures and a dedicated script:
 
 - `CLOSE_COOLIFY_REALTIME_PORTS`
   - `false`: keep public publish path for `6001/6002`
-  - `true`: block direct public `6001/6002` and require dedicated realtime domain
+  - `true`: block direct public `6001/6002` and enforce domain-based realtime path
 - `COOLIFY_REALTIME_DOMAIN`
   - used as `PUSHER_HOST` when set
-  - mandatory when `CLOSE_COOLIFY_REALTIME_PORTS=true`
+  - optional in closed mode; if empty, bootstrap uses `COOLIFY_PUBLIC_DOMAIN` as realtime host
 
 ## Mode A: `CLOSE_COOLIFY_REALTIME_PORTS=false`
 
@@ -81,8 +81,10 @@ COOLIFY_REALTIME_DOMAIN=realtime.example.com
 ### Behavior
 
 Bootstrap enforces:
-- requires `COOLIFY_REALTIME_DOMAIN` (non-empty, non-placeholder)
-- writes `PUSHER_HOST=<domain>`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https`
+- resolves effective realtime domain:
+  - `COOLIFY_REALTIME_DOMAIN` when set (non-placeholder)
+  - otherwise `COOLIFY_PUBLIC_DOMAIN`
+- writes `PUSHER_HOST=<effective-domain>`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https`
 - hardens Coolify compose files:
   - removes canonical `8000->8080` publish rules
     (`${APP_PORT:-8000}:8080` / `8000:8080`) in base/prod compose files
@@ -124,6 +126,14 @@ CLOSE_COOLIFY_REALTIME_PORTS=true
 COOLIFY_REALTIME_DOMAIN=realtime.example.com
 ```
 
+or reuse the same domain:
+
+```env
+CLOSE_COOLIFY_REALTIME_PORTS=true
+COOLIFY_REALTIME_DOMAIN=
+COOLIFY_PUBLIC_DOMAIN=hub.example.com
+```
+
 ## Update procedure for each mode
 
 Use the dedicated script on the VPS:
@@ -157,6 +167,13 @@ sudo bash /opt/vps-coolify-bootstrap/scripts/update-realtime-mode.sh \
 sudo bash /opt/vps-coolify-bootstrap/scripts/update-realtime-mode.sh \
   --mode closed \
   --domain realtime.example.com
+```
+
+### Switch to closed mode (reuse `COOLIFY_PUBLIC_DOMAIN`)
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/update-realtime-mode.sh \
+  --mode closed
 ```
 
 ### Update only env (apply later)

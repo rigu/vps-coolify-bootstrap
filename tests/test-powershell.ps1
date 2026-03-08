@@ -246,7 +246,7 @@ OUTPUT_FILE=$outFile
     }
 }
 
-Run-Test "prepare-vps-coolify-init.ps1 fails when close=true and realtime domain missing" {
+Run-Test "prepare-vps-coolify-init.ps1 closed mode falls back to COOLIFY_PUBLIC_DOMAIN when realtime domain missing" {
     $tmp = New-TempDir
     try {
         $envFile = Join-Path $tmp "bootstrap.env"
@@ -274,9 +274,13 @@ TEMPLATE_FILE=$TemplatePath
 OUTPUT_FILE=$outFile
 "@ | Set-Content -Path $envFile -NoNewline
 
-        Invoke-NativeCommand -Description "prepare-vps-coolify-init (close=true, realtime domain missing)" -ExpectFailure -Command {
+        Invoke-NativeCommand -Description "prepare-vps-coolify-init (close=true, realtime domain missing)" -Command {
             & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile
         }
+        Assert-True (Test-Path -LiteralPath $outFile -PathType Leaf) "Output YAML should be generated in closed mode with fallback domain"
+        $content = Get-Content -LiteralPath $outFile -Raw
+        Assert-Match $content "CLOSE_COOLIFY_REALTIME_PORTS=true" "Output should preserve close=true"
+        Assert-Match $content "COOLIFY_REALTIME_DOMAIN=''" "Output should keep realtime domain empty when relying on fallback"
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }

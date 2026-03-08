@@ -166,10 +166,18 @@ if ($coolifyRealtimeDomain -match '[\s/]') { throw "COOLIFY_REALTIME_DOMAIN must
 if (-not [string]::IsNullOrWhiteSpace($coolifyRealtimeDomain) -and $coolifyRealtimeDomain -match "CHANGE_ME") {
     throw "COOLIFY_REALTIME_DOMAIN must not contain CHANGE_ME placeholder."
 }
-if ($closeCoolifyRealtimePorts -eq "true" -and [string]::IsNullOrWhiteSpace($coolifyRealtimeDomain)) {
-    throw "COOLIFY_REALTIME_DOMAIN is required when CLOSE_COOLIFY_REALTIME_PORTS=true."
-}
 $cfg["COOLIFY_REALTIME_DOMAIN"] = $coolifyRealtimeDomain
+
+$effectiveCoolifyRealtimeDomain = $coolifyRealtimeDomain
+if ($closeCoolifyRealtimePorts -eq "true" -and [string]::IsNullOrWhiteSpace($effectiveCoolifyRealtimeDomain)) {
+    $effectiveCoolifyRealtimeDomain = [string]$cfg["COOLIFY_PUBLIC_DOMAIN"]
+    if (-not [string]::IsNullOrWhiteSpace($effectiveCoolifyRealtimeDomain)) {
+        Write-Warning "COOLIFY_REALTIME_DOMAIN is empty. Closed realtime mode will use COOLIFY_PUBLIC_DOMAIN ($effectiveCoolifyRealtimeDomain)."
+    }
+}
+if ($closeCoolifyRealtimePorts -eq "true" -and [string]::IsNullOrWhiteSpace($effectiveCoolifyRealtimeDomain)) {
+    throw "Closed realtime mode requires domain via COOLIFY_REALTIME_DOMAIN or COOLIFY_PUBLIC_DOMAIN."
+}
 
 foreach ($v in @(
     [string]$cfg["COOLIFY_ROOT_USERNAME"],

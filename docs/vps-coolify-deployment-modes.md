@@ -29,7 +29,7 @@ What bootstrap does:
   - user `COOLIFY_SUDO_NOPASSWD_USER`
   - port `SSH_PORT`
   - managed localhost private key
-- applies realtime policy from env (`COOLIFY_REALTIME_DOMAIN`, `CLOSE_COOLIFY_REALTIME_PORTS`)
+- applies realtime policy from env (`CLOSE_COOLIFY_REALTIME_PORTS` + effective realtime domain from `COOLIFY_REALTIME_DOMAIN` or `COOLIFY_PUBLIC_DOMAIN`)
 
 ## Mode 2) Manual deployment on existing VPS (no user-data field)
 
@@ -121,10 +121,12 @@ For deep behavior, risks, graphs, and update commands, see:
    - app/browser realtime is directed to dedicated domain over `443`
    - direct public `6001/6002` may still be reachable
 
-3. Closed realtime ports with dedicated host
+3. Closed realtime ports (dedicated host optional)
    - `CLOSE_COOLIFY_REALTIME_PORTS=true`
-   - requires `COOLIFY_REALTIME_DOMAIN`
    - bootstrap sets `PUSHER_HOST`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https`
+   - realtime host source:
+     - `COOLIFY_REALTIME_DOMAIN` when set
+     - otherwise `COOLIFY_PUBLIC_DOMAIN` fallback
    - bootstrap hardens Coolify compose ports:
      - removes canonical `8000->8080` publish rules
        (`${APP_PORT:-8000}:8080` / `8000:8080`) from base/prod compose files

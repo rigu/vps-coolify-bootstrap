@@ -157,8 +157,12 @@ if [[ "$COOLIFY_REALTIME_DOMAIN" == *"CHANGE_ME"* ]]; then
   bootstrap_error "COOLIFY_REALTIME_DOMAIN must not contain CHANGE_ME placeholder."
   exit 1
 fi
-if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]] && [[ -z "$COOLIFY_REALTIME_DOMAIN" ]]; then
-  bootstrap_error "COOLIFY_REALTIME_DOMAIN is required when CLOSE_COOLIFY_REALTIME_PORTS=true"
+EFFECTIVE_COOLIFY_REALTIME_DOMAIN="$COOLIFY_REALTIME_DOMAIN"
+if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]] && [[ -z "$EFFECTIVE_COOLIFY_REALTIME_DOMAIN" ]]; then
+  EFFECTIVE_COOLIFY_REALTIME_DOMAIN="${COOLIFY_PUBLIC_DOMAIN:-}"
+fi
+if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]] && [[ -z "$EFFECTIVE_COOLIFY_REALTIME_DOMAIN" ]]; then
+  bootstrap_error "closed realtime mode requires domain: set COOLIFY_REALTIME_DOMAIN or COOLIFY_PUBLIC_DOMAIN"
   exit 1
 fi
 bootstrap_success "Input validation completed (SSH_PORT=${SSH_PORT}, DEVOPS_USER=${DEVOPS_USER}, CLOSE_COOLIFY_REALTIME_PORTS=${CLOSE_COOLIFY_REALTIME_PORTS})."
@@ -472,10 +476,10 @@ configure_coolify_realtime_domain() {
     return 0
   fi
 
-  if [[ -n "$COOLIFY_REALTIME_DOMAIN" ]]; then
+  if [[ -n "$EFFECTIVE_COOLIFY_REALTIME_DOMAIN" ]]; then
     current="$(sed -n 's/^PUSHER_HOST=//p' "$coolify_env" | tail -n1 || true)"
-    if [[ "$current" != "$COOLIFY_REALTIME_DOMAIN" ]]; then
-      set_env_kv "$coolify_env" "PUSHER_HOST" "$COOLIFY_REALTIME_DOMAIN"
+    if [[ "$current" != "$EFFECTIVE_COOLIFY_REALTIME_DOMAIN" ]]; then
+      set_env_kv "$coolify_env" "PUSHER_HOST" "$EFFECTIVE_COOLIFY_REALTIME_DOMAIN"
       changed=1
     fi
 
@@ -491,7 +495,11 @@ configure_coolify_realtime_domain() {
       changed=1
     fi
 
-    bootstrap_success "Configured Coolify realtime host ${COOLIFY_REALTIME_DOMAIN} (PUSHER_PORT=443, PUSHER_SCHEME=https)."
+    if [[ -n "$COOLIFY_REALTIME_DOMAIN" ]]; then
+      bootstrap_success "Configured Coolify realtime host ${EFFECTIVE_COOLIFY_REALTIME_DOMAIN} (PUSHER_PORT=443, PUSHER_SCHEME=https)."
+    else
+      bootstrap_success "Configured Coolify realtime host ${EFFECTIVE_COOLIFY_REALTIME_DOMAIN} via COOLIFY_PUBLIC_DOMAIN fallback (PUSHER_PORT=443, PUSHER_SCHEME=https)."
+    fi
   else
     if grep -qE '^PUSHER_HOST=' "$coolify_env"; then
       delete_env_kv "$coolify_env" "PUSHER_HOST"
@@ -1072,7 +1080,7 @@ if command -v ss >/dev/null 2>&1 && ss -tuln | awk '{print $4}' | grep -Eq '[:.]
   if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
     bootstrap_warn "DOCKER-USER guards were applied to block public ingress to 6001/6002."
     bootstrap_warn "verify effective policy with: sudo iptables -S DOCKER-USER"
-    bootstrap_warn "realtime domain in use: ${COOLIFY_REALTIME_DOMAIN}"
+    bootstrap_warn "realtime domain in use: ${EFFECTIVE_COOLIFY_REALTIME_DOMAIN}"
   else
     bootstrap_warn "realtime ports are intentionally public by configuration."
   fi

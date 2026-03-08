@@ -45,7 +45,7 @@ flowchart TD
   O --> P["Install Coolify if missing"]
   P --> R["Apply groups + sudo policy"]
   R --> Q["Sync localhost-only Coolify SSH user + restricted key + SSH port"]
-  Q --> Q1["Sync realtime host env from COOLIFY_REALTIME_DOMAIN"]
+  Q --> Q1["Sync realtime host env from effective realtime domain (COOLIFY_REALTIME_DOMAIN or COOLIFY_PUBLIC_DOMAIN fallback)"]
   Q1 --> Q2["When CLOSE_COOLIFY_REALTIME_PORTS=true: harden Coolify compose port publishing (8000,6001,6002)"]
   Q2 --> S["Sync DOCKER-USER guards for 6001/6002 based on CLOSE_COOLIFY_REALTIME_PORTS"]
   S --> T["SSH login on hardened port"]
@@ -236,16 +236,18 @@ Runtime password vault behavior:
 
 Dependency rule:
 
-- when `CLOSE_COOLIFY_REALTIME_PORTS=true`, `COOLIFY_REALTIME_DOMAIN` is mandatory
+- when `CLOSE_COOLIFY_REALTIME_PORTS=true`, effective realtime domain is:
+  - `COOLIFY_REALTIME_DOMAIN` when set
+  - otherwise `COOLIFY_PUBLIC_DOMAIN` (fallback)
 - when `COOLIFY_REALTIME_DOMAIN` is set, it must not contain `CHANGE_ME`
 
 Runtime sync behavior:
 
-- if `COOLIFY_REALTIME_DOMAIN` is set:
+- if effective realtime domain is available (`COOLIFY_REALTIME_DOMAIN` or fallback `COOLIFY_PUBLIC_DOMAIN`):
   - write `PUSHER_HOST=<domain>`
   - write `PUSHER_PORT=443`
   - write `PUSHER_SCHEME=https`
-- if empty:
+- if both are empty:
   - remove those keys from Coolify `.env`
 - when `CLOSE_COOLIFY_REALTIME_PORTS=true`, bootstrap also hardens
   Coolify compose files automatically:
@@ -263,8 +265,9 @@ Runtime sync behavior:
   - `CLOSE_COOLIFY_REALTIME_PORTS=false` + domain set:
     app points realtime to `https://<domain>:443`, while direct public
     `6001/6002` may still be reachable
-  - `CLOSE_COOLIFY_REALTIME_PORTS=true` + domain set:
-    app points realtime to `https://<domain>:443`, and public `6001/6002`
+  - `CLOSE_COOLIFY_REALTIME_PORTS=true`:
+    app points realtime to `https://<effective-domain>:443`
+    (`COOLIFY_REALTIME_DOMAIN` or `COOLIFY_PUBLIC_DOMAIN` fallback), and public `6001/6002`
     is blocked via compose hardening + `DOCKER-USER` guards
 
 ### 11) Placeholder and final render constraints

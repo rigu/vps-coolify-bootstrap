@@ -180,9 +180,9 @@ variables beyond the quick reference in Getting Started.
   - How: **AUTO-DETECTED** if a valid key exists on your machine (`~/.ssh/*.pub`); `generate-secrets.*` fills `SSH_PUBLIC_KEY` and `SSH_PUBLIC_KEY_PATH` when placeholders are present
   - Required: NO for bootstrap execution; YES recommended for direct SSH key-based first access
 - `COOLIFY_REALTIME_DOMAIN`
-  - When: runtime when value is set; required when `CLOSE_COOLIFY_REALTIME_PORTS=true`
-  - How: written as `PUSHER_HOST`, `PUSHER_PORT=443`, and `PUSHER_SCHEME=https` in `/data/coolify/source/.env` whenever value is set (independent of `CLOSE_COOLIFY_REALTIME_PORTS`); removed when empty
-  - Required: YES when closing `6001/6002`
+  - When: runtime when value is set
+  - How: written as `PUSHER_HOST`, `PUSHER_PORT=443`, and `PUSHER_SCHEME=https` in `/data/coolify/source/.env` whenever value is set; when `CLOSE_COOLIFY_REALTIME_PORTS=true` and this value is empty, bootstrap falls back to `COOLIFY_PUBLIC_DOMAIN`
+  - Required: NO (fallback exists via `COOLIFY_PUBLIC_DOMAIN` in closed mode)
 - `SSH_PORT`
   - When: bootstrap/replay SSH hardening
   - How: applied via `sshd_config.d` and service restart
@@ -242,7 +242,7 @@ What replay enforces:
 - UFW baseline (`SSH_PORT`, `80`, `443`)
 - `fail2ban` and `unattended-upgrades`
 - Coolify localhost connection user/port/private-key synchronization (`COOLIFY_SUDO_NOPASSWD_USER`, `SSH_PORT`)
-- realtime host env synchronization (`PUSHER_HOST`, `PUSHER_PORT`, `PUSHER_SCHEME`) from `COOLIFY_REALTIME_DOMAIN`
+- realtime host env synchronization (`PUSHER_HOST`, `PUSHER_PORT`, `PUSHER_SCHEME`) from effective realtime domain (`COOLIFY_REALTIME_DOMAIN` or `COOLIFY_PUBLIC_DOMAIN` fallback)
 - when `CLOSE_COOLIFY_REALTIME_PORTS=true`, automatic Coolify compose hardening to remove public `8000/6001/6002` publish bindings
 - `DOCKER-USER` guards for `6001/6002` when `CLOSE_COOLIFY_REALTIME_PORTS=true`
 
@@ -286,14 +286,17 @@ Bootstrap behavior:
 - if `COOLIFY_REALTIME_DOMAIN` is set, bootstrap always configures app-level
   realtime routing via `PUSHER_HOST=<domain>`, `PUSHER_PORT=443`,
   `PUSHER_SCHEME=https` (even when `CLOSE_COOLIFY_REALTIME_PORTS=false`)
+- if `COOLIFY_REALTIME_DOMAIN` is empty and `CLOSE_COOLIFY_REALTIME_PORTS=true`,
+  bootstrap configures app-level realtime routing using `COOLIFY_PUBLIC_DOMAIN`
 
 Operational interpretation:
 
 - `CLOSE_COOLIFY_REALTIME_PORTS=false` + `COOLIFY_REALTIME_DOMAIN` set means
   "domain routing enabled, direct `6001/6002` still reachable".
-- `CLOSE_COOLIFY_REALTIME_PORTS=true` + `COOLIFY_REALTIME_DOMAIN` set means
-  "domain routing enabled, direct public `6001/6002` blocked by compose
-  hardening + `DOCKER-USER` guards".
+- `CLOSE_COOLIFY_REALTIME_PORTS=true` means
+  "domain routing enabled on effective realtime domain (`COOLIFY_REALTIME_DOMAIN`
+  or `COOLIFY_PUBLIC_DOMAIN` fallback), direct public `6001/6002` blocked by
+  compose hardening + `DOCKER-USER` guards".
 - Domain routing on `443` is application-level behavior from `PUSHER_*`
   values, not an automatic host-level NAT redirect.
 
@@ -309,9 +312,11 @@ Detailed behavior and mode-by-mode guidance:
 
 `CLOSE_COOLIFY_REALTIME_PORTS=true` exact enforcement path:
 
-1. Validation stage requires `COOLIFY_REALTIME_DOMAIN`.
+1. Validation stage resolves effective realtime domain:
+   - `COOLIFY_REALTIME_DOMAIN` when set
+   - otherwise `COOLIFY_PUBLIC_DOMAIN`
 2. Bootstrap writes realtime app endpoint in Coolify env:
-   - `PUSHER_HOST=<COOLIFY_REALTIME_DOMAIN>`
+   - `PUSHER_HOST=<effective_realtime_domain>`
    - `PUSHER_PORT=443`
    - `PUSHER_SCHEME=https`
 3. Bootstrap hardens Coolify compose files:
@@ -363,6 +368,65 @@ For production:
 - disable auto-updates in Coolify
 - schedule upgrades in maintenance windows
 - validate backup and rollback plans before upgrade
+
+### Coolify update runbook (recommended)
+
+Use this procedure for every Coolify upgrade so hardening policy is re-applied
+after the upstream installer changes files/containers.
+
+1. Keep provider console access open and connect by SSH.
+
+   ```bash
+   ssh -p <SSH_PORT> <DEVOPS_USER>@<SERVER_IP>
+   ```
+
+2. Create local backups for policy + Coolify env before upgrade.
+
+   ```bash
+   sudo cp /etc/vps-coolify-bootstrap/bootstrap.env /root/bootstrap.env.bak.$(date +%F-%H%M%S)
+   sudo cp /data/coolify/source/.env /root/coolify.env.bak.$(date +%F-%H%M%S)
+   ```
+
+3. Pull latest bootstrap scripts (contains hardening/recovery fixes).
+
+   ```bash
+   cd /opt/vps-coolify-bootstrap
+   sudo git pull --ff-only origin main
+   ```
+
+4. Run official Coolify upgrade.
+
+   ```bash
+   curl -fsSL https://cdn.coollabs.io/coolify/install.sh | sudo bash
+   ```
+
+5. Re-apply bootstrap policy immediately after upgrade.
+
+   ```bash
+   sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env
+   ```
+
+6. Validate runtime state.
+
+   ```bash
+   sudo bash /opt/vps-coolify-bootstrap/scripts/verify-bootstrap-state.sh /etc/vps-coolify-bootstrap/bootstrap.env
+   sudo ss -lntp | grep -E ':(22|80|443|8000|6001|6002)\b' || true
+   sudo docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+   ```
+
+7. If realtime is in closed mode, confirm domain-based routing and port guards.
+
+   ```bash
+   sudo grep -nE '^PUSHER_HOST=|^PUSHER_PORT=|^PUSHER_SCHEME=' /data/coolify/source/.env
+   sudo iptables -S DOCKER-USER | grep -E '6001|6002' || true
+   sudo ip6tables -S DOCKER-USER 2>/dev/null | grep -E '6001|6002' || true
+   ```
+
+Operational note:
+
+- `COOLIFY_REALTIME_DOMAIN` can be the same as `COOLIFY_PUBLIC_DOMAIN`.
+- replay after upgrade is mandatory if you rely on bootstrap hardening
+  (`CLOSE_COOLIFY_REALTIME_PORTS=true`, SSH single-port policy, sudo policy).
 
 References:
 - <https://coolify.io/docs/knowledge-base/server/auto-update>
