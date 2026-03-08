@@ -64,11 +64,11 @@ It checks common public key files in `~/.ssh` (for example `id_ed25519.pub`,
 `SSH_PUBLIC_KEY` and `SSH_PUBLIC_KEY_PATH` when current values are empty or still `CHANGE_ME`.
 If no valid key is found, set `SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_PATH` manually.
 
-### Detailed script workflow (8 iterations)
+### Detailed script workflow
 
 Use this practical sequence when you want deterministic, repeatable local preparation.
 
-1. Iteration 1: initialize local env from scratch
+1. Step 1: initialize local env from scratch
 
    Use this on a fresh clone:
 
@@ -81,7 +81,7 @@ Use this practical sequence when you want deterministic, repeatable local prepar
    - placeholder secret values are replaced
    - SSH key is auto-filled if detected locally
 
-2. Iteration 2: inspect and set required business values manually
+2. Step 2: inspect and set required business values manually
 
    Edit `bootstrap-artifacts/bootstrap.env` and set at least:
    - `COOLIFY_PUBLIC_DOMAIN`
@@ -91,7 +91,7 @@ Use this practical sequence when you want deterministic, repeatable local prepar
 
    Keep generated values unless you intentionally want new secrets.
 
-3. Iteration 3: force only Coolify root password regeneration (optional)
+3. Step 3: force only Coolify root password regeneration (optional)
 
    Bash:
 
@@ -105,7 +105,7 @@ Use this practical sequence when you want deterministic, repeatable local prepar
    pwsh -File scripts/generate-secrets.ps1 -ForcePassword
    ```
 
-4. Iteration 4: force only vault encryption password regeneration (optional)
+4. Step 4: force only vault encryption password regeneration (optional)
 
    Bash:
 
@@ -119,7 +119,7 @@ Use this practical sequence when you want deterministic, repeatable local prepar
    pwsh -File scripts/generate-secrets.ps1 -ForceEncryptionPassword
    ```
 
-5. Iteration 5: force SSH key re-detection (optional)
+5. Step 5: force SSH key re-detection (optional)
 
    Use this after rotating local SSH keys:
 
@@ -135,7 +135,7 @@ Use this practical sequence when you want deterministic, repeatable local prepar
    pwsh -File scripts/generate-secrets.ps1 -ForceSshKey
    ```
 
-6. Iteration 6: run with a custom env file path (optional)
+6. Step 6: run with a custom env file path (optional)
 
    Scripts create missing parent folders and copy `env/bootstrap.env.example` if the file is missing.
 
@@ -151,7 +151,7 @@ Use this practical sequence when you want deterministic, repeatable local prepar
    pwsh -File scripts/generate-secrets.ps1 -EnvFile envs/prod/bootstrap.env
    ```
 
-7. Iteration 7: render VPS init YAML from prepared env
+7. Step 7: render VPS init YAML from prepared env
 
    Bash (default path):
 
@@ -167,7 +167,7 @@ Use this practical sequence when you want deterministic, repeatable local prepar
 
    Expected output: `bootstrap-artifacts/vps-coolify-init.generated.yml`
 
-8. Iteration 8: rerender safely after env changes
+8. Step 8: rerender safely after env changes
 
    After any change in `bootstrap.env`, rerun prepare with overwrite.
    This updates only the generated YAML file; your `bootstrap.env` remains the source of truth.
