@@ -150,6 +150,8 @@ Username keys:
 Accepted format:
 
 - regex `^[a-z_][a-z0-9_-]*[$]?$`
+- `root` is explicitly forbidden
+- `DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` must be different
 
 Notes:
 
@@ -171,6 +173,8 @@ Accepted format:
 - usernames separated by space, comma, or semicolon
 - surrounding whitespace is trimmed per item
 - `:` is not allowed in usernames
+- `root` is not allowed
+- `COOLIFY_SUDO_NOPASSWD_USER` is not allowed in this list
 
 Runtime behavior:
 

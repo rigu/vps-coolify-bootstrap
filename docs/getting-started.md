@@ -287,6 +287,9 @@ Input validation enforced by scripts:
 - `CLOSE_COOLIFY_REALTIME_PORTS` must be `true/false` (or `1/0`)
 - `COOLIFY_REALTIME_DOMAIN` is required when `CLOSE_COOLIFY_REALTIME_PORTS=true`
 - usernames in user lists must match `^[a-z_][a-z0-9_-]*[$]?$` and must not contain `:`
+- `root` is forbidden for `DEVOPS_USER`, `COOLIFY_SUDO_NOPASSWD_USER`, and in `ADDITIONAL_SUDO_USERS`
+- `DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` must be different users
+- `ADDITIONAL_SUDO_USERS` must not contain `COOLIFY_SUDO_NOPASSWD_USER`
 
 Bootstrap runtime also terminates stale `sshd` listeners on port `22` when
 `SSH_PORT` is configured to a different value, to avoid parallel legacy

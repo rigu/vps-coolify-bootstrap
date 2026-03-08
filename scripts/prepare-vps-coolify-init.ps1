@@ -73,18 +73,23 @@ function Test-ValidUnixUsername {
 
 $devopsUser = if ($cfg.ContainsKey("DEVOPS_USER") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["DEVOPS_USER"])) { [string]$cfg["DEVOPS_USER"] } else { "devops" }
 if ($devopsUser -notmatch '^[a-z_][a-z0-9_-]*[$]?$') { throw "DEVOPS_USER contains invalid UNIX username: $devopsUser" }
+if ($devopsUser -eq "root") { throw "DEVOPS_USER must not be root." }
 $cfg["DEVOPS_USER"] = $devopsUser
 
 $coolifySudoNopasswdUser = if ($cfg.ContainsKey("COOLIFY_SUDO_NOPASSWD_USER") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["COOLIFY_SUDO_NOPASSWD_USER"])) { [string]$cfg["COOLIFY_SUDO_NOPASSWD_USER"] } else { "coolify" }
 if (-not (Test-ValidUnixUsername -User $coolifySudoNopasswdUser)) { throw "COOLIFY_SUDO_NOPASSWD_USER contains invalid UNIX username: $coolifySudoNopasswdUser" }
+if ($coolifySudoNopasswdUser -eq "root") { throw "COOLIFY_SUDO_NOPASSWD_USER must not be root." }
+if ($devopsUser -eq $coolifySudoNopasswdUser) { throw "DEVOPS_USER and COOLIFY_SUDO_NOPASSWD_USER must be different users." }
 $cfg["COOLIFY_SUDO_NOPASSWD_USER"] = $coolifySudoNopasswdUser
 
 $managedUsers = @($cfg["DEVOPS_USER"], $coolifySudoNopasswdUser)
 if (-not $cfg.ContainsKey("ADDITIONAL_SUDO_USERS")) { $cfg["ADDITIONAL_SUDO_USERS"] = "" }
 $additionalUsers = ([string]$cfg["ADDITIONAL_SUDO_USERS"] -split '[,;\s]+') | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 foreach ($user in $additionalUsers) {
+    if ($user -eq "root") { throw "ADDITIONAL_SUDO_USERS must not contain root." }
     if ($user.Contains(":")) { throw "ADDITIONAL_SUDO_USERS contains invalid username (colon not allowed): $user" }
     if (-not (Test-ValidUnixUsername -User $user)) { throw "ADDITIONAL_SUDO_USERS contains invalid UNIX username: $user" }
+    if ($user -eq $coolifySudoNopasswdUser) { throw "ADDITIONAL_SUDO_USERS must not contain COOLIFY_SUDO_NOPASSWD_USER ($coolifySudoNopasswdUser)." }
     if (-not ($managedUsers -contains $user)) { $managedUsers += $user }
 }
 

@@ -24,6 +24,9 @@ Effective managed users are:
 - each managed user is created if missing
 - each managed user is added to `sudo`, `docker`, and `coolify`
 - usernames must match `^[a-z_][a-z0-9_-]*[$]?$`
+- `root` is forbidden for `DEVOPS_USER`, `COOLIFY_SUDO_NOPASSWD_USER`, and in `ADDITIONAL_SUDO_USERS`
+- `DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` must be different
+- `ADDITIONAL_SUDO_USERS` must not contain `COOLIFY_SUDO_NOPASSWD_USER`
 
 ### More than two sudo users
 

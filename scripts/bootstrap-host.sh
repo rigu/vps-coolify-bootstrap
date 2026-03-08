@@ -70,22 +70,42 @@ if ! is_valid_unix_username "$DEVOPS_USER"; then
   echo "ERROR: DEVOPS_USER is not a valid UNIX username: $DEVOPS_USER" >&2
   exit 1
 fi
+if [[ "$DEVOPS_USER" == "root" ]]; then
+  echo "ERROR: DEVOPS_USER must not be root." >&2
+  exit 1
+fi
 
 COOLIFY_SUDO_NOPASSWD_USER="${COOLIFY_SUDO_NOPASSWD_USER:-coolify}"
 if ! is_valid_unix_username "$COOLIFY_SUDO_NOPASSWD_USER"; then
   echo "ERROR: COOLIFY_SUDO_NOPASSWD_USER is not a valid UNIX username: $COOLIFY_SUDO_NOPASSWD_USER" >&2
   exit 1
 fi
+if [[ "$COOLIFY_SUDO_NOPASSWD_USER" == "root" ]]; then
+  echo "ERROR: COOLIFY_SUDO_NOPASSWD_USER must not be root." >&2
+  exit 1
+fi
+if [[ "$DEVOPS_USER" == "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
+  echo "ERROR: DEVOPS_USER and COOLIFY_SUDO_NOPASSWD_USER must be different users." >&2
+  exit 1
+fi
 
 MANAGED_USERS_CSV="$DEVOPS_USER"
 MANAGED_USERS_CSV="$(csv_append_unique "$MANAGED_USERS_CSV" "$COOLIFY_SUDO_NOPASSWD_USER")"
 for user in $(split_csv_to_lines "${ADDITIONAL_SUDO_USERS:-}"); do
+  if [[ "$user" == "root" ]]; then
+    echo "ERROR: ADDITIONAL_SUDO_USERS must not contain root." >&2
+    exit 1
+  fi
   if [[ "$user" == *:* ]]; then
     echo "ERROR: ADDITIONAL_SUDO_USERS contains invalid username (colon not allowed): $user" >&2
     exit 1
   fi
   if ! is_valid_unix_username "$user"; then
     echo "ERROR: ADDITIONAL_SUDO_USERS contains invalid UNIX username: $user" >&2
+    exit 1
+  fi
+  if [[ "$user" == "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
+    echo "ERROR: ADDITIONAL_SUDO_USERS must not contain COOLIFY_SUDO_NOPASSWD_USER ($COOLIFY_SUDO_NOPASSWD_USER)." >&2
     exit 1
   fi
   MANAGED_USERS_CSV="$(csv_append_unique "$MANAGED_USERS_CSV" "$user")"
