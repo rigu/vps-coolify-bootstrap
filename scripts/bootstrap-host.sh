@@ -526,6 +526,7 @@ harden_coolify_compose_ports() {
   local backup_prod=""
   local result=0
   local backup_suffix=""
+  local compose_err=""
   local -a compose_cmd=()
 
   if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" != "true" ]]; then
@@ -580,12 +581,26 @@ harden_coolify_compose_ports() {
         return 1
       fi
 
-      if ! "${compose_cmd[@]}" -f "$base_compose" -f "$prod_compose" up -d; then
-        bootstrap_error "failed to redeploy Coolify after compose hardening; restoring backups."
-        mv "$backup_base" "$base_compose"
-        mv "$backup_prod" "$prod_compose"
-        return 1
+      compose_err="$(mktemp)"
+      if ! "${compose_cmd[@]}" -f "$base_compose" -f "$prod_compose" up -d 2> >(tee "$compose_err" >&2); then
+        if sanitize_compose_parseaddr_cidr_and_retry "$compose_err" "$base_compose" "$prod_compose"; then
+          bootstrap_warn "retrying Coolify redeploy after CIDR ParseAddr sanitization."
+          if ! "${compose_cmd[@]}" -f "$base_compose" -f "$prod_compose" up -d; then
+            rm -f "$compose_err"
+            bootstrap_error "failed to redeploy Coolify after compose hardening; restoring backups."
+            mv "$backup_base" "$base_compose"
+            mv "$backup_prod" "$prod_compose"
+            return 1
+          fi
+        else
+          rm -f "$compose_err"
+          bootstrap_error "failed to redeploy Coolify after compose hardening; restoring backups."
+          mv "$backup_base" "$base_compose"
+          mv "$backup_prod" "$prod_compose"
+          return 1
+        fi
       fi
+      rm -f "$compose_err"
       rm -f "$backup_base" "$backup_prod"
       bootstrap_success "Coolify compose hardened and redeployed successfully."
       ;;
@@ -602,6 +617,79 @@ harden_coolify_compose_ports() {
       return 1
       ;;
   esac
+}
+
+replace_literal_in_file() {
+  local file="$1"
+  local old_value="$2"
+  local new_value="$3"
+  local status=0
+  python3 - "$file" "$old_value" "$new_value" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+old_value = sys.argv[2]
+new_value = sys.argv[3]
+
+text = path.read_text(encoding="utf-8")
+updated = text.replace(old_value, new_value)
+if updated == text:
+    raise SystemExit(3)
+path.write_text(updated, encoding="utf-8")
+raise SystemExit(0)
+PY
+  status=$?
+  if [[ "$status" == "0" ]]; then
+    return 0
+  fi
+  if [[ "$status" == "3" ]]; then
+    return 1
+  fi
+  return "$status"
+}
+
+sanitize_compose_parseaddr_cidr_and_retry() {
+  local err_file="$1"
+  local base_compose="$2"
+  local prod_compose="$3"
+  local coolify_env="/data/coolify/source/.env"
+  local value=""
+  local sanitized=""
+  local target=""
+  local changed=0
+  local -a bad_values=()
+  local -a targets=("$coolify_env" "$base_compose" "$prod_compose")
+
+  mapfile -t bad_values < <(
+    grep -oE 'ParseAddr\("[^"]+/[0-9]{1,3}"\)' "$err_file" 2>/dev/null \
+      | sed -E 's/^ParseAddr\("([^"]+)"\)$/\1/' \
+      | sort -u
+  )
+
+  if [[ "${#bad_values[@]}" -eq 0 ]]; then
+    return 1
+  fi
+
+  for value in "${bad_values[@]}"; do
+    sanitized="${value%%/*}"
+    if [[ -z "$sanitized" || "$sanitized" == "$value" ]]; then
+      continue
+    fi
+
+    for target in "${targets[@]}"; do
+      [[ -f "$target" ]] || continue
+      if replace_literal_in_file "$target" "$value" "$sanitized"; then
+        changed=1
+        bootstrap_warn "sanitized ParseAddr CIDR value in $target: $value -> $sanitized"
+      fi
+    done
+  done
+
+  if (( changed == 1 )); then
+    return 0
+  fi
+  return 1
 }
 
 apply_sudo_policy() {
