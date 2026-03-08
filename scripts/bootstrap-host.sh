@@ -1036,6 +1036,35 @@ PHP
   return 0
 }
 
+ensure_coolify_proxy_path_access() {
+  local proxy_root="/data/coolify/proxy"
+  local user="$COOLIFY_SUDO_NOPASSWD_USER"
+
+  if [[ ! -d "$proxy_root" ]]; then
+    bootstrap_warn "$proxy_root not found; skipping proxy path permission synchronization."
+    return 0
+  fi
+
+  # Coolify executes remote proxy operations using the configured localhost SSH
+  # user. That user must be able to traverse and write under /data/coolify/proxy.
+  chgrp coolify /data/coolify 2>/dev/null || true
+  chmod g+rx /data/coolify 2>/dev/null || true
+  chgrp -R coolify "$proxy_root" 2>/dev/null || true
+  chmod g+rwx "$proxy_root" 2>/dev/null || true
+  chmod g+s "$proxy_root" 2>/dev/null || true
+  chmod -R g+rwX "$proxy_root" 2>/dev/null || true
+
+  if id "$user" >/dev/null 2>&1; then
+    if sudo -u "$user" test -x "$proxy_root" && sudo -u "$user" test -w "$proxy_root"; then
+      bootstrap_success "Coolify proxy path access synchronized for ${user} (${proxy_root})."
+      return 0
+    fi
+  fi
+
+  bootstrap_error "coolify localhost user ${user} cannot access ${proxy_root} after permission sync."
+  return 1
+}
+
 ensure_coolify_https_proxy() {
   local attempt=0
   local max_attempts=20
@@ -1163,6 +1192,7 @@ bootstrap_success "Managed users synchronized to sudo/docker/coolify groups."
 
 sync_coolify_localhost_ssh_user
 bootstrap_success "Coolify localhost SSH user synchronization completed."
+ensure_coolify_proxy_path_access
 ensure_coolify_https_proxy
 bootstrap_success "Coolify public domain proxy synchronized to https://${COOLIFY_PUBLIC_DOMAIN}."
 configure_coolify_realtime_domain
