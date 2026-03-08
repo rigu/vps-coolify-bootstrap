@@ -23,15 +23,20 @@ Production-ready **VPS bootstrap for Coolify on Ubuntu 24.04 LTS** with VPS-Cool
 
 Prerequisites: Git, Bash (or PowerShell), OpenSSL, and a VPS provider account.
 
-1. Prepare env + secrets:
+1. Clone repository and enter folder:
+```bash
+git clone https://github.com/rigu/vps-coolify-bootstrap.git
+cd vps-coolify-bootstrap
+```
+2. Prepare env + secrets:
 ```bash
 bash scripts/generate-secrets.sh
 ```
-2. Generate VPS-Coolify init file:
+3. Generate VPS-Coolify init file:
 ```bash
 bash scripts/prepare-vps-coolify-init.sh --overwrite
 ```
-3. Provision VPS by pasting `bootstrap-artifacts/vps-coolify-init.generated.yml` into the provider user-data field (VPS init format) during server creation (first boot). If the UI has no user-data option, use provider API/CLI or follow the manual fallback in [docs/getting-started.md](docs/getting-started.md#3-provision-vps).
+4. Provision VPS by pasting `bootstrap-artifacts/vps-coolify-init.generated.yml` into the provider user-data field (VPS init format) during server creation (first boot). If the UI has no user-data option, use provider API/CLI or follow the manual fallback in [docs/getting-started.md](docs/getting-started.md#3-provision-vps).
 
 Detailed script usage (including force flags, custom env paths, rerender workflow, and troubleshooting): [docs/getting-started.md](docs/getting-started.md#detailed-script-workflow).
 

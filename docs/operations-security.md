@@ -35,7 +35,9 @@ COOLIFY_SUDO_NOPASSWD_USER=coolify
 ADDITIONAL_SUDO_USERS=admin ops;dev
 ```
 
-Re-render the VPS-Coolify init file or replay bootstrap to apply changes.
+Apply path depends on server lifecycle:
+- for a new VPS not yet provisioned: re-render VPS-Coolify init and provision with the new file
+- for an existing VPS already running: update server `/etc/vps-coolify-bootstrap/bootstrap.env` and replay bootstrap
 Other required variables are omitted for brevity; keep required `CHANGE_ME`
 values (domain, credentials, encryption password, SSH key) fully configured.
 
@@ -48,8 +50,10 @@ effective managed user set.
 On the first SSH login as `DEVOPS_USER`, set a local account password:
 
 ```bash
-sudo passwd "$(whoami)"
+sudo passwd <DEVOPS_USER>
 ```
+
+Replace `<DEVOPS_USER>` with the value from `/etc/vps-coolify-bootstrap/bootstrap.env`.
 
 `DEVOPS_USER` has passwordless sudo for operations, but setting a local
 password is still required for emergency/recovery flows (for example provider
@@ -133,75 +137,75 @@ variables beyond the quick reference in Getting Started.
 - `DEVOPS_USER`
   - When: bootstrap/replay runtime, before sudo policy is written
   - How: defaults to `devops` when unset
-  - Must change: NO
+  - Required: NO
 - `COOLIFY_SUDO_NOPASSWD_USER`
   - When: bootstrap/replay runtime
   - How: defaults to `coolify`; auto-added to managed user/group lists and passwordless sudo policy
-  - Must change: NO
+  - Required: NO
 - `SSH_KEY_ROTATE`
   - When: runtime during SSH key synchronization
   - How: applies to `DEVOPS_USER` + `ADDITIONAL_SUDO_USERS`; default `0` appends key, `1` replaces their `authorized_keys`; does not apply to `COOLIFY_SUDO_NOPASSWD_USER`
-  - Must change: NO
+  - Required: NO
   - Example:
     - `SSH_KEY_ROTATE=0`: keep existing keys and ensure current `SSH_PUBLIC_KEY` is present for `DEVOPS_USER` + `ADDITIONAL_SUDO_USERS`
     - `SSH_KEY_ROTATE=1`: replace keys for `DEVOPS_USER` + `ADDITIONAL_SUDO_USERS` with current `SSH_PUBLIC_KEY` during replay/boot
 - `CLOSE_COOLIFY_REALTIME_PORTS`
   - When: runtime during `DOCKER-USER` guard sync
   - How: default `false` keeps ports public; `true` adds guards to block public ingress to `6001/6002`
-  - Must change: NO
+  - Required: NO
 
 ### B) Coolify admin variables
 
 - `COOLIFY_PUBLIC_DOMAIN`
   - When: used by bootstrap output and onboarding flow
   - How: validated as hostname
-  - Must change: YES
+  - Required: YES
 - `COOLIFY_ROOT_USERNAME`
   - When: passed to Coolify installer
   - How: installer environment variable
-  - Must change: YES
+  - Required: YES
 - `COOLIFY_ROOT_USER_EMAIL`
   - When: passed to Coolify installer and used as login identifier
   - How: installer environment variable, email format validated
-  - Must change: YES
+  - Required: YES
 - `COOLIFY_ROOT_USER_PASSWORD`
   - When: local generation before provisioning if placeholder/empty
   - How: **AUTO-GENERATED** by `generate-secrets.*` only when value is empty/`CHANGE_ME` (`openssl rand -hex 12` in Bash)
-  - Must change: NO
+  - Required: NO
 
 ### C) Server user variables
 
 - `SSH_PUBLIC_KEY` / `SSH_PUBLIC_KEY_PATH`
   - When: local preparation step and host bootstrap key installation
   - How: **AUTO-DETECTED** if a valid key exists on your machine (`~/.ssh/*.pub`); `generate-secrets.*` fills `SSH_PUBLIC_KEY` and `SSH_PUBLIC_KEY_PATH` when placeholders are present
-  - Must change: NO for bootstrap execution; YES recommended for direct SSH key-based first access
+  - Required: NO for bootstrap execution; YES recommended for direct SSH key-based first access
 - `COOLIFY_REALTIME_DOMAIN`
   - When: runtime when value is set; required when `CLOSE_COOLIFY_REALTIME_PORTS=true`
   - How: written as `PUSHER_HOST`, `PUSHER_PORT=443`, and `PUSHER_SCHEME=https` in `/data/coolify/source/.env` whenever value is set (independent of `CLOSE_COOLIFY_REALTIME_PORTS`); removed when empty
-  - Must change: YES when closing `6001/6002`
+  - Required: YES when closing `6001/6002`
 - `SSH_PORT`
   - When: bootstrap/replay SSH hardening
   - How: applied via `sshd_config.d` and service restart
-  - Must change: NO
+  - Required: NO
 - `ADDITIONAL_SUDO_USERS`
   - When: runtime user/group reconciliation
   - How: optional list separated by space/comma/semicolon; each user is validated and merged into effective managed users
-  - Must change: NO unless team model differs
+  - Required: NO unless team model differs
 - `TIMEZONE`
   - When: early VPS init phase
   - How: applied as system timezone
-  - Must change: NO
+  - Required: NO
 
 ### D) Generated passwords and secrets
 
 - `USER_PASSWORDS_ENCRYPTION_PASSWORD`
   - When: local generation before provisioning if placeholder/empty
   - How: **AUTO-GENERATED** by `generate-secrets.*` only when value is empty/`CHANGE_ME` (`openssl rand -hex 16` in Bash)
-  - Must change: NO after secure generation
+  - Required: NO after secure generation
 - account passwords for managed users (`DEVOPS_USER`, `COOLIFY_SUDO_NOPASSWD_USER`, `ADDITIONAL_SUDO_USERS`)
   - When: during bootstrap/replay runtime on the VPS host in `ensure-user-passwords.sh`
   - How: not pre-generated locally; password is generated only when account is locked/unset (`/etc/shadow` empty hash or prefixed `!`/`*`) or when vault has no entry for that user; unlocked accounts already present in vault are not rotated; then vault is encrypted to `/etc/vps-coolify-bootstrap/user-passwords.enc`
-  - Must change: YES for `DEVOPS_USER` on first login (`sudo passwd "$(whoami)"`)
+  - Required: YES for `DEVOPS_USER` on first login (`sudo passwd "$(whoami)"`)
 
 ## Replay bootstrap policy (idempotent)
 
