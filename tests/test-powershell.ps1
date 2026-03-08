@@ -52,6 +52,29 @@ function Run-Test {
     }
 }
 
+function Invoke-NativeCommand {
+    param(
+        [scriptblock]$Command,
+        [string]$Description,
+        [switch]$ExpectFailure
+    )
+
+    $global:LASTEXITCODE = 0
+    & $Command | Out-Null
+    $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+
+    if ($ExpectFailure) {
+        if ($exitCode -eq 0) {
+            throw "$Description should fail, but exited with code 0."
+        }
+        return
+    }
+
+    if ($exitCode -ne 0) {
+        throw "$Description failed with exit code $exitCode."
+    }
+}
+
 Run-Test "generate-secrets.ps1 creates env + secrets + ssh autodetect" {
     $tmp = New-TempDir
     try {
@@ -64,7 +87,9 @@ Run-Test "generate-secrets.ps1 creates env + secrets + ssh autodetect" {
         $env:USERPROFILE = $homeFake
 
         $envFile = Join-Path $tmp "bootstrap/bootstrap.env"
-        & pwsh -NoLogo -NoProfile -File $GenerateScript -EnvFile $envFile | Out-Null
+        Invoke-NativeCommand -Description "generate-secrets (create env + autodetect)" -Command {
+            & pwsh -NoLogo -NoProfile -File $GenerateScript -EnvFile $envFile
+        }
 
         Assert-True (Test-Path -LiteralPath $envFile -PathType Leaf) "Env file should be created"
         $pw = Strip-Quotes (Env-Value -File $envFile -Key "COOLIFY_ROOT_USER_PASSWORD")
@@ -95,14 +120,20 @@ Run-Test "generate-secrets.ps1 force-encryption-password rotates only when reque
         $envFile = Join-Path $tmp "bootstrap.env"
         Copy-Item -LiteralPath (Join-Path $RepoRoot "env/bootstrap.env.example") -Destination $envFile
 
-        & pwsh -NoLogo -NoProfile -File $GenerateScript -EnvFile $envFile | Out-Null
+        Invoke-NativeCommand -Description "generate-secrets (initial)" -Command {
+            & pwsh -NoLogo -NoProfile -File $GenerateScript -EnvFile $envFile
+        }
         $first = Strip-Quotes (Env-Value -File $envFile -Key "USER_PASSWORDS_ENCRYPTION_PASSWORD")
 
-        & pwsh -NoLogo -NoProfile -File $GenerateScript -EnvFile $envFile | Out-Null
+        Invoke-NativeCommand -Description "generate-secrets (second run without force)" -Command {
+            & pwsh -NoLogo -NoProfile -File $GenerateScript -EnvFile $envFile
+        }
         $second = Strip-Quotes (Env-Value -File $envFile -Key "USER_PASSWORDS_ENCRYPTION_PASSWORD")
         Assert-True ($first -eq $second) "Encryption password should stay unchanged without -ForceEncryptionPassword"
 
-        & pwsh -NoLogo -NoProfile -File $GenerateScript -EnvFile $envFile -ForceEncryptionPassword | Out-Null
+        Invoke-NativeCommand -Description "generate-secrets (forced encryption password rotate)" -Command {
+            & pwsh -NoLogo -NoProfile -File $GenerateScript -EnvFile $envFile -ForceEncryptionPassword
+        }
         $third = Strip-Quotes (Env-Value -File $envFile -Key "USER_PASSWORDS_ENCRYPTION_PASSWORD")
         Assert-True ($third -ne $second) "Encryption password should rotate with -ForceEncryptionPassword"
     } finally {
@@ -128,11 +159,15 @@ Run-Test "generate-secrets.ps1 force-ssh-key replaces existing key/path" {
             Replace("SSH_PUBLIC_KEY=CHANGE_ME_ssh_public_key", "SSH_PUBLIC_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOldPsKey old@test'") |
             Set-Content -LiteralPath $envFile -NoNewline
 
-        & pwsh -NoLogo -NoProfile -File $GenerateScript -EnvFile $envFile | Out-Null
+        Invoke-NativeCommand -Description "generate-secrets (without -ForceSshKey)" -Command {
+            & pwsh -NoLogo -NoProfile -File $GenerateScript -EnvFile $envFile
+        }
         $noForcePath = Strip-Quotes (Env-Value -File $envFile -Key "SSH_PUBLIC_KEY_PATH")
         Assert-True ($noForcePath -eq "/old/path/old.pub") "SSH_PUBLIC_KEY_PATH should stay unchanged without -ForceSshKey"
 
-        & pwsh -NoLogo -NoProfile -File $GenerateScript -EnvFile $envFile -ForceSshKey | Out-Null
+        Invoke-NativeCommand -Description "generate-secrets (with -ForceSshKey)" -Command {
+            & pwsh -NoLogo -NoProfile -File $GenerateScript -EnvFile $envFile -ForceSshKey
+        }
         $forcedPath = Strip-Quotes (Env-Value -File $envFile -Key "SSH_PUBLIC_KEY_PATH")
         Assert-Match $forcedPath 'id_ed25519\.pub$' "SSH_PUBLIC_KEY_PATH should be replaced with detected path when forced"
     } finally {
@@ -170,14 +205,22 @@ TEMPLATE_FILE=$TemplatePath
 OUTPUT_FILE=$outFile
 "@ | Set-Content -Path $envFile -NoNewline
 
-        & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile | Out-Null
+        Invoke-NativeCommand -Description "prepare-vps-coolify-init (valid env)" -Command {
+            & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile
+        }
         Assert-True (Test-Path -LiteralPath $outFile -PathType Leaf) "Output YAML should be generated"
 
         $content = Get-Content -LiteralPath $outFile -Raw
         Assert-True (-not $content.Contains("_HERE")) "Output should not contain unreplaced placeholders"
         Assert-Match $content 'ssh_authorized_keys:' "Output should include ssh_authorized_keys"
 
-        & python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1], 'r', encoding='utf-8').read())" "$outFile" | Out-Null
+        if (Get-Command python3 -ErrorAction SilentlyContinue) {
+            Invoke-NativeCommand -Description "python3 yaml parse" -Command {
+                & python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1], 'r', encoding='utf-8').read())" "$outFile"
+            }
+        } else {
+            Write-Host "[INFO] python3 not found; skipping YAML parse check on this host."
+        }
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
@@ -211,13 +254,9 @@ TEMPLATE_FILE=$TemplatePath
 OUTPUT_FILE=$outFile
 "@ | Set-Content -Path $envFile -NoNewline
 
-        $failed = $false
-        try {
-            & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile | Out-Null
-        } catch {
-            $failed = $true
+        Invoke-NativeCommand -Description "prepare-vps-coolify-init (close=true, realtime domain missing)" -ExpectFailure -Command {
+            & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile
         }
-        Assert-True $failed "prepare-vps-coolify-init.ps1 should fail when realtime domain is missing and close=true"
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
@@ -251,13 +290,9 @@ TEMPLATE_FILE=$TemplatePath
 OUTPUT_FILE=$outFile
 "@ | Set-Content -Path $envFile -NoNewline
 
-        $failed = $false
-        try {
-            & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile | Out-Null
-        } catch {
-            $failed = $true
+        Invoke-NativeCommand -Description "prepare-vps-coolify-init (close=true, realtime domain placeholder)" -ExpectFailure -Command {
+            & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile
         }
-        Assert-True $failed "prepare-vps-coolify-init.ps1 should fail when realtime domain is placeholder and close=true"
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
@@ -294,13 +329,17 @@ TEMPLATE_FILE=$TemplatePath
 OUTPUT_FILE=$outFile
 "@ | Set-Content -Path $envFile -NoNewline
 
-        & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile | Out-Null
+        Invoke-NativeCommand -Description "prepare-vps-coolify-init (initial render)" -Command {
+            & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile
+        }
         $firstHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $outFile).Hash
 
         (Get-Content -LiteralPath $envFile -Raw).Replace("COOLIFY_PUBLIC_DOMAIN=hub.example.com", "COOLIFY_PUBLIC_DOMAIN=hub2.example.com") |
             Set-Content -LiteralPath $envFile -NoNewline
 
-        & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile -Overwrite | Out-Null
+        Invoke-NativeCommand -Description "prepare-vps-coolify-init (-Overwrite rerender)" -Command {
+            & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile -Overwrite
+        }
         $secondHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $outFile).Hash
 
         Assert-True ($firstHash -ne $secondHash) "Output should change on -EnvFile + -Overwrite rerender"
@@ -338,7 +377,9 @@ TEMPLATE_FILE=$TemplatePath
 OUTPUT_FILE=$outFile
 "@ | Set-Content -Path $envFile -NoNewline
 
-        & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile | Out-Null
+        Invoke-NativeCommand -Description "prepare-vps-coolify-init (default DEVOPS_USER)" -Command {
+            & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile
+        }
         $content = Get-Content -LiteralPath $outFile -Raw
         Assert-Match $content 'name: devops' "Missing DEVOPS_USER should default to devops"
     } finally {
@@ -391,15 +432,11 @@ OUTPUT_FILE=$outFile
 
             $lines = Get-Content -LiteralPath $envFile
             $lines = $lines | Where-Object { $_ -notmatch "^$missingKey=" }
-            Set-Content -LiteralPath $envFile -Value $lines -NoNewline
+            Set-Content -LiteralPath $envFile -Value $lines
 
-            $failed = $false
-            try {
-                & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile | Out-Null
-            } catch {
-                $failed = $true
+            Invoke-NativeCommand -Description "prepare-vps-coolify-init (missing required key: $missingKey)" -ExpectFailure -Command {
+                & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile
             }
-            Assert-True $failed "prepare-vps-coolify-init.ps1 should fail when required key is missing: $missingKey"
         } finally {
             Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
         }
@@ -434,13 +471,9 @@ TEMPLATE_FILE=$TemplatePath
 OUTPUT_FILE=$outFile
 "@ | Set-Content -Path $envFile -NoNewline
 
-        $failed = $false
-        try {
-            & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile | Out-Null
-        } catch {
-            $failed = $true
+        Invoke-NativeCommand -Description "prepare-vps-coolify-init (empty required value)" -ExpectFailure -Command {
+            & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile
         }
-        Assert-True $failed "prepare-vps-coolify-init.ps1 should fail when required key has empty value"
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
