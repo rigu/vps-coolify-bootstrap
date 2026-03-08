@@ -281,12 +281,15 @@ if [[ ! -f "$template_path" ]]; then
 fi
 
 ssh_public_key="${cfg[SSH_PUBLIC_KEY]:-}"
-if [[ -z "$ssh_public_key" || "$ssh_public_key" == *"CHANGE_ME"* ]]; then
-  ssh_key_path="${cfg[SSH_PUBLIC_KEY_PATH]:-}"
-  if [[ -z "$ssh_key_path" || "$ssh_key_path" == *"CHANGE_ME"* ]]; then
-    echo "ERROR: Set SSH_PUBLIC_KEY or SSH_PUBLIC_KEY_PATH in $env_file" >&2
-    exit 1
-  fi
+if [[ "$ssh_public_key" == *"CHANGE_ME"* ]]; then
+  ssh_public_key=""
+fi
+ssh_key_path="${cfg[SSH_PUBLIC_KEY_PATH]:-}"
+if [[ "$ssh_key_path" == *"CHANGE_ME"* ]]; then
+  ssh_key_path=""
+fi
+
+if [[ -z "$ssh_public_key" && -n "$ssh_key_path" ]]; then
   ssh_key_path="$(resolve_path "$ssh_key_path" "$env_dir")"
   if [[ ! -f "$ssh_key_path" ]]; then
     echo "ERROR: SSH public key file not found: $ssh_key_path" >&2
@@ -295,9 +298,18 @@ if [[ -z "$ssh_public_key" || "$ssh_public_key" == *"CHANGE_ME"* ]]; then
   ssh_public_key="$(tr -d '\r' < "$ssh_key_path" | head -n1)"
 fi
 
-if [[ "$ssh_public_key" == *$'\n'* ]] || [[ ! "$ssh_public_key" =~ ^ssh-(ed25519|rsa|ecdsa-[^[:space:]]+)[[:space:]] ]]; then
+if [[ -n "$ssh_public_key" ]] && { [[ "$ssh_public_key" == *$'\n'* ]] || [[ ! "$ssh_public_key" =~ ^ssh-(ed25519|rsa|ecdsa-[^[:space:]]+)[[:space:]] ]]; }; then
   echo "ERROR: Invalid SSH public key format." >&2
   exit 1
+fi
+
+devops_ssh_authorized_keys_block=""
+if [[ -n "$ssh_public_key" ]]; then
+  devops_ssh_authorized_keys_block=$'ssh_authorized_keys:\n      - '"$ssh_public_key"
+else
+  echo "WARNING: SSH_PUBLIC_KEY and SSH_PUBLIC_KEY_PATH are empty or placeholder values." >&2
+  echo "WARNING: Generated VPS init YML will not include ssh_authorized_keys for DEVOPS_USER." >&2
+  echo "WARNING: Ensure alternate first-access method (provider console/password/manual key injection)." >&2
 fi
 
 for v in "$ssh_public_key" "${cfg[TIMEZONE]}" "${cfg[COOLIFY_PUBLIC_DOMAIN]}" "${cfg[COOLIFY_REALTIME_DOMAIN]}" "${cfg[COOLIFY_ROOT_USERNAME]}" "${cfg[COOLIFY_ROOT_USER_EMAIL]}" "${cfg[COOLIFY_ROOT_USER_PASSWORD]}" "${cfg[BOOTSTRAP_REPO_URL]}" "${cfg[BOOTSTRAP_REPO_REF]}"; do
@@ -348,7 +360,8 @@ content="${content//TIMEZONE_HERE/${cfg[TIMEZONE]}}"
 content="${content//SSH_PORT_HERE/${cfg[SSH_PORT]}}"
 content="${content//DEVOPS_USER_HERE/${cfg[DEVOPS_USER]}}"
 content="${content//COOLIFY_SUDO_NOPASSWD_USER_HERE/${cfg[COOLIFY_SUDO_NOPASSWD_USER]}}"
-content="${content//SSH_PUBLIC_KEY_HERE/$ssh_public_key}"
+content="${content//DEVOPS_SSH_AUTHORIZED_KEYS_BLOCK_HERE/$devops_ssh_authorized_keys_block}"
+content="${content//BOOTSTRAP_SSH_PUBLIC_KEY_HERE/$ssh_public_key}"
 content="${content//SSH_KEY_ROTATE_HERE/$ssh_key_rotate}"
 content="${content//ADDITIONAL_SUDO_USERS_HERE/${cfg[ADDITIONAL_SUDO_USERS]}}"
 content="${content//CLOSE_COOLIFY_REALTIME_PORTS_HERE/${cfg[CLOSE_COOLIFY_REALTIME_PORTS]}}"
@@ -361,7 +374,7 @@ content="${content//USER_PASSWORDS_ENCRYPTION_PASSWORD_HERE/$user_passwords_encr
 content="${content//BOOTSTRAP_REPO_URL_HERE/${cfg[BOOTSTRAP_REPO_URL]}}"
 content="${content//BOOTSTRAP_REPO_REF_HERE/${cfg[BOOTSTRAP_REPO_REF]}}"
 
-for token in TIMEZONE_HERE SSH_PORT_HERE DEVOPS_USER_HERE COOLIFY_SUDO_NOPASSWD_USER_HERE SSH_PUBLIC_KEY_HERE SSH_KEY_ROTATE_HERE ADDITIONAL_SUDO_USERS_HERE CLOSE_COOLIFY_REALTIME_PORTS_HERE COOLIFY_REALTIME_DOMAIN_HERE COOLIFY_PUBLIC_DOMAIN_HERE COOLIFY_ROOT_USERNAME_HERE COOLIFY_ROOT_USER_EMAIL_HERE COOLIFY_ROOT_USER_PASSWORD_HERE USER_PASSWORDS_ENCRYPTION_PASSWORD_HERE BOOTSTRAP_REPO_URL_HERE BOOTSTRAP_REPO_REF_HERE; do
+for token in TIMEZONE_HERE SSH_PORT_HERE DEVOPS_USER_HERE COOLIFY_SUDO_NOPASSWD_USER_HERE DEVOPS_SSH_AUTHORIZED_KEYS_BLOCK_HERE BOOTSTRAP_SSH_PUBLIC_KEY_HERE SSH_KEY_ROTATE_HERE ADDITIONAL_SUDO_USERS_HERE CLOSE_COOLIFY_REALTIME_PORTS_HERE COOLIFY_REALTIME_DOMAIN_HERE COOLIFY_PUBLIC_DOMAIN_HERE COOLIFY_ROOT_USERNAME_HERE COOLIFY_ROOT_USER_EMAIL_HERE COOLIFY_ROOT_USER_PASSWORD_HERE USER_PASSWORDS_ENCRYPTION_PASSWORD_HERE BOOTSTRAP_REPO_URL_HERE BOOTSTRAP_REPO_REF_HERE; do
   if grep -Fq "$token" <<< "$content"; then
     echo "ERROR: Unreplaced placeholder: $token" >&2
     exit 1

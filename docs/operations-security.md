@@ -180,7 +180,7 @@ variables beyond the quick reference in Getting Started.
   - Must change: YES (valid key required)
 - `COOLIFY_REALTIME_DOMAIN`
   - When: runtime when value is set; required when `CLOSE_COOLIFY_REALTIME_PORTS=true`
-  - How: written as `PUSHER_HOST`, `PUSHER_PORT=443`, and `PUSHER_SCHEME=https` in `/data/coolify/source/.env`; removed when empty
+  - How: written as `PUSHER_HOST`, `PUSHER_PORT=443`, and `PUSHER_SCHEME=https` in `/data/coolify/source/.env` whenever value is set (independent of `CLOSE_COOLIFY_REALTIME_PORTS`); removed when empty
   - Must change: YES when closing `6001/6002`
 - `SSH_PORT`
   - When: bootstrap/replay SSH hardening
@@ -280,6 +280,35 @@ Bootstrap behavior:
 - if `CLOSE_COOLIFY_REALTIME_PORTS=true`, bootstrap adds `DOCKER-USER`
   guard rules to block public ingress to `6001/6002`
 - if `CLOSE_COOLIFY_REALTIME_PORTS=false` (default), bootstrap removes those guards
+- if `COOLIFY_REALTIME_DOMAIN` is set, bootstrap always configures app-level
+  realtime routing via `PUSHER_HOST=<domain>`, `PUSHER_PORT=443`,
+  `PUSHER_SCHEME=https` (even when `CLOSE_COOLIFY_REALTIME_PORTS=false`)
+
+Operational interpretation:
+
+- `CLOSE_COOLIFY_REALTIME_PORTS=false` + `COOLIFY_REALTIME_DOMAIN` set means
+  "domain routing enabled, direct `6001/6002` still reachable".
+- `CLOSE_COOLIFY_REALTIME_PORTS=true` + `COOLIFY_REALTIME_DOMAIN` set means
+  "domain routing enabled, direct public `6001/6002` blocked by
+  `DOCKER-USER` guards".
+- Domain routing on `443` is application-level behavior from `PUSHER_*`
+  values, not an automatic host-level NAT redirect.
+
+`CLOSE_COOLIFY_REALTIME_PORTS=true` exact enforcement path:
+
+1. Validation stage requires `COOLIFY_REALTIME_DOMAIN`.
+2. Bootstrap writes realtime app endpoint in Coolify env:
+   - `PUSHER_HOST=<COOLIFY_REALTIME_DOMAIN>`
+   - `PUSHER_PORT=443`
+   - `PUSHER_SCHEME=https`
+3. Bootstrap restarts `coolify` and `coolify-realtime` containers if those values changed.
+4. Bootstrap installs `DOCKER-USER` ingress guards to block public forwarded traffic to `6001/6002`.
+5. Bootstrap keeps UFW `80/443` ALLOW baseline for domain-facing traffic.
+
+Compose invariants:
+
+- Bootstrap does not mutate Coolify `docker-compose` files to implement this mode.
+- The control-plane mechanism is env-driven (`PUSHER_*`) plus host firewall guards (`DOCKER-USER`).
 
 Check effective rules:
 

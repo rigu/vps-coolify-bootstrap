@@ -108,15 +108,26 @@ Reference:
 
 These are runtime exposure variants controlled by env:
 
-1. Public realtime ports (default)
+1. Public realtime ports, no dedicated host (default)
    - `CLOSE_COOLIFY_REALTIME_PORTS=false`
+   - `COOLIFY_REALTIME_DOMAIN` empty
    - `6001/6002` can remain externally reachable via Docker publish rules
+   - bootstrap removes `PUSHER_HOST`, `PUSHER_PORT`, `PUSHER_SCHEME`
 
-2. Closed realtime ports with dedicated host
+2. Public realtime ports, dedicated realtime domain
+   - `CLOSE_COOLIFY_REALTIME_PORTS=false`
+   - `COOLIFY_REALTIME_DOMAIN` set
+   - bootstrap sets `PUSHER_HOST`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https`
+   - app/browser realtime is directed to dedicated domain over `443`
+   - direct public `6001/6002` may still be reachable
+
+3. Closed realtime ports with dedicated host
    - `CLOSE_COOLIFY_REALTIME_PORTS=true`
    - requires `COOLIFY_REALTIME_DOMAIN`
    - bootstrap sets `PUSHER_HOST`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https`
    - bootstrap enforces `DOCKER-USER` guards for `6001/6002`
+   - bootstrap does not rewrite Coolify compose to implement this mode
+   - routing to `443` is app-level via `PUSHER_*`; direct public `6001/6002` is blocked by guards
 
 ## Access phase variants
 

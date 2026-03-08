@@ -21,7 +21,7 @@ require_var() {
   fi
 }
 
-for v in SSH_PORT SSH_PUBLIC_KEY DEVOPS_USER COOLIFY_PUBLIC_DOMAIN COOLIFY_ROOT_USERNAME COOLIFY_ROOT_USER_EMAIL COOLIFY_ROOT_USER_PASSWORD USER_PASSWORDS_ENCRYPTION_PASSWORD; do
+for v in SSH_PORT DEVOPS_USER COOLIFY_PUBLIC_DOMAIN COOLIFY_ROOT_USERNAME COOLIFY_ROOT_USER_EMAIL COOLIFY_ROOT_USER_PASSWORD USER_PASSWORDS_ENCRYPTION_PASSWORD; do
   require_var "$v"
 done
 
@@ -45,9 +45,16 @@ if (( ${#USER_PASSWORDS_ENCRYPTION_PASSWORD} < 16 )); then
   exit 1
 fi
 
-if [[ ! "$SSH_PUBLIC_KEY" =~ ^ssh-(ed25519|rsa|ecdsa-[^[:space:]]+)[[:space:]] ]]; then
+SSH_PUBLIC_KEY="${SSH_PUBLIC_KEY:-}"
+if [[ "$SSH_PUBLIC_KEY" == *"CHANGE_ME"* ]]; then
+  SSH_PUBLIC_KEY=""
+fi
+if [[ -n "$SSH_PUBLIC_KEY" ]] && [[ ! "$SSH_PUBLIC_KEY" =~ ^ssh-(ed25519|rsa|ecdsa-[^[:space:]]+)[[:space:]] ]]; then
   echo "ERROR: invalid SSH_PUBLIC_KEY format" >&2
   exit 1
+fi
+if [[ -z "$SSH_PUBLIC_KEY" ]]; then
+  echo "WARNING: SSH_PUBLIC_KEY is empty; bootstrap will not manage operator SSH keys for DEVOPS_USER/ADDITIONAL_SUDO_USERS."
 fi
 
 if [[ "$COOLIFY_PUBLIC_DOMAIN" =~ [[:space:]/] ]]; then

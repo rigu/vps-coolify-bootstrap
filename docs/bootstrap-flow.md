@@ -195,6 +195,7 @@ Resolution rules:
 
 1. Use `SSH_PUBLIC_KEY` if already set and valid.
 2. Else read first line from `SSH_PUBLIC_KEY_PATH`.
+3. If neither is available, generation continues with warnings; no `ssh_authorized_keys` is injected for `DEVOPS_USER`, bootstrap host run does not fail on missing `SSH_PUBLIC_KEY`, and the operator must use an alternate first-access path.
 
 `generate-secrets.*` helper behavior:
 
@@ -247,6 +248,17 @@ Runtime sync behavior:
   - write `PUSHER_SCHEME=https`
 - if empty:
   - remove those keys from Coolify `.env`
+- bootstrap does not edit Coolify compose files for realtime routing;
+  it uses env-level `PUSHER_*` configuration and optional `DOCKER-USER` guards
+- this `PUSHER_*` synchronization is independent from `CLOSE_COOLIFY_REALTIME_PORTS`
+  and is applied even when `CLOSE_COOLIFY_REALTIME_PORTS=false`
+- meaning of each mode:
+  - `CLOSE_COOLIFY_REALTIME_PORTS=false` + domain set:
+    app points realtime to `https://<domain>:443`, while direct public
+    `6001/6002` may still be reachable
+  - `CLOSE_COOLIFY_REALTIME_PORTS=true` + domain set:
+    app points realtime to `https://<domain>:443`, and public `6001/6002`
+    is blocked via `DOCKER-USER` guards
 
 ### 11) Placeholder and final render constraints
 

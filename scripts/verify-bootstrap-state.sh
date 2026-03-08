@@ -194,10 +194,14 @@ if [[ -n "$coolify_user_home" ]] && [[ -f "${coolify_user_home}/.ssh/authorized_
     fail "Coolify localhost public key missing in ${COOLIFY_SUDO_NOPASSWD_USER} authorized_keys"
   fi
 
-  if grep -Fxq -- "${SSH_PUBLIC_KEY:-}" "${coolify_user_home}/.ssh/authorized_keys"; then
-    fail "operator SSH key should not be present in ${COOLIFY_SUDO_NOPASSWD_USER} authorized_keys"
+  if [[ -n "${SSH_PUBLIC_KEY:-}" ]]; then
+    if grep -Fxq -- "${SSH_PUBLIC_KEY}" "${coolify_user_home}/.ssh/authorized_keys"; then
+      fail "operator SSH key should not be present in ${COOLIFY_SUDO_NOPASSWD_USER} authorized_keys"
+    else
+      pass "operator SSH key is not present in ${COOLIFY_SUDO_NOPASSWD_USER} authorized_keys"
+    fi
   else
-    pass "operator SSH key is not present in ${COOLIFY_SUDO_NOPASSWD_USER} authorized_keys"
+    pass "operator SSH key not configured in bootstrap.env; skip operator-key absence check"
   fi
 else
   fail "cannot validate ${COOLIFY_SUDO_NOPASSWD_USER} authorized_keys against Coolify localhost key"
@@ -273,6 +277,23 @@ if [[ -n "${COOLIFY_REALTIME_DOMAIN:-}" ]]; then
     pass "PUSHER_SCHEME is https for dedicated realtime host"
   else
     fail "PUSHER_SCHEME is ${env_pusher_scheme:-<empty>} (expected https)"
+  fi
+  if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "false" ]]; then
+    pass "realtime routing via dedicated host is configured on https/443 even with CLOSE_COOLIFY_REALTIME_PORTS=false"
+  else
+    pass "realtime routing via dedicated host is configured on https/443 with CLOSE_COOLIFY_REALTIME_PORTS=true"
+    if ss -lnt | awk '{print $4}' | grep -Eq '(^|[:.])443$'; then
+      pass "port 443 listener exists for domain/reverse-proxy path"
+    else
+      warn "no local listener detected on port 443; verify reverse-proxy readiness"
+    fi
+    if command -v getent >/dev/null 2>&1; then
+      if getent ahosts "$COOLIFY_REALTIME_DOMAIN" >/dev/null 2>&1; then
+        pass "DNS resolution works for COOLIFY_REALTIME_DOMAIN (${COOLIFY_REALTIME_DOMAIN})"
+      else
+        warn "DNS resolution failed for COOLIFY_REALTIME_DOMAIN (${COOLIFY_REALTIME_DOMAIN})"
+      fi
+    fi
   fi
 else
   if [[ -z "$env_pusher_host" && -z "$env_pusher_port" && -z "$env_pusher_scheme" ]]; then

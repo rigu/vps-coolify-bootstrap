@@ -99,19 +99,33 @@ if (-not [System.IO.Path]::IsPathRooted($templatePath)) { $templatePath = Join-P
 if (-not [System.IO.Path]::IsPathRooted($outputPath)) { $outputPath = Join-Path (Split-Path -Parent $envPath) $outputPath }
 if (-not (Test-Path -LiteralPath $templatePath -PathType Leaf)) { throw "Template file not found: $templatePath" }
 
-$ssh = if ($cfg.ContainsKey("SSH_PUBLIC_KEY") -and $cfg["SSH_PUBLIC_KEY"] -and $cfg["SSH_PUBLIC_KEY"] -notmatch "CHANGE_ME") {
-    [string]$cfg["SSH_PUBLIC_KEY"]
-} else {
-    if (-not $cfg.ContainsKey("SSH_PUBLIC_KEY_PATH") -or [string]::IsNullOrWhiteSpace([string]$cfg["SSH_PUBLIC_KEY_PATH"]) -or [string]$cfg["SSH_PUBLIC_KEY_PATH"] -match "CHANGE_ME") {
-        throw "Set SSH_PUBLIC_KEY or SSH_PUBLIC_KEY_PATH in env file"
-    }
-    $k = [string]$cfg["SSH_PUBLIC_KEY_PATH"]
-    if (-not [System.IO.Path]::IsPathRooted($k)) { $k = Join-Path (Split-Path -Parent $envPath) $k }
-    if (-not (Test-Path -LiteralPath $k -PathType Leaf)) { throw "SSH public key file not found: $k" }
-    (Get-Content -LiteralPath $k -Raw).Trim()
+$ssh = ""
+if ($cfg.ContainsKey("SSH_PUBLIC_KEY") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SSH_PUBLIC_KEY"]) -and [string]$cfg["SSH_PUBLIC_KEY"] -notmatch "CHANGE_ME") {
+    $ssh = [string]$cfg["SSH_PUBLIC_KEY"]
 }
 
-if ($ssh -notmatch '^ssh-(ed25519|rsa|ecdsa-[^\s]+)\s') { throw "Invalid SSH public key format." }
+$sshPath = ""
+if ($cfg.ContainsKey("SSH_PUBLIC_KEY_PATH") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SSH_PUBLIC_KEY_PATH"]) -and [string]$cfg["SSH_PUBLIC_KEY_PATH"] -notmatch "CHANGE_ME") {
+    $sshPath = [string]$cfg["SSH_PUBLIC_KEY_PATH"]
+}
+
+if ([string]::IsNullOrWhiteSpace($ssh) -and -not [string]::IsNullOrWhiteSpace($sshPath)) {
+    $k = $sshPath
+    if (-not [System.IO.Path]::IsPathRooted($k)) { $k = Join-Path (Split-Path -Parent $envPath) $k }
+    if (-not (Test-Path -LiteralPath $k -PathType Leaf)) { throw "SSH public key file not found: $k" }
+    $ssh = (Get-Content -LiteralPath $k -Raw).Trim()
+}
+
+if (-not [string]::IsNullOrWhiteSpace($ssh) -and $ssh -notmatch '^ssh-(ed25519|rsa|ecdsa-[^\s]+)\s') { throw "Invalid SSH public key format." }
+
+$devopsSshAuthorizedKeysBlock = ""
+if (-not [string]::IsNullOrWhiteSpace($ssh)) {
+    $devopsSshAuthorizedKeysBlock = "ssh_authorized_keys:`n      - $ssh"
+} else {
+    Write-Warning "SSH_PUBLIC_KEY and SSH_PUBLIC_KEY_PATH are empty or placeholder values."
+    Write-Warning "Generated VPS init YML will not include ssh_authorized_keys for DEVOPS_USER."
+    Write-Warning "Ensure alternate first-access method (provider console/password/manual key injection)."
+}
 if ([string]$cfg["COOLIFY_ROOT_USER_PASSWORD"].Length -lt 16) { throw "COOLIFY_ROOT_USER_PASSWORD must be at least 16 characters." }
 if ([string]$cfg["USER_PASSWORDS_ENCRYPTION_PASSWORD"].Length -lt 16) { throw "USER_PASSWORDS_ENCRYPTION_PASSWORD must be at least 16 characters." }
 $sshKeyRotate = if ($cfg.ContainsKey("SSH_KEY_ROTATE") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SSH_KEY_ROTATE"])) { [string]$cfg["SSH_KEY_ROTATE"] } else { "0" }
@@ -175,7 +189,8 @@ $map = [ordered]@{
     "SSH_PORT_HERE" = [string]$cfg["SSH_PORT"]
     "DEVOPS_USER_HERE" = [string]$cfg["DEVOPS_USER"]
     "COOLIFY_SUDO_NOPASSWD_USER_HERE" = [string]$cfg["COOLIFY_SUDO_NOPASSWD_USER"]
-    "SSH_PUBLIC_KEY_HERE" = [string]$ssh
+    "DEVOPS_SSH_AUTHORIZED_KEYS_BLOCK_HERE" = [string]$devopsSshAuthorizedKeysBlock
+    "BOOTSTRAP_SSH_PUBLIC_KEY_HERE" = [string]$ssh
     "SSH_KEY_ROTATE_HERE" = [string]$sshKeyRotate
     "ADDITIONAL_SUDO_USERS_HERE" = [string]$cfg["ADDITIONAL_SUDO_USERS"]
     "CLOSE_COOLIFY_REALTIME_PORTS_HERE" = [string]$cfg["CLOSE_COOLIFY_REALTIME_PORTS"]
