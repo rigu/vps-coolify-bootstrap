@@ -582,10 +582,12 @@ harden_coolify_compose_ports() {
       fi
 
       compose_err="$(mktemp)"
-      if ! "${compose_cmd[@]}" -f "$base_compose" -f "$prod_compose" up -d 2> >(tee "$compose_err" >&2); then
+      if ! "${compose_cmd[@]}" -f "$base_compose" -f "$prod_compose" up -d >"$compose_err" 2>&1; then
+        cat "$compose_err" >&2 || true
         if sanitize_compose_parseaddr_cidr_and_retry "$compose_err" "$base_compose" "$prod_compose"; then
           bootstrap_warn "retrying Coolify redeploy after CIDR ParseAddr sanitization."
-          if ! "${compose_cmd[@]}" -f "$base_compose" -f "$prod_compose" up -d; then
+          if ! "${compose_cmd[@]}" -f "$base_compose" -f "$prod_compose" up -d >"$compose_err" 2>&1; then
+            cat "$compose_err" >&2 || true
             rm -f "$compose_err"
             bootstrap_error "failed to redeploy Coolify after compose hardening; restoring backups."
             mv "$backup_base" "$base_compose"
