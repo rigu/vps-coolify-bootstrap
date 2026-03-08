@@ -1,7 +1,4 @@
 ---
-layout: page
-title: Getting Started
-description: End-to-end setup steps for preparing env values, rendering VPS-Coolify init, and provisioning the VPS.
 ---
 
 # Getting Started

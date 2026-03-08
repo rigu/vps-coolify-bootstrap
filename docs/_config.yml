@@ -7,6 +7,54 @@ markdown: kramdown
 plugins:
   - jekyll-seo-tag
   - jekyll-sitemap
+defaults:
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: page
+  - scope:
+      path: "index.md"
+      type: "pages"
+    values:
+      title: VPS Coolify Bootstrap Docs
+      description: Canonical documentation for production VPS bootstrapping with Coolify on Ubuntu 24.04.
+  - scope:
+      path: "getting-started.md"
+      type: "pages"
+    values:
+      title: Getting Started
+      description: End-to-end setup steps for preparing env values, rendering VPS-Coolify init, and provisioning the VPS.
+  - scope:
+      path: "bootstrap-flow.md"
+      type: "pages"
+    values:
+      title: Bootstrap Flow
+      description: Detailed first-boot execution order, VPS init behavior, and bootstrap flow for Coolify provisioning.
+  - scope:
+      path: "coolify-deployment-modes.md"
+      type: "pages"
+    values:
+      title: Coolify Deployment Modes
+      description: Complete reference for all Coolify deployment modes supported by this bootstrap.
+  - scope:
+      path: "operations-security.md"
+      type: "pages"
+    values:
+      title: Operations and Security
+      description: Production operations guidance for post-bootstrap hardening, monitoring, and Coolify-safe server operation.
+  - scope:
+      path: "bootstrap-failure-recovery.md"
+      type: "pages"
+    values:
+      title: Bootstrap Failure Recovery
+      description: Step-by-step runbook to recover failed first-boot VPS init/bootstrap execution.
+  - scope:
+      path: "github-promotion.md"
+      type: "pages"
+    values:
+      title: GitHub Promotion Checklist
+      description: Practical checklist to improve repository discoverability on GitHub and search engines.
 header_pages:
   - index.md
   - getting-started.md

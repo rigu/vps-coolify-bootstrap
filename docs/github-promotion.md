@@ -1,7 +1,4 @@
 ---
-layout: page
-title: GitHub Promotion Checklist
-description: Practical checklist to improve repository discoverability on GitHub and search engines.
 ---
 
 # GitHub Promotion Checklist

@@ -1,7 +1,4 @@
 ---
-layout: page
-title: Coolify Deployment Modes
-description: Complete reference for all Coolify deployment modes supported by this bootstrap.
 ---
 
 # Coolify Deployment Modes

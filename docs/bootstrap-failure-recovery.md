@@ -1,7 +1,4 @@
 ---
-layout: page
-title: Bootstrap Failure Recovery
-description: Step-by-step runbook to recover failed first-boot VPS init/bootstrap execution.
 ---
 
 # Bootstrap Failure Recovery

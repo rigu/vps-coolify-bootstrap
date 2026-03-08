@@ -1,7 +1,4 @@
 ---
-layout: page
-title: Operations and Security
-description: Production operations guidance for post-bootstrap hardening, monitoring, and Coolify-safe server operation.
 ---
 
 # Operations and Security

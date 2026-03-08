@@ -1,7 +1,4 @@
 ---
-layout: page
-title: Bootstrap Flow
-description: Detailed first-boot execution order, VPS init behavior, and bootstrap flow for Coolify provisioning.
 ---
 
 # Bootstrap Flow

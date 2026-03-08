@@ -1,7 +1,4 @@
 ---
-layout: page
-title: VPS Coolify Bootstrap Docs
-description: Canonical documentation for production VPS bootstrapping with Coolify on Ubuntu 24.04.
 ---
 
 # VPS Coolify Bootstrap
