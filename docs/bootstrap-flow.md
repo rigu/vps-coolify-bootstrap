@@ -40,7 +40,7 @@ flowchart TD
   J --> K["Set passwords for locked/unset users or users missing from vault"]
   K --> L["Write encrypted vault /etc/vps-coolify-bootstrap/user-passwords.enc"]
   L --> M["Sync SSH AllowUsers from effective managed users"]
-  M --> N["Disable ssh.socket, validate sshd, restart ssh.service, cleanup stale :22 listeners"]
+  M --> N["Disable ssh.socket, disable legacy Port directives, validate sshd, restart ssh.service, enforce only SSH_PORT (no :22 listener)"]
   N --> O["Apply UFW rules and enable fail2ban + unattended-upgrades"]
   O --> P["Install Coolify if missing"]
   P --> R["Apply groups + sudo policy"]

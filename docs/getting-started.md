@@ -341,9 +341,11 @@ Input validation enforced by scripts:
 - `DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` must be different users
 - `ADDITIONAL_SUDO_USERS` must not contain `COOLIFY_SUDO_NOPASSWD_USER`
 
-Bootstrap runtime also terminates stale `sshd` listeners on port `22` when
-`SSH_PORT` is configured to a different value, to avoid parallel legacy
-listeners outside `ssh.service`.
+Bootstrap runtime enforces a single SSH listen port when `SSH_PORT` is not `22`:
+- removes legacy recovery fragment `10-port-recovery.conf` when present
+- disables legacy `Port ...` directives in other SSH config fragments
+- keeps `Port SSH_PORT` in `10-bootstrap-hardening.conf`
+- restarts `ssh.service` and fails if `:22` is still listening
 
 ### Realtime routing summary
 

@@ -281,6 +281,51 @@ sync_sshd_allowusers() {
   rm -f "$tmp_cfg"
 }
 
+enforce_sshd_single_port() {
+  local sshd_cfg="/etc/ssh/sshd_config.d/10-bootstrap-hardening.conf"
+  local recovery_cfg="/etc/ssh/sshd_config.d/10-port-recovery.conf"
+  local tmp_cfg=""
+  local tmp_new=""
+  local file=""
+  local -a cfg_files=()
+
+  install -d -m 755 /etc/ssh/sshd_config.d
+
+  if [[ -f "$recovery_cfg" ]]; then
+    rm -f "$recovery_cfg"
+    bootstrap_warn "Removed recovery SSH config fragment: $recovery_cfg"
+  fi
+
+  tmp_cfg="$(mktemp)"
+  tmp_new="$(mktemp)"
+  if [[ -f "$sshd_cfg" ]]; then
+    grep -Ev '^[[:space:]]*Port[[:space:]]+[0-9]+([[:space:]]+.*)?$' "$sshd_cfg" >"$tmp_cfg" || true
+  else
+    : >"$tmp_cfg"
+  fi
+  {
+    printf 'Port %s\n' "$SSH_PORT"
+    cat "$tmp_cfg"
+  } >"$tmp_new"
+  install -o root -g root -m 644 "$tmp_new" "$sshd_cfg"
+  rm -f "$tmp_cfg" "$tmp_new"
+
+  shopt -s nullglob
+  cfg_files=(/etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf)
+  shopt -u nullglob
+
+  for file in "${cfg_files[@]}"; do
+    [[ -f "$file" ]] || continue
+    [[ "$file" == "$sshd_cfg" ]] && continue
+    if grep -Eq '^[[:space:]]*Port[[:space:]]+[0-9]+([[:space:]]+.*)?$' "$file"; then
+      sed -i -E 's/^[[:space:]]*Port[[:space:]]+([0-9]+([[:space:]]+.*)?)$/# bootstrap-disabled Port \1/' "$file"
+      bootstrap_warn "Disabled legacy Port directives in $file to enforce SSH_PORT=$SSH_PORT."
+    fi
+  done
+
+  bootstrap_success "SSH single-port policy prepared (Port $SSH_PORT only)."
+}
+
 cleanup_stale_sshd_port22_listeners() {
   local service_main_pid=""
   local pid=""
@@ -319,8 +364,9 @@ cleanup_stale_sshd_port22_listeners() {
 
   sleep 1
   if ss -lnt '( sport = :22 )' 2>/dev/null | grep -q ':22'; then
-    bootstrap_warn "port 22 is still listening after stale-listener cleanup."
-    bootstrap_warn "inspect ssh.socket and SSH config fragments for extra listeners."
+    bootstrap_error "port 22 is still listening after stale-listener cleanup."
+    bootstrap_error "bootstrap expects only SSH_PORT=$SSH_PORT; inspect ssh.socket and SSH config fragments."
+    return 1
   fi
 }
 
@@ -595,6 +641,7 @@ bash "$script_dir/ensure-user-passwords.sh" "$ENV_FILE"
 bootstrap_success "Managed user password/vault synchronization completed."
 sync_sshd_allowusers
 bootstrap_success "sshd AllowUsers synchronized from managed users."
+enforce_sshd_single_port
 
 # Make sure sshd runtime dir exists before validation/restart.
 mkdir -p /run/sshd

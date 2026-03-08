@@ -251,7 +251,7 @@ Operational notes:
 - run replay as `DEVOPS_USER`, `COOLIFY_SUDO_NOPASSWD_USER`, or root via provider console
 - replay resets UFW baseline; re-apply custom rules after replay
 - replay restarts SSH service; keep provider console open
-- replay can terminate stale `sshd` listeners on `22` when `SSH_PORT` is not `22`
+- replay enforces single SSH port policy (`SSH_PORT` only): disables legacy `Port` directives and fails if `:22` still listens
 
 Quick verification after replay:
 
