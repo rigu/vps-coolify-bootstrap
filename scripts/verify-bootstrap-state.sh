@@ -51,6 +51,8 @@ done
 
 failures=0
 warnings=0
+has_iptables_8000_drop=unknown
+has_ip6tables_8000_drop=unknown
 
 pass() {
   printf '[%s] PASS [%s] %s\n' "$(bootstrap_log_ts)" "${BOOTSTRAP_LOG_CONTEXT:-verify-bootstrap-state.sh}" "$1"
@@ -178,6 +180,22 @@ else
   else
     fail "coolify container is not running"
   fi
+  if docker ps --format '{{.Names}}' | grep -Eq '^coolify-proxy($|_)'; then
+    pass "coolify proxy container is running"
+  else
+    fail "coolify proxy container is not running"
+  fi
+fi
+
+if ss -lnt | awk '{print $4}' | grep -Eq '(^|[:.])80$'; then
+  pass "port 80 listener exists for Coolify proxy"
+else
+  fail "port 80 listener missing for Coolify proxy"
+fi
+if ss -lnt | awk '{print $4}' | grep -Eq '(^|[:.])443$'; then
+  pass "port 443 listener exists for Coolify proxy"
+else
+  fail "port 443 listener missing for Coolify proxy"
 fi
 
 coolify_local_key="/data/coolify/ssh/keys/id.${COOLIFY_SUDO_NOPASSWD_USER}@host.docker.internal"
@@ -231,11 +249,16 @@ echo 'server_user=' . $server->user . PHP_EOL;
 echo 'server_ip=' . $server->ip . PHP_EOL;
 echo 'server_port=' . $server->port . PHP_EOL;
 echo 'server_private_key_id=' . $server->private_key_id . PHP_EOL;
+echo 'server_proxy_type=' . ($server->proxyType() ?? '') . PHP_EOL;
+$settings = \App\Models\InstanceSettings::get();
+echo 'instance_fqdn=' . ($settings->fqdn ?? '') . PHP_EOL;
 PHP
 )"; then
     server_user="$(sed -n 's/^server_user=//p' <<<"$db_state" | tail -n1)"
     server_ip="$(sed -n 's/^server_ip=//p' <<<"$db_state" | tail -n1)"
     server_port="$(sed -n 's/^server_port=//p' <<<"$db_state" | tail -n1)"
+    server_proxy_type="$(sed -n 's/^server_proxy_type=//p' <<<"$db_state" | tail -n1)"
+    instance_fqdn="$(sed -n 's/^instance_fqdn=//p' <<<"$db_state" | tail -n1)"
     if [[ "$server_user" == "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
       pass "Coolify localhost server user is ${COOLIFY_SUDO_NOPASSWD_USER}"
     else
@@ -250,6 +273,17 @@ PHP
       pass "Coolify localhost server port is ${SSH_PORT}"
     else
       fail "Coolify localhost server port is ${server_port} (expected ${SSH_PORT})"
+    fi
+    if [[ -n "$server_proxy_type" && "$server_proxy_type" != "NONE" ]]; then
+      pass "Coolify localhost server proxy type is ${server_proxy_type}"
+    else
+      fail "Coolify localhost server proxy type is ${server_proxy_type:-<empty>} (expected TRAEFIK/CADDY)"
+    fi
+    expected_instance_fqdn="https://${COOLIFY_PUBLIC_DOMAIN}"
+    if [[ "$instance_fqdn" == "$expected_instance_fqdn" ]]; then
+      pass "Instance fqdn is ${expected_instance_fqdn}"
+    else
+      fail "Instance fqdn is ${instance_fqdn:-<empty>} (expected ${expected_instance_fqdn})"
     fi
   else
     fail "unable to read Coolify localhost server state from container"
@@ -322,13 +356,13 @@ fi
 base_compose="/data/coolify/source/docker-compose.yml"
 prod_compose="/data/coolify/source/docker-compose.prod.yml"
 if [[ -f "$base_compose" && -f "$prod_compose" ]]; then
+  if grep -Eq '^[[:space:]]*-[[:space:]]*"[^"]*:8080"' "$base_compose" \
+    || grep -Eq '^[[:space:]]*-[[:space:]]*"[^"]*:8080"' "$prod_compose"; then
+    warn "Coolify compose still publishes 8080 via host mapping; public access must be blocked by DOCKER-USER 8000 guards"
+  else
+    pass "Coolify compose does not publish 8080 via host port mapping"
+  fi
   if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
-    if grep -Eq '^[[:space:]]*-[[:space:]]*"[^"]*:8080"' "$base_compose" \
-      || grep -Eq '^[[:space:]]*-[[:space:]]*"[^"]*:8080"' "$prod_compose"; then
-      fail "Coolify compose still publishes 8080 via host port mapping (expected removed when CLOSE_COOLIFY_REALTIME_PORTS=true)"
-    else
-      pass "Coolify compose does not publish 8080 via host port mapping"
-    fi
     if grep -Eq '^([[:space:]]*)ports:[[:space:]]*$' "$prod_compose" \
       && grep -Eq '^[[:space:]]*-[[:space:]]*"\$\{SOKETI_PORT:-6001\}:6001"' "$prod_compose" \
       && grep -Eq '^[[:space:]]*-[[:space:]]*"6002:6002"' "$prod_compose"; then
@@ -342,6 +376,13 @@ else
 fi
 
 if command -v iptables >/dev/null 2>&1 && iptables -nL DOCKER-USER >/dev/null 2>&1; then
+  if iptables -C DOCKER-USER -p tcp --dport 8000 -j DROP >/dev/null 2>&1; then
+    has_iptables_8000_drop=true
+    pass "iptables DOCKER-USER DROP guard exists for 8000"
+  else
+    has_iptables_8000_drop=false
+    fail "iptables DOCKER-USER DROP guard missing for 8000"
+  fi
   if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
     if iptables -C DOCKER-USER -p tcp -m multiport --dports 6001,6002 -j DROP >/dev/null 2>&1; then
       pass "iptables DOCKER-USER DROP guard exists for 6001/6002"
@@ -356,7 +397,19 @@ if command -v iptables >/dev/null 2>&1 && iptables -nL DOCKER-USER >/dev/null 2>
     fi
   fi
 else
-  warn "iptables/DOCKER-USER not available; skipped 6001/6002 guard verification"
+  warn "iptables/DOCKER-USER not available; skipped 8000 and 6001/6002 guard verification"
+fi
+
+if command -v ip6tables >/dev/null 2>&1 && ip6tables -nL DOCKER-USER >/dev/null 2>&1; then
+  if ip6tables -C DOCKER-USER -p tcp --dport 8000 -j DROP >/dev/null 2>&1; then
+    has_ip6tables_8000_drop=true
+    pass "ip6tables DOCKER-USER DROP guard exists for 8000"
+  else
+    has_ip6tables_8000_drop=false
+    warn "ip6tables DOCKER-USER DROP guard missing for 8000"
+  fi
+else
+  warn "ip6tables/DOCKER-USER not available; skipped IPv6 8000 guard verification"
 fi
 
 if ss -lnt | awk '{print $4}' | grep -Eq '[:.]6001$|[:.]6002$'; then
@@ -367,6 +420,21 @@ if ss -lnt | awk '{print $4}' | grep -Eq '[:.]6001$|[:.]6002$'; then
   fi
 else
   pass "ports 6001/6002 are not listening on host"
+fi
+
+if ss -lnt | awk '{print $4}' | grep -Eq '[:.]8000$'; then
+  if [[ "$has_iptables_8000_drop" == "true" ]]; then
+    pass "port 8000 is listening, but IPv4 public ingress is blocked by DOCKER-USER"
+  else
+    fail "port 8000 is listening and IPv4 DOCKER-USER DROP guard is missing"
+  fi
+  if [[ "$has_ip6tables_8000_drop" == "true" ]]; then
+    pass "port 8000 IPv6 public ingress is blocked by DOCKER-USER"
+  elif [[ "$has_ip6tables_8000_drop" == "false" ]]; then
+    warn "port 8000 listens and IPv6 DOCKER-USER DROP guard is missing"
+  fi
+else
+  pass "port 8000 is not listening on host"
 fi
 
 echo "=== Summary ==="

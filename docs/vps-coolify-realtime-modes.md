@@ -19,12 +19,16 @@ It also includes operational update procedures and a dedicated script:
   - used as `PUSHER_HOST` when set
   - optional in closed mode; if empty, bootstrap uses `COOLIFY_PUBLIC_DOMAIN` as realtime host
 
+Independent from realtime mode:
+- bootstrap always enforces HTTPS-only public access for Coolify UI by blocking public ingress to port `8000` with `DOCKER-USER` guards.
+
 ## Mode A: `CLOSE_COOLIFY_REALTIME_PORTS=false`
 
 ### Behavior
 
 Bootstrap enforces:
-- removes `DOCKER-USER` drop guards for realtime ports
+- keeps `DOCKER-USER` public-drop guard for `8000`
+- removes `DOCKER-USER` drop guards for realtime ports `6001/6002`
 - if `COOLIFY_REALTIME_DOMAIN` is set:
   - writes `PUSHER_HOST=<domain>`
   - writes `PUSHER_PORT=443`
@@ -48,6 +52,7 @@ flowchart TD
   E --> G["Soketi realtime container"]
   F --> G
   H["DOCKER-USER guards"] --> I["Removed in this mode"]
+  J["Port 8000 guard"] --> K["Always kept (public-drop)"]
 ```
 
 ### Advantages
@@ -85,15 +90,17 @@ Bootstrap enforces:
   - `COOLIFY_REALTIME_DOMAIN` when set (non-placeholder)
   - otherwise `COOLIFY_PUBLIC_DOMAIN`
 - writes `PUSHER_HOST=<effective-domain>`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https`
-- hardens Coolify compose files:
+- attempts Coolify compose hardening:
   - removes canonical `8000->8080` publish rules
     (`${APP_PORT:-8000}:8080` / `8000:8080`) in base/prod compose files
   - converts Soketi public `ports` into internal `expose` in `docker-compose.prod.yml`
+  - if redeploy fails, bootstrap restores compose backups and continues with `DOCKER-USER` guards
+- keeps `DOCKER-USER` public-drop guard for `8000`
 - adds `DOCKER-USER` guards to drop public forwarded traffic to `6001/6002`
   with localhost/private network allow exceptions
 
 Result:
-- direct public `6001/6002` ingress is blocked by compose hardening + `DOCKER-USER`
+- direct public `6001/6002` ingress is blocked by `DOCKER-USER` (compose hardening is an extra reduction when successful)
 - realtime must flow through domain/reverse-proxy path on `443`
 
 ### Graph (descriptive)
@@ -104,7 +111,8 @@ flowchart TD
   B --> C["Reverse proxy / TLS termination"]
   C --> D["Coolify realtime service"]
   E["Direct public 6001/6002 traffic"] --> F["DOCKER-USER DROP"]
-  G["Compose hardening"] --> H["No public publish for 8000/6001/6002"]
+  G["Compose hardening (best effort)"] --> H["Reduce direct publishes when possible"]
+  I["DOCKER-USER 8000 drop"] --> J["HTTPS-only public UI access"]
 ```
 
 ### Advantages
@@ -196,14 +204,15 @@ sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-
 ```bash
 sudo grep -nE '^CLOSE_COOLIFY_REALTIME_PORTS=|^COOLIFY_REALTIME_DOMAIN=' /etc/vps-coolify-bootstrap/bootstrap.env
 sudo grep -nE '^PUSHER_(HOST|PORT|SCHEME)=' /data/coolify/source/.env
-sudo iptables -S DOCKER-USER | grep -E '6001|6002' || true
-sudo ip6tables -S DOCKER-USER 2>/dev/null | grep -E '6001|6002' || true
+sudo iptables -S DOCKER-USER | grep -E '8000|6001|6002' || true
+sudo ip6tables -S DOCKER-USER 2>/dev/null | grep -E '8000|6001|6002' || true
 sudo ss -lntp | grep -E ':(80|443|8000|6001|6002)\b' || true
 sudo bash /opt/vps-coolify-bootstrap/scripts/verify-bootstrap-state.sh /etc/vps-coolify-bootstrap/bootstrap.env
 ```
 
 Interpretation:
-- closed mode expected: `6001/6002` not publicly published, guards present
-- public mode expected: guards removed; published ports may exist
+- all modes expected: `8000` public ingress blocked via `DOCKER-USER`
+- closed mode expected: `6001/6002` guards present
+- public mode expected: `6001/6002` guards removed; published ports may exist
 
 Back to [Docs Home](index.md)

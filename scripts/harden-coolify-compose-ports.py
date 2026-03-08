@@ -3,7 +3,8 @@
 
 Behavior:
 - Removes canonical APP_PORT/8000->8080 publish lines from both compose files.
-- Converts Soketi 6001/6002 public ports block to expose-only in docker-compose.prod.yml.
+- When realtime close mode is enabled, converts Soketi 6001/6002 public ports
+  block to expose-only in docker-compose.prod.yml.
 
 Exit codes:
 - 0: already hardened / no changes required
@@ -82,7 +83,16 @@ def _remove_empty_ports_keys(text: str) -> tuple[str, int]:
     return "".join(out), removed
 
 
-def harden_compose(base_path: Path, prod_path: Path) -> int:
+def _parse_close_realtime_arg(raw: str) -> bool:
+    v = raw.strip().lower()
+    if v in ("true", "1"):
+        return True
+    if v in ("false", "0"):
+        return False
+    raise ValueError("close-realtime flag must be true/false or 1/0")
+
+
+def harden_compose(base_path: Path, prod_path: Path, close_realtime_ports: bool = True) -> int:
     base_text = _read_text(base_path)
     prod_text = _read_text(prod_path)
 
@@ -113,19 +123,21 @@ def harden_compose(base_path: Path, prod_path: Path) -> int:
             "unrecognized 8080 publish rule in docker-compose.prod.yml"
         )
 
-    new_prod_text, prod_replacements = SOKETI_PUBLIC_PORTS_BLOCK.subn(
-        '\\1expose:\\n\\1  - "6001"\\n\\1  - "6002"\\n', new_prod_text
-    )
-    if prod_replacements > 0:
-        changed = True
-    else:
-        # If canonical public block is absent, accept only expose-only state.
-        if not SOKETI_EXPOSE_BLOCK.search(new_prod_text) and (
-            ANY_6001_PUBLISH.search(new_prod_text) or ANY_6002_PUBLISH.search(new_prod_text)
-        ):
-            unknown_patterns.append(
-                "unrecognized 6001/6002 publish rules in docker-compose.prod.yml"
-            )
+    prod_replacements = 0
+    if close_realtime_ports:
+        new_prod_text, prod_replacements = SOKETI_PUBLIC_PORTS_BLOCK.subn(
+            '\\1expose:\\n\\1  - "6001"\\n\\1  - "6002"\\n', new_prod_text
+        )
+        if prod_replacements > 0:
+            changed = True
+        else:
+            # If canonical public block is absent, accept only expose-only state.
+            if not SOKETI_EXPOSE_BLOCK.search(new_prod_text) and (
+                ANY_6001_PUBLISH.search(new_prod_text) or ANY_6002_PUBLISH.search(new_prod_text)
+            ):
+                unknown_patterns.append(
+                    "unrecognized 6001/6002 publish rules in docker-compose.prod.yml"
+                )
 
     if unknown_patterns:
         for item in unknown_patterns:
@@ -153,19 +165,30 @@ def harden_compose(base_path: Path, prod_path: Path) -> int:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        _log("ERROR", "Usage: harden-coolify-compose-ports.py <base-compose> <prod-compose>", sys.stderr)
+    if len(sys.argv) not in (3, 4):
+        _log(
+            "ERROR",
+            "Usage: harden-coolify-compose-ports.py <base-compose> <prod-compose> [<close-realtime-ports:true|false>]",
+            sys.stderr,
+        )
         return 1
 
     base_path = Path(sys.argv[1])
     prod_path = Path(sys.argv[2])
+    close_realtime_ports = True
+    if len(sys.argv) == 4:
+        try:
+            close_realtime_ports = _parse_close_realtime_arg(sys.argv[3])
+        except ValueError as exc:
+            _log("ERROR", str(exc), sys.stderr)
+            return 1
 
     if not base_path.is_file() or not prod_path.is_file():
         _log("ERROR", "compose files not found", sys.stderr)
         return 1
 
     try:
-        return harden_compose(base_path, prod_path)
+        return harden_compose(base_path, prod_path, close_realtime_ports=close_realtime_ports)
     except Exception as exc:  # pragma: no cover - defensive guard
         _log("ERROR", f"compose hardening failed: {exc}", sys.stderr)
         return 1

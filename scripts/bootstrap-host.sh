@@ -403,14 +403,24 @@ remove_docker_user_rule_if_present() {
 
 sync_coolify_realtime_port_guards() {
   if ! command -v iptables >/dev/null 2>&1; then
-    bootstrap_warn "iptables is not available; cannot manage DOCKER-USER guards for 6001/6002."
-    return 0
+    bootstrap_error "iptables is required to enforce DOCKER-USER guards for HTTPS-only policy."
+    return 1
   fi
 
   if ! iptables -nL DOCKER-USER >/dev/null 2>&1; then
-    bootstrap_warn "DOCKER-USER chain is unavailable; cannot manage guards for 6001/6002."
-    return 0
+    bootstrap_error "DOCKER-USER chain is unavailable; cannot enforce HTTPS-only policy."
+    return 1
   fi
+
+  # Enforce HTTPS-only public access for Coolify UI:
+  # - 80/443 are served by Coolify proxy
+  # - 8000 remains local/private only (drop public ingress in DOCKER-USER)
+  add_docker_user_rule_if_missing iptables -p tcp --dport 8000 -j DROP
+  add_docker_user_rule_if_missing iptables -p tcp --dport 8000 -s 127.0.0.1/32 -j RETURN
+  add_docker_user_rule_if_missing iptables -p tcp --dport 8000 -s 10.0.0.0/8 -j RETURN
+  add_docker_user_rule_if_missing iptables -p tcp --dport 8000 -s 172.16.0.0/12 -j RETURN
+  add_docker_user_rule_if_missing iptables -p tcp --dport 8000 -s 192.168.0.0/16 -j RETURN
+  add_docker_user_rule_if_missing iptables -p tcp --dport 8000 -s 100.64.0.0/10 -j RETURN
 
   if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
     # Drop public forwarded traffic to Coolify realtime ports by default.
@@ -430,6 +440,10 @@ sync_coolify_realtime_port_guards() {
   fi
 
   if command -v ip6tables >/dev/null 2>&1 && ip6tables -nL DOCKER-USER >/dev/null 2>&1; then
+    add_docker_user_rule_if_missing ip6tables -p tcp --dport 8000 -j DROP
+    add_docker_user_rule_if_missing ip6tables -p tcp --dport 8000 -s ::1/128 -j RETURN
+    add_docker_user_rule_if_missing ip6tables -p tcp --dport 8000 -s fc00::/7 -j RETURN
+    add_docker_user_rule_if_missing ip6tables -p tcp --dport 8000 -s fe80::/10 -j RETURN
     if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
       add_docker_user_rule_if_missing ip6tables -p tcp -m multiport --dports 6001,6002 -j DROP
       add_docker_user_rule_if_missing ip6tables -p tcp -m multiport --dports 6001,6002 -s ::1/128 -j RETURN
@@ -442,7 +456,7 @@ sync_coolify_realtime_port_guards() {
       remove_docker_user_rule_if_present ip6tables -p tcp -m multiport --dports 6001,6002 -j DROP
     fi
   fi
-  bootstrap_success "DOCKER-USER guards synchronized for 6001/6002 (CLOSE_COOLIFY_REALTIME_PORTS=${CLOSE_COOLIFY_REALTIME_PORTS})."
+  bootstrap_success "DOCKER-USER guards synchronized (8000 public blocked; 6001/6002 policy from CLOSE_COOLIFY_REALTIME_PORTS=${CLOSE_COOLIFY_REALTIME_PORTS})."
 }
 
 set_env_kv() {
@@ -537,22 +551,17 @@ harden_coolify_compose_ports() {
   local compose_err=""
   local -a compose_cmd=()
 
-  if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" != "true" ]]; then
-    bootstrap_success "Compose hardening skipped because CLOSE_COOLIFY_REALTIME_PORTS=${CLOSE_COOLIFY_REALTIME_PORTS}."
+  if [[ ! -f "$base_compose" || ! -f "$prod_compose" ]]; then
+    bootstrap_warn "Coolify compose files not found; skipping compose hardening and relying on DOCKER-USER guards."
     return 0
   fi
-
-  if [[ ! -f "$base_compose" || ! -f "$prod_compose" ]]; then
-    bootstrap_error "Coolify compose files not found: $base_compose / $prod_compose"
-    return 1
-  fi
   if [[ ! -f "$hardener_py" ]]; then
-    bootstrap_error "compose hardener script not found: $hardener_py"
-    return 1
+    bootstrap_warn "compose hardener script not found; skipping compose hardening and relying on DOCKER-USER guards."
+    return 0
   fi
   if ! command -v python3 >/dev/null 2>&1; then
-    bootstrap_error "python3 is required for compose hardening with CLOSE_COOLIFY_REALTIME_PORTS=true"
-    return 1
+    bootstrap_warn "python3 not found; skipping compose hardening and relying on DOCKER-USER guards."
+    return 0
   fi
 
   backup_suffix="$(date +%Y%m%d%H%M%S)"
@@ -566,7 +575,7 @@ harden_coolify_compose_ports() {
   # - 10: changes applied
   # - 20: unsupported format
   # Capture non-zero codes without triggering ERR trap.
-  if python3 "$hardener_py" "$base_compose" "$prod_compose"; then
+  if python3 "$hardener_py" "$base_compose" "$prod_compose" "$CLOSE_COOLIFY_REALTIME_PORTS"; then
     result=0
   else
     result=$?
@@ -598,17 +607,17 @@ harden_coolify_compose_ports() {
           if ! "${compose_cmd[@]}" -f "$base_compose" -f "$prod_compose" up -d >"$compose_err" 2>&1; then
             cat "$compose_err" >&2 || true
             rm -f "$compose_err"
-            bootstrap_error "failed to redeploy Coolify after compose hardening; restoring backups."
+            bootstrap_warn "failed to redeploy Coolify after compose hardening; restoring backups and continuing with DOCKER-USER guards."
             mv "$backup_base" "$base_compose"
             mv "$backup_prod" "$prod_compose"
-            return 1
+            return 0
           fi
         else
           rm -f "$compose_err"
-          bootstrap_error "failed to redeploy Coolify after compose hardening; restoring backups."
+          bootstrap_warn "failed to redeploy Coolify after compose hardening; restoring backups and continuing with DOCKER-USER guards."
           mv "$backup_base" "$base_compose"
           mv "$backup_prod" "$prod_compose"
-          return 1
+          return 0
         fi
       fi
       rm -f "$compose_err"
@@ -616,16 +625,16 @@ harden_coolify_compose_ports() {
       bootstrap_success "Coolify compose hardened and redeployed successfully."
       ;;
     20)
-      bootstrap_error "unsupported Coolify compose format; refusing partial hardening."
+      bootstrap_warn "unsupported Coolify compose format; restoring backups and continuing with DOCKER-USER guards."
       mv "$backup_base" "$base_compose"
       mv "$backup_prod" "$prod_compose"
-      return 1
+      return 0
       ;;
     *)
-      bootstrap_error "compose hardening failed with code $result; restoring backups."
+      bootstrap_warn "compose hardening failed with code $result; restoring backups and continuing with DOCKER-USER guards."
       mv "$backup_base" "$base_compose"
       mv "$backup_prod" "$prod_compose"
-      return 1
+      return 0
       ;;
   esac
 }
@@ -1021,10 +1030,95 @@ PHP
     fi
     attempt=$((attempt + 1))
     sleep 2
-  done
+ done
 
   bootstrap_warn "failed to synchronize Coolify localhost server SSH user automatically after retries."
   return 0
+}
+
+ensure_coolify_https_proxy() {
+  local attempt=0
+  local max_attempts=20
+  local listener_wait=0
+
+  if ! command -v docker >/dev/null 2>&1; then
+    bootstrap_error "docker not found; cannot enforce Coolify HTTPS proxy."
+    return 1
+  fi
+  if ! docker ps --format '{{.Names}}' | grep -qx 'coolify'; then
+    bootstrap_error "coolify container is not running; cannot enforce Coolify HTTPS proxy."
+    return 1
+  fi
+
+  while (( attempt < max_attempts )); do
+    if docker exec -i \
+      -e BOOTSTRAP_COOLIFY_PUBLIC_DOMAIN="$COOLIFY_PUBLIC_DOMAIN" \
+      coolify php <<'PHP'
+<?php
+chdir('/var/www/html');
+require '/var/www/html/vendor/autoload.php';
+$app = require '/var/www/html/bootstrap/app.php';
+$kernel = $app->make(\Illuminate\Contracts\Console\Kernel::class);
+$kernel->bootstrap();
+
+$domain = trim((string) getenv('BOOTSTRAP_COOLIFY_PUBLIC_DOMAIN'));
+if ($domain === '' || preg_match('/[\s\/]/', $domain)) {
+    fwrite(STDERR, "invalid bootstrap public domain\n");
+    exit(41);
+}
+
+$targetFqdn = 'https://' . $domain;
+$settings = \App\Models\InstanceSettings::get();
+if ((string) $settings->fqdn !== $targetFqdn) {
+    $settings->fqdn = $targetFqdn;
+    $settings->save();
+    $settings->refresh();
+}
+
+$server = \App\Models\Server::find(0);
+if (! $server) {
+    fwrite(STDERR, "Coolify localhost server (id=0) not found\n");
+    exit(42);
+}
+
+$proxyType = (string) ($server->proxyType() ?? '');
+if ($proxyType === '' || $proxyType === 'NONE') {
+    $server->changeProxy('TRAEFIK', async: false);
+    $server->refresh();
+}
+
+\App\Actions\Proxy\StartProxy::run($server, async: false, force: true);
+$server->setupDynamicProxyConfiguration();
+$server->setupDefaultRedirect();
+\App\Actions\Proxy\StartProxy::run($server, async: false, force: true, restarting: true);
+
+echo "bootstrap-coolify-fqdn={$settings->fqdn}\n";
+echo "bootstrap-coolify-proxy={$server->proxyType()}\n";
+PHP
+    then
+      break
+    fi
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+
+  if (( attempt >= max_attempts )); then
+    bootstrap_error "failed to configure Coolify HTTPS proxy for ${COOLIFY_PUBLIC_DOMAIN} after retries."
+    return 1
+  fi
+
+  while (( listener_wait < 30 )); do
+    if ss -lnt | awk '{print $4}' | grep -Eq '(^|[:.])80$' && \
+       ss -lnt | awk '{print $4}' | grep -Eq '(^|[:.])443$'; then
+      bootstrap_success "Coolify HTTPS proxy listeners detected on 80/443."
+      return 0
+    fi
+    sleep 2
+    listener_wait=$((listener_wait + 1))
+  done
+
+  bootstrap_error "Coolify proxy did not expose both 80 and 443 after configuration."
+  return 1
 }
 
 if ! is_coolify_running; then
@@ -1069,12 +1163,20 @@ bootstrap_success "Managed users synchronized to sudo/docker/coolify groups."
 
 sync_coolify_localhost_ssh_user
 bootstrap_success "Coolify localhost SSH user synchronization completed."
+ensure_coolify_https_proxy
+bootstrap_success "Coolify public domain proxy synchronized to https://${COOLIFY_PUBLIC_DOMAIN}."
 configure_coolify_realtime_domain
 harden_coolify_compose_ports
 sync_coolify_realtime_port_guards
 bootstrap_success "Realtime security policy synchronization completed."
 
 # Docker published ports bypass UFW because Docker writes iptables rules directly.
+if command -v ss >/dev/null 2>&1 && ss -tuln | awk '{print $4}' | grep -Eq '[:.]8000$'; then
+  bootstrap_warn "port 8000 is listening on host."
+  bootstrap_warn "DOCKER-USER guards were applied to block public ingress to 8000."
+  bootstrap_warn "verify effective policy with: sudo iptables -S DOCKER-USER | grep -- '--dport 8000'"
+fi
+
 if command -v ss >/dev/null 2>&1 && ss -tuln | awk '{print $4}' | grep -Eq '[:.]6001$|[:.]6002$'; then
   bootstrap_warn "port 6001 and/or 6002 is listening on host."
   if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then

@@ -127,25 +127,21 @@ For deep behavior, risks, graphs, and update commands, see:
    - realtime host source:
      - `COOLIFY_REALTIME_DOMAIN` when set
      - otherwise `COOLIFY_PUBLIC_DOMAIN` fallback
-   - bootstrap hardens Coolify compose ports:
+   - bootstrap attempts Coolify compose hardening:
      - removes canonical `8000->8080` publish rules
        (`${APP_PORT:-8000}:8080` / `8000:8080`) from base/prod compose files
      - converts Soketi `ports` publish to internal `expose` for `6001/6002`
-   - bootstrap enforces `DOCKER-USER` guards for `6001/6002`
-   - routing to `443` is app-level via `PUSHER_*`; direct public `6001/6002` is blocked by compose hardening + guards
+     - if compose redeploy fails, backups are restored and bootstrap continues with host-level guards
+   - bootstrap enforces `DOCKER-USER` guards:
+     - always blocks public ingress to `8000`
+     - blocks public ingress to `6001/6002` in closed mode
+   - routing to `443` is app-level via `PUSHER_*`; direct public `6001/6002` is blocked by guards
 
-## Access phase variants
+## Access result
 
-During bootstrap and onboarding you may see:
-
-1. Temporary bootstrap access:
-   - `http://<SERVER_IP>:8000`
-   - useful before proxy/domain/TLS path is fully ready
-   - note: if `CLOSE_COOLIFY_REALTIME_PORTS=true`, bootstrap compose hardening can remove this publish path automatically
-
-2. Final domain access:
-   - `https://<COOLIFY_PUBLIC_DOMAIN>`
-   - expected steady-state entrypoint
+Bootstrap enforces Coolify domain proxy readiness on:
+- `https://<COOLIFY_PUBLIC_DOMAIN>` via ports `80/443`
+- no public ingress to `8000` in final state (guarded by `DOCKER-USER`, independent of compose format)
 
 ## Verify deployment state
 
