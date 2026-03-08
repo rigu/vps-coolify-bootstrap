@@ -201,7 +201,10 @@ If login fails but provider console works, re-check:
 - user presence in `/etc/passwd` and authorized key content
 - `REMOTE HOST IDENTIFICATION HAS CHANGED` warning (Windows/Linux/macOS):
   verify host fingerprint in provider console (`sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`),
-  then run `ssh-keygen -R "[$SERVER_IP]:$SSH_PORT"` locally and reconnect
+  then run `ssh-keygen -R "[$SERVER_IP]:$SSH_PORT"` locally and reconnect.
+  If SSH still reports an offending key line, remove that line from local `known_hosts`
+  (`C:\Users\<you>\.ssh\known_hosts` on Windows, `~/.ssh/known_hosts` on Linux/macOS),
+  then connect again and accept the new host key.
 
 ## 8A) Recover Coolify "Server is not reachable" onboarding errors
 

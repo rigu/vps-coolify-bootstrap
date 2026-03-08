@@ -427,18 +427,29 @@ After first boot, use this checklist:
    ```
 
    If the fingerprint matches what SSH shows, remove the old local key entry and reconnect.
+   SSH may also show an "Offending ... key in ...known_hosts:<line>" message.
+   That means your local `known_hosts` still has an old key for the same `IP:port`.
+   Remove that stale entry, then connect again.
 
    Windows PowerShell:
 
    ```powershell
+   # remove stale key for this host:port from C:\Users\<you>\.ssh\known_hosts
    ssh-keygen -R "[<SERVER_IP>]:<SSH_PORT>"
+   # reconnect and accept the new host key
    ssh -p <SSH_PORT> <DEVOPS_USER>@<SERVER_IP>
    ```
+
+   If `ssh-keygen -R` does not clear it, open
+   `C:\Users\<you>\.ssh\known_hosts`, remove the offending line shown by SSH,
+   save, then reconnect.
 
    Linux/macOS:
 
    ```bash
+   # remove stale key for this host:port from ~/.ssh/known_hosts
    ssh-keygen -R "[<SERVER_IP>]:<SSH_PORT>"
+   # reconnect and accept the new host key
    ssh -p <SSH_PORT> <DEVOPS_USER>@<SERVER_IP>
    ```
 
