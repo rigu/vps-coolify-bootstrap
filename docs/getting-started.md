@@ -8,26 +8,25 @@ description: End-to-end setup steps for preparing env values, rendering VPS-Cool
 
 ## 1) Prepare env values
 
-Linux/macOS:
+Run secret generation first. This is the local preparation step that creates or updates
+`bootstrap-artifacts/bootstrap.env`.
+
+Linux/macOS (default path):
 
 ```bash
-mkdir -p bootstrap-artifacts
-cp env/bootstrap.env.example bootstrap-artifacts/bootstrap.env
-bash scripts/generate-secrets.sh --env-file bootstrap-artifacts/bootstrap.env
+bash scripts/generate-secrets.sh
 ```
 
-Windows PowerShell (`pwsh` preferred, `powershell` fallback):
+Windows PowerShell (default path, `pwsh` preferred):
 
 ```powershell
-New-Item -ItemType Directory -Path bootstrap-artifacts -Force | Out-Null
-Copy-Item env/bootstrap.env.example bootstrap-artifacts/bootstrap.env
-pwsh -File scripts/generate-secrets.ps1 -EnvFile bootstrap-artifacts/bootstrap.env
+pwsh -File scripts/generate-secrets.ps1
 ```
 
 PowerShell compatibility note:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\generate-secrets.ps1 -EnvFile bootstrap-artifacts/bootstrap.env
+powershell -ExecutionPolicy Bypass -File .\scripts\generate-secrets.ps1
 ```
 
 Use the same `pwsh` -> `powershell -ExecutionPolicy Bypass -File` replacement
@@ -42,6 +41,19 @@ winget install --id Microsoft.PowerShell --source winget
 If `winget` is unavailable, install from:
 <https://github.com/PowerShell/PowerShell/releases/latest>
 
+What `generate-secrets.*` does:
+
+- if `bootstrap-artifacts/bootstrap.env` does not exist, creates parent folder and copies `env/bootstrap.env.example`
+- updates only placeholder/empty values by default (non-destructive for already-set values)
+- auto-detects SSH public key from local machine and fills both `SSH_PUBLIC_KEY` and `SSH_PUBLIC_KEY_PATH` when needed
+- sets secure file permissions for generated env file (`chmod 600` in Bash; file write in PowerShell)
+
+What it does not do:
+
+- does not provision the VPS
+- does not render the VPS init YAML
+- does not rotate already valid values unless force flags are provided
+
 On shared Windows systems, verify ACLs for generated secret files
 (`bootstrap-artifacts/bootstrap.env`, `bootstrap-artifacts/vps-coolify-init.generated.yml`)
 after running PowerShell scripts.
@@ -51,6 +63,134 @@ It checks common public key files in `~/.ssh` (for example `id_ed25519.pub`,
 `id_ecdsa.pub`, `id_rsa.pub`, then other `*.pub`) and fills both
 `SSH_PUBLIC_KEY` and `SSH_PUBLIC_KEY_PATH` when current values are empty or still `CHANGE_ME`.
 If no valid key is found, set `SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_PATH` manually.
+
+### Detailed script workflow (8 iterations)
+
+Use this practical sequence when you want deterministic, repeatable local preparation.
+
+1. Iteration 1: initialize local env from scratch
+
+   Use this on a fresh clone:
+
+   ```bash
+   bash scripts/generate-secrets.sh
+   ```
+
+   Expected result:
+   - `bootstrap-artifacts/bootstrap.env` is created automatically
+   - placeholder secret values are replaced
+   - SSH key is auto-filled if detected locally
+
+2. Iteration 2: inspect and set required business values manually
+
+   Edit `bootstrap-artifacts/bootstrap.env` and set at least:
+   - `COOLIFY_PUBLIC_DOMAIN`
+   - `COOLIFY_ROOT_USERNAME`
+   - `COOLIFY_ROOT_USER_EMAIL`
+   - any other values still containing `CHANGE_ME`
+
+   Keep generated values unless you intentionally want new secrets.
+
+3. Iteration 3: force only Coolify root password regeneration (optional)
+
+   Bash:
+
+   ```bash
+   bash scripts/generate-secrets.sh --force-password
+   ```
+
+   PowerShell:
+
+   ```powershell
+   pwsh -File scripts/generate-secrets.ps1 -ForcePassword
+   ```
+
+4. Iteration 4: force only vault encryption password regeneration (optional)
+
+   Bash:
+
+   ```bash
+   bash scripts/generate-secrets.sh --force-encryption-password
+   ```
+
+   PowerShell:
+
+   ```powershell
+   pwsh -File scripts/generate-secrets.ps1 -ForceEncryptionPassword
+   ```
+
+5. Iteration 5: force SSH key re-detection (optional)
+
+   Use this after rotating local SSH keys:
+
+   Bash:
+
+   ```bash
+   bash scripts/generate-secrets.sh --force-ssh-key
+   ```
+
+   PowerShell:
+
+   ```powershell
+   pwsh -File scripts/generate-secrets.ps1 -ForceSshKey
+   ```
+
+6. Iteration 6: run with a custom env file path (optional)
+
+   Scripts create missing parent folders and copy `env/bootstrap.env.example` if the file is missing.
+
+   Bash:
+
+   ```bash
+   bash scripts/generate-secrets.sh --env-file envs/prod/bootstrap.env
+   ```
+
+   PowerShell:
+
+   ```powershell
+   pwsh -File scripts/generate-secrets.ps1 -EnvFile envs/prod/bootstrap.env
+   ```
+
+7. Iteration 7: render VPS init YAML from prepared env
+
+   Bash (default path):
+
+   ```bash
+   bash scripts/prepare-vps-coolify-init.sh --overwrite
+   ```
+
+   PowerShell (default path):
+
+   ```powershell
+   pwsh -File scripts/prepare-vps-coolify-init.ps1 -Overwrite
+   ```
+
+   Expected output: `bootstrap-artifacts/vps-coolify-init.generated.yml`
+
+8. Iteration 8: rerender safely after env changes
+
+   After any change in `bootstrap.env`, rerun prepare with overwrite.
+   This updates only the generated YAML file; your `bootstrap.env` remains the source of truth.
+
+   Bash:
+
+   ```bash
+   bash scripts/prepare-vps-coolify-init.sh --env-file bootstrap-artifacts/bootstrap.env --overwrite
+   ```
+
+   PowerShell:
+
+   ```powershell
+   pwsh -File scripts/prepare-vps-coolify-init.ps1 -EnvFile bootstrap-artifacts/bootstrap.env -Overwrite
+   ```
+
+Validation notes for `prepare-vps-coolify-init.*`:
+
+- rejects unresolved required values (for example `CHANGE_ME`)
+- validates input formats (`SSH_PORT`, usernames, email, hostname, booleans)
+- enforces cross-field rule: `COOLIFY_REALTIME_DOMAIN` is required when `CLOSE_COOLIFY_REALTIME_PORTS=true`
+- fails if output exists and overwrite is not enabled
+- fails if generated file exceeds provider size limit (Hetzner VPS init: 32768 bytes)
 
 ## Bootstrap env quick reference
 
@@ -120,16 +260,17 @@ listeners outside `ssh.service`.
 Linux/macOS:
 
 ```bash
-bash scripts/prepare-vps-coolify-init.sh --env-file bootstrap-artifacts/bootstrap.env --overwrite
+bash scripts/prepare-vps-coolify-init.sh --overwrite
 ```
 
 PowerShell:
 
 ```powershell
-pwsh -File scripts/prepare-vps-coolify-init.ps1 -EnvFile bootstrap-artifacts/bootstrap.env -Overwrite
+pwsh -File scripts/prepare-vps-coolify-init.ps1 -Overwrite
 ```
 
 Generated output defaults to `bootstrap-artifacts/vps-coolify-init.generated.yml`.
+Use `--env-file <path>` / `-EnvFile <path>` when you work with multiple environments.
 
 ## 3) Provision VPS
 

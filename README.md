@@ -24,15 +24,15 @@ Prerequisites: Git, Bash (or PowerShell), OpenSSL, and a VPS provider account.
 
 1. Prepare env + secrets:
 ```bash
-mkdir -p bootstrap-artifacts
-cp env/bootstrap.env.example bootstrap-artifacts/bootstrap.env
-bash scripts/generate-secrets.sh --env-file bootstrap-artifacts/bootstrap.env
+bash scripts/generate-secrets.sh
 ```
 2. Generate VPS-Coolify init file:
 ```bash
-bash scripts/prepare-vps-coolify-init.sh --env-file bootstrap-artifacts/bootstrap.env --overwrite
+bash scripts/prepare-vps-coolify-init.sh --overwrite
 ```
 3. Provision VPS by pasting `bootstrap-artifacts/vps-coolify-init.generated.yml` into the provider user-data field (VPS init format) during server creation (first boot). If the UI has no user-data option, use provider API/CLI or follow the manual fallback in [docs/getting-started.md](docs/getting-started.md#3-provision-vps).
+
+Detailed script usage (including force flags, custom env paths, rerender workflow, and troubleshooting): [docs/getting-started.md](docs/getting-started.md#detailed-script-workflow-8-iterations).
 
 ## Documentation (GitHub Pages)
 

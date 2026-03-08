@@ -280,24 +280,20 @@ PowerShell note for this section:
 
 1. On local machine, reset to clean env baseline:
 ```bash
-mkdir -p bootstrap-artifacts
-cp env/bootstrap.env.example bootstrap-artifacts/bootstrap.env
-bash scripts/generate-secrets.sh --env-file bootstrap-artifacts/bootstrap.env
+bash scripts/generate-secrets.sh
 ```
    Windows PowerShell:
 ```powershell
-New-Item -ItemType Directory -Path bootstrap-artifacts -Force | Out-Null
-Copy-Item env/bootstrap.env.example bootstrap-artifacts/bootstrap.env
-pwsh -File scripts/generate-secrets.ps1 -EnvFile bootstrap-artifacts/bootstrap.env
+pwsh -File scripts/generate-secrets.ps1
 ```
 2. Fill all required values in `bootstrap-artifacts/bootstrap.env` (no `CHANGE_ME`).
 3. Regenerate VPS-Coolify init:
 ```bash
-bash scripts/prepare-vps-coolify-init.sh --env-file bootstrap-artifacts/bootstrap.env --overwrite
+bash scripts/prepare-vps-coolify-init.sh --overwrite
 ```
    Windows PowerShell:
 ```powershell
-pwsh -File scripts/prepare-vps-coolify-init.ps1 -EnvFile bootstrap-artifacts/bootstrap.env -Overwrite
+pwsh -File scripts/prepare-vps-coolify-init.ps1 -Overwrite
 ```
 4. Verify generated file is placeholder-free:
 ```bash
