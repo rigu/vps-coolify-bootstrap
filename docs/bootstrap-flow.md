@@ -17,8 +17,8 @@ description: Detailed first-boot execution order, VPS init behavior, and bootstr
 On first boot, the VPS init agent:
 
 1. sets the timezone and runs package update/upgrade
-2. creates initial users (`PRIMARY_SUDO_USER`, `SECONDARY_SUDO_USER`) and SSH bootstrap key
-   (additional users from `CREATE_USERS` are created later by `bootstrap-host.sh`)
+2. creates initial users (`DEVOPS_USER`, `COOLIFY_SUDO_NOPASSWD_USER`) and sets SSH bootstrap key for `DEVOPS_USER`
+   (additional users from `ADDITIONAL_SUDO_USERS` are created later by `bootstrap-host.sh`)
 3. disables root SSH login and SSH password auth
 4. installs baseline packages (`curl`, `git`, `openssl`, `ufw`, `fail2ban`, `unattended-upgrades`, ...)
 5. writes hardening and runtime files
@@ -32,22 +32,22 @@ On first boot, the VPS init agent:
 flowchart TD
   A["Prepare env + secrets"] --> B["Render VPS-Coolify init"]
   B --> C["Provision Ubuntu 24 VPS"]
-  C --> D["VPS init first boot (cloud-init)"]
+  C --> D["VPS first boot: run VPS init user-data"]
   D --> E["Install packages + write baseline files"]
   E --> F["Clone BOOTSTRAP_REPO_URL at BOOTSTRAP_REPO_REF"]
-  F --> G["Apply sysctl --system"]
+  F --> G["Apply kernel/network sysctl profile (sysctl --system)"]
   G --> H["Run scripts/bootstrap-host.sh"]
-  H --> H1["Validate inputs"]
+  H --> H1["Re-validate runtime inputs on VPS"]
   H1 --> I["Ensure users + SSH keys (including COOLIFY_SUDO_NOPASSWD_USER)"]
   I --> J["Run ensure-user-passwords.sh"]
-  J --> K["Set/rotate user passwords if needed"]
+  J --> K["Set passwords only for locked/unset users"]
   K --> L["Write encrypted vault /etc/vps-coolify-bootstrap/user-passwords.enc"]
-  L --> M["Sync SSH AllowUsers from CREATE_USERS"]
-  M --> N["Switch to ssh.service + validate + cleanup :22"]
+  L --> M["Sync SSH AllowUsers from effective managed users"]
+  M --> N["Disable ssh.socket, validate sshd, restart ssh.service, cleanup stale :22 listeners"]
   N --> O["Apply UFW rules and enable fail2ban + unattended-upgrades"]
   O --> P["Install Coolify if missing"]
   P --> R["Apply groups + sudo policy"]
-  R --> Q["Sync Coolify localhost SSH user + key + port"]
+  R --> Q["Sync localhost-only Coolify SSH user + restricted key + SSH port"]
   Q --> Q1["Sync realtime host env from COOLIFY_REALTIME_DOMAIN"]
   Q1 --> S["Sync DOCKER-USER guards for 6001/6002 based on CLOSE_COOLIFY_REALTIME_PORTS"]
   S --> T["SSH login on hardened port"]
@@ -56,6 +56,27 @@ flowchart TD
 
 Important: `ensure-user-passwords.sh` runs on the VPS host during bootstrap/replay.
 User account passwords are not pre-generated locally during env preparation.
+
+## Why validation appears twice
+
+Validation is intentionally done in two stages:
+
+1. local render validation (`prepare-vps-coolify-init.*`) before generating the YAML
+2. server runtime validation (`bootstrap-host.sh`) before applying privileged changes
+
+This is defense-in-depth. Even if a file is edited manually on the VPS after provisioning,
+runtime checks still block unsafe/invalid values.
+
+## Coolify localhost SSH hardening
+
+`COOLIFY_SUDO_NOPASSWD_USER` is secured for localhost service use:
+
+- the operator SSH key (`SSH_PUBLIC_KEY`) is not kept in this user's `authorized_keys`
+- bootstrap generates a dedicated key pair under `/data/coolify/ssh/keys/`
+- the dedicated public key is installed with `from="..."` restriction, limited to localhost/private ranges used by Docker
+- Coolify server id `0` is synchronized to this user + `SSH_PORT` on `host.docker.internal`
+
+Result: this user is not intended for direct public SSH access from the internet.
 
 ## Accepted configuration types
 
@@ -123,8 +144,7 @@ Legacy compatibility:
 
 Username keys:
 
-- `PRIMARY_SUDO_USER`
-- `SECONDARY_SUDO_USER`
+- `DEVOPS_USER`
 - `COOLIFY_SUDO_NOPASSWD_USER`
 
 Accepted format:
@@ -133,19 +153,18 @@ Accepted format:
 
 Notes:
 
-- `PRIMARY_SUDO_USER` must exist in `CREATE_USERS`
-- `SECONDARY_SUDO_USER` must exist in `CREATE_USERS` (render-time requirement)
+- `DEVOPS_USER` defaults to `devops`
 - `COOLIFY_SUDO_NOPASSWD_USER` defaults to `coolify`
-- `COOLIFY_SUDO_NOPASSWD_USER` is auto-added to all managed lists (`CREATE_USERS`, `SUDO_USERS`, `DOCKER_USERS`, `COOLIFY_GROUP_USERS`)
+- effective managed users are built as:
+  - `DEVOPS_USER`
+  - `COOLIFY_SUDO_NOPASSWD_USER`
+  - users from `ADDITIONAL_SUDO_USERS`
 
 ### 6) CSV list configuration types
 
-CSV keys:
+CSV key:
 
-- `CREATE_USERS`
-- `SUDO_USERS`
-- `DOCKER_USERS`
-- `COOLIFY_GROUP_USERS`
+- `ADDITIONAL_SUDO_USERS`
 
 Accepted format:
 
@@ -153,9 +172,10 @@ Accepted format:
 - surrounding whitespace is trimmed per item
 - `:` is not allowed in usernames
 
-Subset rules:
+Runtime behavior:
 
-- every user in `SUDO_USERS`, `DOCKER_USERS`, and `COOLIFY_GROUP_USERS` must also exist in `CREATE_USERS`
+- each effective managed user is ensured to exist
+- each effective managed user is added to `sudo`, `docker`, and `coolify` groups
 
 ### 7) SSH public key configuration types
 
@@ -203,7 +223,10 @@ Generation behavior:
 Runtime password vault behavior:
 
 - `ensure-user-passwords.sh` runs on VPS host during bootstrap/replay
-- sets passwords only for locked/unset accounts
+- sets passwords only when needed:
+  - account is locked/unset in `/etc/shadow` (hash empty or starts with `!` / `*`)
+  - or account has no stored entry yet in encrypted vault
+- if account already has usable password and has a vault entry, password is kept unchanged
 - stores encrypted vault at `/etc/vps-coolify-bootstrap/user-passwords.enc`
 
 ### 10) Realtime policy pair (cross-field dependency)
@@ -235,7 +258,7 @@ Local render fails if:
 - Coolify URL printed by bootstrap: `https://<COOLIFY_PUBLIC_DOMAIN>`
 - Encrypted credential vault: `/etc/vps-coolify-bootstrap/user-passwords.enc`
 
-To decrypt on the server (must be run as `PRIMARY_SUDO_USER` or `COOLIFY_SUDO_NOPASSWD_USER`, both passwordless sudo by policy), use the recommended sequence below:
+To decrypt on the server (must be run as `DEVOPS_USER` or `COOLIFY_SUDO_NOPASSWD_USER`, both passwordless sudo by policy), use the recommended sequence below:
 
 ```bash
 export USER_PASSWORDS_ENCRYPTION_PASSWORD="$(
@@ -249,7 +272,7 @@ sudo env USER_PASSWORDS_ENCRYPTION_PASSWORD="$USER_PASSWORDS_ENCRYPTION_PASSWORD
 ```
 
 Note: other sudo users require their password to run `sudo`, but their
-password is inside this vault. Only `PRIMARY_SUDO_USER` or
+password is inside this vault. Only `DEVOPS_USER` or
 `COOLIFY_SUDO_NOPASSWD_USER` (passwordless sudo) or root via provider console
 can decrypt it.
 

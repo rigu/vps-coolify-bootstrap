@@ -22,7 +22,7 @@ require_var() {
   fi
 }
 
-require_var CREATE_USERS
+require_var DEVOPS_USER
 require_var USER_PASSWORDS_ENCRYPTION_PASSWORD
 
 if (( ${#USER_PASSWORDS_ENCRYPTION_PASSWORD} < 16 )); then
@@ -35,7 +35,24 @@ if ! is_valid_unix_username "$COOLIFY_SUDO_NOPASSWD_USER"; then
   echo "ERROR: COOLIFY_SUDO_NOPASSWD_USER contains invalid UNIX username: $COOLIFY_SUDO_NOPASSWD_USER" >&2
   exit 1
 fi
-managed_users_csv="$(csv_append_unique "$CREATE_USERS" "$COOLIFY_SUDO_NOPASSWD_USER")"
+DEVOPS_USER="${DEVOPS_USER:-devops}"
+if ! is_valid_unix_username "$DEVOPS_USER"; then
+  echo "ERROR: DEVOPS_USER contains invalid UNIX username: $DEVOPS_USER" >&2
+  exit 1
+fi
+managed_users_csv="$DEVOPS_USER"
+managed_users_csv="$(csv_append_unique "$managed_users_csv" "$COOLIFY_SUDO_NOPASSWD_USER")"
+for user in $(split_csv_to_lines "${ADDITIONAL_SUDO_USERS:-}"); do
+  if [[ "$user" == *:* ]]; then
+    echo "ERROR: ADDITIONAL_SUDO_USERS contains invalid username (colon not allowed): $user" >&2
+    exit 1
+  fi
+  if ! is_valid_unix_username "$user"; then
+    echo "ERROR: ADDITIONAL_SUDO_USERS contains invalid UNIX username: $user" >&2
+    exit 1
+  fi
+  managed_users_csv="$(csv_append_unique "$managed_users_csv" "$user")"
+done
 
 if ! command -v openssl >/dev/null 2>&1; then
   echo "ERROR: openssl is required to encrypt generated password file" >&2
@@ -97,17 +114,17 @@ fi
 changed_count=0
 for user in $(split_csv_to_lines "$managed_users_csv"); do
   if [[ "$user" == *:* ]]; then
-    echo "ERROR: CREATE_USERS contains invalid username (colon not allowed): $user" >&2
+    echo "ERROR: managed user list contains invalid username (colon not allowed): $user" >&2
     exit 1
   fi
 
   if ! is_valid_unix_username "$user"; then
-    echo "ERROR: CREATE_USERS contains invalid UNIX username: $user" >&2
+    echo "ERROR: managed user list contains invalid UNIX username: $user" >&2
     exit 1
   fi
 
   if ! id "$user" >/dev/null 2>&1; then
-    echo "ERROR: user declared in CREATE_USERS does not exist: $user" >&2
+    echo "ERROR: managed user does not exist: $user" >&2
     exit 1
   fi
 

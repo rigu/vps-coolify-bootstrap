@@ -9,8 +9,24 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $envPath = if ([System.IO.Path]::IsPathRooted($EnvFile)) { $EnvFile } else { Join-Path $repoRoot $EnvFile }
+$envExamplePath = Join-Path $repoRoot "env/bootstrap.env.example"
+
+if (-not (Test-Path -LiteralPath $envExamplePath -PathType Leaf)) {
+    throw "Missing template env file: $envExamplePath"
+}
+
+if (Test-Path -LiteralPath $envPath -PathType Container) {
+    throw "--env-file points to a directory, expected a file: $envPath"
+}
+
+$envDir = Split-Path -Parent $envPath
+if (-not [string]::IsNullOrWhiteSpace($envDir) -and -not (Test-Path -LiteralPath $envDir -PathType Container)) {
+    New-Item -ItemType Directory -Path $envDir -Force | Out-Null
+}
+
 if (-not (Test-Path -LiteralPath $envPath -PathType Leaf)) {
-    throw "Env file not found: $envPath"
+    Copy-Item -LiteralPath $envExamplePath -Destination $envPath
+    Write-Host "Created: $envPath (from $envExamplePath)"
 }
 
 $cfg = @{}
@@ -30,8 +46,7 @@ foreach ($line in Get-Content -LiteralPath $envPath) {
 }
 
 foreach ($k in @(
-    "TIMEZONE","SSH_PORT","PRIMARY_SUDO_USER","SECONDARY_SUDO_USER",
-    "CREATE_USERS","SUDO_USERS","DOCKER_USERS","COOLIFY_GROUP_USERS",
+    "TIMEZONE","SSH_PORT","DEVOPS_USER",
     "COOLIFY_PUBLIC_DOMAIN","COOLIFY_ROOT_USERNAME","COOLIFY_ROOT_USER_EMAIL","COOLIFY_ROOT_USER_PASSWORD","USER_PASSWORDS_ENCRYPTION_PASSWORD",
     "BOOTSTRAP_REPO_URL","BOOTSTRAP_REPO_REF"
 )) {
@@ -56,55 +71,22 @@ function Test-ValidUnixUsername {
     return ($User -match '^[a-z_][a-z0-9_-]*[$]?$')
 }
 
-function Add-CsvValueUnique {
-    param(
-        [string]$Csv,
-        [string]$Value
-    )
+$devopsUser = if ($cfg.ContainsKey("DEVOPS_USER") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["DEVOPS_USER"])) { [string]$cfg["DEVOPS_USER"] } else { "devops" }
+if ($devopsUser -notmatch '^[a-z_][a-z0-9_-]*[$]?$') { throw "DEVOPS_USER contains invalid UNIX username: $devopsUser" }
+$cfg["DEVOPS_USER"] = $devopsUser
 
-    $items = $Csv.Split(",") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-    if ($items -contains $Value) { return ($items -join ",") }
-    return (($items + $Value) -join ",")
-}
-
-$createUsers = ([string]$cfg["CREATE_USERS"]).Split(",") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-$primarySudoUser = [string]$cfg["PRIMARY_SUDO_USER"]
-$secondarySudoUser = [string]$cfg["SECONDARY_SUDO_USER"]
-if ($primarySudoUser -notmatch '^[a-z_][a-z0-9_-]*[$]?$') { throw "PRIMARY_SUDO_USER contains invalid UNIX username: $primarySudoUser" }
-if ($secondarySudoUser -notmatch '^[a-z_][a-z0-9_-]*[$]?$') { throw "SECONDARY_SUDO_USER contains invalid UNIX username: $secondarySudoUser" }
-if (-not ($createUsers -contains $primarySudoUser)) { throw "PRIMARY_SUDO_USER must be present in CREATE_USERS." }
-if (-not ($createUsers -contains $secondarySudoUser)) { throw "SECONDARY_SUDO_USER must be present in CREATE_USERS." }
 $coolifySudoNopasswdUser = if ($cfg.ContainsKey("COOLIFY_SUDO_NOPASSWD_USER") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["COOLIFY_SUDO_NOPASSWD_USER"])) { [string]$cfg["COOLIFY_SUDO_NOPASSWD_USER"] } else { "coolify" }
 if (-not (Test-ValidUnixUsername -User $coolifySudoNopasswdUser)) { throw "COOLIFY_SUDO_NOPASSWD_USER contains invalid UNIX username: $coolifySudoNopasswdUser" }
 $cfg["COOLIFY_SUDO_NOPASSWD_USER"] = $coolifySudoNopasswdUser
-$cfg["CREATE_USERS"] = Add-CsvValueUnique -Csv ([string]$cfg["CREATE_USERS"]) -Value $coolifySudoNopasswdUser
-$cfg["SUDO_USERS"] = Add-CsvValueUnique -Csv ([string]$cfg["SUDO_USERS"]) -Value $coolifySudoNopasswdUser
-$cfg["DOCKER_USERS"] = Add-CsvValueUnique -Csv ([string]$cfg["DOCKER_USERS"]) -Value $coolifySudoNopasswdUser
-$cfg["COOLIFY_GROUP_USERS"] = Add-CsvValueUnique -Csv ([string]$cfg["COOLIFY_GROUP_USERS"]) -Value $coolifySudoNopasswdUser
-$createUsers = ([string]$cfg["CREATE_USERS"]).Split(",") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 
-function Validate-UserListSubset {
-    param(
-        [string]$ListName,
-        [string]$Csv,
-        [string[]]$CreateUsers
-    )
-
-    $users = $Csv.Split(",") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-    foreach ($user in $users) {
-        if ($user.Contains(":")) { throw "${ListName} contains invalid username (colon not allowed): $user" }
-        if (-not (Test-ValidUnixUsername -User $user)) { throw "${ListName} contains invalid UNIX username: $user" }
-        if (-not ($CreateUsers -contains $user)) { throw "${ListName} contains user not present in CREATE_USERS: $user" }
-    }
+$managedUsers = @($cfg["DEVOPS_USER"], $coolifySudoNopasswdUser)
+if (-not $cfg.ContainsKey("ADDITIONAL_SUDO_USERS")) { $cfg["ADDITIONAL_SUDO_USERS"] = "" }
+$additionalUsers = ([string]$cfg["ADDITIONAL_SUDO_USERS"]).Split(",") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+foreach ($user in $additionalUsers) {
+    if ($user.Contains(":")) { throw "ADDITIONAL_SUDO_USERS contains invalid username (colon not allowed): $user" }
+    if (-not (Test-ValidUnixUsername -User $user)) { throw "ADDITIONAL_SUDO_USERS contains invalid UNIX username: $user" }
+    if (-not ($managedUsers -contains $user)) { $managedUsers += $user }
 }
-
-foreach ($user in $createUsers) {
-    if ($user.Contains(":")) { throw "CREATE_USERS contains invalid username (colon not allowed): $user" }
-    if (-not (Test-ValidUnixUsername -User $user)) { throw "CREATE_USERS contains invalid UNIX username: $user" }
-}
-Validate-UserListSubset -ListName "SUDO_USERS" -Csv ([string]$cfg["SUDO_USERS"]) -CreateUsers $createUsers
-Validate-UserListSubset -ListName "DOCKER_USERS" -Csv ([string]$cfg["DOCKER_USERS"]) -CreateUsers $createUsers
-Validate-UserListSubset -ListName "COOLIFY_GROUP_USERS" -Csv ([string]$cfg["COOLIFY_GROUP_USERS"]) -CreateUsers $createUsers
 
 $templatePath = if ($cfg.ContainsKey("TEMPLATE_FILE") -and $cfg["TEMPLATE_FILE"]) { $cfg["TEMPLATE_FILE"] } else { "../templates/vps-init.template.yml" }
 $outputPath = if ($cfg.ContainsKey("OUTPUT_FILE") -and $cfg["OUTPUT_FILE"]) { $cfg["OUTPUT_FILE"] } else { "../bootstrap-artifacts/vps-coolify-init.generated.yml" }
@@ -158,13 +140,9 @@ foreach ($v in @(
     [string]$cfg["COOLIFY_ROOT_USER_PASSWORD"],
     [string]$cfg["COOLIFY_PUBLIC_DOMAIN"],
     [string]$cfg["USER_PASSWORDS_ENCRYPTION_PASSWORD"],
-    [string]$cfg["PRIMARY_SUDO_USER"],
-    [string]$cfg["SECONDARY_SUDO_USER"],
+    [string]$cfg["DEVOPS_USER"],
     [string]$cfg["COOLIFY_SUDO_NOPASSWD_USER"],
-    [string]$cfg["CREATE_USERS"],
-    [string]$cfg["SUDO_USERS"],
-    [string]$cfg["DOCKER_USERS"],
-    [string]$cfg["COOLIFY_GROUP_USERS"],
+    [string]$cfg["ADDITIONAL_SUDO_USERS"],
     [string]$cfg["BOOTSTRAP_REPO_URL"],
     [string]$cfg["BOOTSTRAP_REPO_REF"]
 )) {
@@ -190,15 +168,11 @@ $content = Get-Content -LiteralPath $templatePath -Raw
 $map = [ordered]@{
     "TIMEZONE_HERE" = [string]$cfg["TIMEZONE"]
     "SSH_PORT_HERE" = [string]$cfg["SSH_PORT"]
-    "PRIMARY_SUDO_USER_HERE" = [string]$cfg["PRIMARY_SUDO_USER"]
-    "SECONDARY_SUDO_USER_HERE" = [string]$cfg["SECONDARY_SUDO_USER"]
+    "DEVOPS_USER_HERE" = [string]$cfg["DEVOPS_USER"]
     "COOLIFY_SUDO_NOPASSWD_USER_HERE" = [string]$cfg["COOLIFY_SUDO_NOPASSWD_USER"]
     "SSH_PUBLIC_KEY_HERE" = [string]$ssh
     "SSH_KEY_ROTATE_HERE" = [string]$sshKeyRotate
-    "CREATE_USERS_HERE" = [string]$cfg["CREATE_USERS"]
-    "SUDO_USERS_HERE" = [string]$cfg["SUDO_USERS"]
-    "DOCKER_USERS_HERE" = [string]$cfg["DOCKER_USERS"]
-    "COOLIFY_GROUP_USERS_HERE" = [string]$cfg["COOLIFY_GROUP_USERS"]
+    "ADDITIONAL_SUDO_USERS_HERE" = [string]$cfg["ADDITIONAL_SUDO_USERS"]
     "CLOSE_COOLIFY_REALTIME_PORTS_HERE" = [string]$cfg["CLOSE_COOLIFY_REALTIME_PORTS"]
     "COOLIFY_REALTIME_DOMAIN_HERE" = [string]$cfg["COOLIFY_REALTIME_DOMAIN"]
     "COOLIFY_PUBLIC_DOMAIN_HERE" = [string]$cfg["COOLIFY_PUBLIC_DOMAIN"]

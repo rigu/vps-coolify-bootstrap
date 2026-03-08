@@ -7,6 +7,9 @@ Render VPS-Coolify init user-data (VPS init format) from template + env file.
 
 Usage:
   scripts/prepare-vps-coolify-init.sh [--env-file <path>] [--overwrite]
+
+Behavior:
+  - If env file is missing, script creates parent directory and copies env/bootstrap.env.example.
 USAGE
 }
 
@@ -34,6 +37,9 @@ resolve_path() {
 
 env_file="bootstrap-artifacts/bootstrap.env"
 overwrite=0
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "$script_dir/.." && pwd)"
+env_example_file="$repo_root/env/bootstrap.env.example"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -57,10 +63,26 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-env_file="$(resolve_path "$env_file" "$PWD")"
-if [[ ! -f "$env_file" ]]; then
-  echo "ERROR: Env file not found: $env_file" >&2
+if [[ "$env_file" != /* ]]; then
+  env_file="$repo_root/$env_file"
+fi
+
+if [[ -d "$env_file" ]]; then
+  echo "ERROR: --env-file points to a directory, expected a file: $env_file" >&2
   exit 1
+fi
+
+if [[ ! -f "$env_example_file" ]]; then
+  echo "ERROR: missing template env file: $env_example_file" >&2
+  exit 1
+fi
+
+mkdir -p "$(dirname "$env_file")"
+
+if [[ ! -f "$env_file" ]]; then
+  cp "$env_example_file" "$env_file"
+  chmod 600 "$env_file"
+  echo "Created: $env_file (from $env_example_file)"
 fi
 
 declare -A cfg=()
@@ -121,7 +143,7 @@ is_valid_unix_username() {
   [[ "$user" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]
 }
 
-for k in TIMEZONE SSH_PORT PRIMARY_SUDO_USER SECONDARY_SUDO_USER CREATE_USERS SUDO_USERS DOCKER_USERS COOLIFY_GROUP_USERS COOLIFY_PUBLIC_DOMAIN COOLIFY_ROOT_USERNAME COOLIFY_ROOT_USER_EMAIL COOLIFY_ROOT_USER_PASSWORD USER_PASSWORDS_ENCRYPTION_PASSWORD BOOTSTRAP_REPO_URL BOOTSTRAP_REPO_REF; do
+for k in TIMEZONE SSH_PORT DEVOPS_USER COOLIFY_PUBLIC_DOMAIN COOLIFY_ROOT_USERNAME COOLIFY_ROOT_USER_EMAIL COOLIFY_ROOT_USER_PASSWORD USER_PASSWORDS_ENCRYPTION_PASSWORD BOOTSTRAP_REPO_URL BOOTSTRAP_REPO_REF; do
   require_key "$k"
 done
 
@@ -156,23 +178,12 @@ if [[ ! "${cfg[COOLIFY_ROOT_USERNAME]}" =~ ^[A-Za-z0-9._-]+$ ]]; then
   exit 1
 fi
 
-if ! is_valid_unix_username "${cfg[PRIMARY_SUDO_USER]}"; then
-  echo "ERROR: PRIMARY_SUDO_USER contains invalid UNIX username: ${cfg[PRIMARY_SUDO_USER]}" >&2
+devops_user="${cfg[DEVOPS_USER]:-devops}"
+if ! is_valid_unix_username "$devops_user"; then
+  echo "ERROR: DEVOPS_USER contains invalid UNIX username: $devops_user" >&2
   exit 1
 fi
-if ! is_valid_unix_username "${cfg[SECONDARY_SUDO_USER]}"; then
-  echo "ERROR: SECONDARY_SUDO_USER contains invalid UNIX username: ${cfg[SECONDARY_SUDO_USER]}" >&2
-  exit 1
-fi
-
-if ! csv_contains_value "${cfg[CREATE_USERS]}" "${cfg[PRIMARY_SUDO_USER]}"; then
-  echo "ERROR: PRIMARY_SUDO_USER must be present in CREATE_USERS." >&2
-  exit 1
-fi
-if ! csv_contains_value "${cfg[CREATE_USERS]}" "${cfg[SECONDARY_SUDO_USER]}"; then
-  echo "ERROR: SECONDARY_SUDO_USER must be present in CREATE_USERS." >&2
-  exit 1
-fi
+cfg[DEVOPS_USER]="$devops_user"
 
 coolify_sudo_nopasswd_user="${cfg[COOLIFY_SUDO_NOPASSWD_USER]:-coolify}"
 if ! is_valid_unix_username "$coolify_sudo_nopasswd_user"; then
@@ -180,49 +191,24 @@ if ! is_valid_unix_username "$coolify_sudo_nopasswd_user"; then
   exit 1
 fi
 cfg[COOLIFY_SUDO_NOPASSWD_USER]="$coolify_sudo_nopasswd_user"
-cfg[CREATE_USERS]="$(csv_append_unique "${cfg[CREATE_USERS]}" "$coolify_sudo_nopasswd_user")"
-cfg[SUDO_USERS]="$(csv_append_unique "${cfg[SUDO_USERS]}" "$coolify_sudo_nopasswd_user")"
-cfg[DOCKER_USERS]="$(csv_append_unique "${cfg[DOCKER_USERS]}" "$coolify_sudo_nopasswd_user")"
-cfg[COOLIFY_GROUP_USERS]="$(csv_append_unique "${cfg[COOLIFY_GROUP_USERS]}" "$coolify_sudo_nopasswd_user")"
 
-for user in $(printf '%s\n' "${cfg[CREATE_USERS]}" | tr ',' '\n'); do
+cfg[ADDITIONAL_SUDO_USERS]="${cfg[ADDITIONAL_SUDO_USERS]:-}"
+managed_users_csv="${cfg[DEVOPS_USER]}"
+managed_users_csv="$(csv_append_unique "$managed_users_csv" "${cfg[COOLIFY_SUDO_NOPASSWD_USER]}")"
+for user in $(printf '%s\n' "${cfg[ADDITIONAL_SUDO_USERS]}" | tr ',' '\n'); do
   user="$(trim "$user")"
   [[ -n "$user" ]] || continue
   if [[ "$user" == *:* ]]; then
-    echo "ERROR: CREATE_USERS contains invalid username (colon not allowed): $user" >&2
+    echo "ERROR: ADDITIONAL_SUDO_USERS contains invalid username (colon not allowed): $user" >&2
     exit 1
   fi
   if ! is_valid_unix_username "$user"; then
-    echo "ERROR: CREATE_USERS contains invalid UNIX username: $user" >&2
+    echo "ERROR: ADDITIONAL_SUDO_USERS contains invalid UNIX username: $user" >&2
     exit 1
   fi
+  managed_users_csv="$(csv_append_unique "$managed_users_csv" "$user")"
 done
-
-validate_user_csv_subset() {
-  local list_name="$1"
-  local list_value="$2"
-  local user=""
-  for user in $(printf '%s\n' "$list_value" | tr ',' '\n'); do
-    user="$(trim "$user")"
-    [[ -n "$user" ]] || continue
-    if [[ "$user" == *:* ]]; then
-      echo "ERROR: ${list_name} contains invalid username (colon not allowed): $user" >&2
-      exit 1
-    fi
-    if ! is_valid_unix_username "$user"; then
-      echo "ERROR: ${list_name} contains invalid UNIX username: $user" >&2
-      exit 1
-    fi
-    if ! csv_contains_value "${cfg[CREATE_USERS]}" "$user"; then
-      echo "ERROR: ${list_name} contains user not present in CREATE_USERS: $user" >&2
-      exit 1
-    fi
-  done
-}
-
-validate_user_csv_subset "SUDO_USERS" "${cfg[SUDO_USERS]}"
-validate_user_csv_subset "DOCKER_USERS" "${cfg[DOCKER_USERS]}"
-validate_user_csv_subset "COOLIFY_GROUP_USERS" "${cfg[COOLIFY_GROUP_USERS]}"
+cfg[MANAGED_USERS]="$managed_users_csv"
 
 close_coolify_realtime_ports="${cfg[CLOSE_COOLIFY_REALTIME_PORTS]:-}"
 if [[ -z "$close_coolify_realtime_ports" ]] && [[ -n "${cfg[ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS]:-}" ]]; then
@@ -310,7 +296,7 @@ if [[ "$ssh_key_rotate" != "0" && "$ssh_key_rotate" != "1" ]]; then
   exit 1
 fi
 
-for v in "${cfg[COOLIFY_PUBLIC_DOMAIN]}" "${cfg[COOLIFY_ROOT_USERNAME]}" "${cfg[COOLIFY_ROOT_USER_EMAIL]}" "$coolify_password" "$user_passwords_encryption_password" "${cfg[PRIMARY_SUDO_USER]}" "${cfg[SECONDARY_SUDO_USER]}" "${cfg[COOLIFY_SUDO_NOPASSWD_USER]}" "${cfg[CREATE_USERS]}" "${cfg[SUDO_USERS]}" "${cfg[DOCKER_USERS]}" "${cfg[COOLIFY_GROUP_USERS]}" "${cfg[BOOTSTRAP_REPO_URL]}" "${cfg[BOOTSTRAP_REPO_REF]}"; do
+for v in "${cfg[COOLIFY_PUBLIC_DOMAIN]}" "${cfg[COOLIFY_ROOT_USERNAME]}" "${cfg[COOLIFY_ROOT_USER_EMAIL]}" "$coolify_password" "$user_passwords_encryption_password" "${cfg[DEVOPS_USER]}" "${cfg[COOLIFY_SUDO_NOPASSWD_USER]}" "${cfg[ADDITIONAL_SUDO_USERS]}" "${cfg[BOOTSTRAP_REPO_URL]}" "${cfg[BOOTSTRAP_REPO_REF]}"; do
   if [[ "$v" == *"CHANGE_ME"* ]]; then
     echo "ERROR: Replace CHANGE_ME values in $env_file" >&2
     exit 1
@@ -332,15 +318,11 @@ mkdir -p "$(dirname "$output_path")"
 content="$(cat "$template_path")"
 content="${content//TIMEZONE_HERE/${cfg[TIMEZONE]}}"
 content="${content//SSH_PORT_HERE/${cfg[SSH_PORT]}}"
-content="${content//PRIMARY_SUDO_USER_HERE/${cfg[PRIMARY_SUDO_USER]}}"
-content="${content//SECONDARY_SUDO_USER_HERE/${cfg[SECONDARY_SUDO_USER]}}"
+content="${content//DEVOPS_USER_HERE/${cfg[DEVOPS_USER]}}"
 content="${content//COOLIFY_SUDO_NOPASSWD_USER_HERE/${cfg[COOLIFY_SUDO_NOPASSWD_USER]}}"
 content="${content//SSH_PUBLIC_KEY_HERE/$ssh_public_key}"
 content="${content//SSH_KEY_ROTATE_HERE/$ssh_key_rotate}"
-content="${content//CREATE_USERS_HERE/${cfg[CREATE_USERS]}}"
-content="${content//SUDO_USERS_HERE/${cfg[SUDO_USERS]}}"
-content="${content//DOCKER_USERS_HERE/${cfg[DOCKER_USERS]}}"
-content="${content//COOLIFY_GROUP_USERS_HERE/${cfg[COOLIFY_GROUP_USERS]}}"
+content="${content//ADDITIONAL_SUDO_USERS_HERE/${cfg[ADDITIONAL_SUDO_USERS]}}"
 content="${content//CLOSE_COOLIFY_REALTIME_PORTS_HERE/${cfg[CLOSE_COOLIFY_REALTIME_PORTS]}}"
 content="${content//COOLIFY_REALTIME_DOMAIN_HERE/${cfg[COOLIFY_REALTIME_DOMAIN]}}"
 content="${content//COOLIFY_PUBLIC_DOMAIN_HERE/${cfg[COOLIFY_PUBLIC_DOMAIN]}}"
@@ -351,7 +333,7 @@ content="${content//USER_PASSWORDS_ENCRYPTION_PASSWORD_HERE/$user_passwords_encr
 content="${content//BOOTSTRAP_REPO_URL_HERE/${cfg[BOOTSTRAP_REPO_URL]}}"
 content="${content//BOOTSTRAP_REPO_REF_HERE/${cfg[BOOTSTRAP_REPO_REF]}}"
 
-for token in TIMEZONE_HERE SSH_PORT_HERE PRIMARY_SUDO_USER_HERE SECONDARY_SUDO_USER_HERE COOLIFY_SUDO_NOPASSWD_USER_HERE SSH_PUBLIC_KEY_HERE SSH_KEY_ROTATE_HERE CREATE_USERS_HERE SUDO_USERS_HERE DOCKER_USERS_HERE COOLIFY_GROUP_USERS_HERE CLOSE_COOLIFY_REALTIME_PORTS_HERE COOLIFY_REALTIME_DOMAIN_HERE COOLIFY_PUBLIC_DOMAIN_HERE COOLIFY_ROOT_USERNAME_HERE COOLIFY_ROOT_USER_EMAIL_HERE COOLIFY_ROOT_USER_PASSWORD_HERE USER_PASSWORDS_ENCRYPTION_PASSWORD_HERE BOOTSTRAP_REPO_URL_HERE BOOTSTRAP_REPO_REF_HERE; do
+for token in TIMEZONE_HERE SSH_PORT_HERE DEVOPS_USER_HERE COOLIFY_SUDO_NOPASSWD_USER_HERE SSH_PUBLIC_KEY_HERE SSH_KEY_ROTATE_HERE ADDITIONAL_SUDO_USERS_HERE CLOSE_COOLIFY_REALTIME_PORTS_HERE COOLIFY_REALTIME_DOMAIN_HERE COOLIFY_PUBLIC_DOMAIN_HERE COOLIFY_ROOT_USERNAME_HERE COOLIFY_ROOT_USER_EMAIL_HERE COOLIFY_ROOT_USER_PASSWORD_HERE USER_PASSWORDS_ENCRYPTION_PASSWORD_HERE BOOTSTRAP_REPO_URL_HERE BOOTSTRAP_REPO_REF_HERE; do
   if grep -Fq "$token" <<< "$content"; then
     echo "ERROR: Unreplaced placeholder: $token" >&2
     exit 1

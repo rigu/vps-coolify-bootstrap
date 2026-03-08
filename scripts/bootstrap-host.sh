@@ -21,7 +21,7 @@ require_var() {
   fi
 }
 
-for v in SSH_PORT SSH_PUBLIC_KEY CREATE_USERS SUDO_USERS DOCKER_USERS COOLIFY_GROUP_USERS COOLIFY_PUBLIC_DOMAIN COOLIFY_ROOT_USERNAME COOLIFY_ROOT_USER_EMAIL COOLIFY_ROOT_USER_PASSWORD USER_PASSWORDS_ENCRYPTION_PASSWORD; do
+for v in SSH_PORT SSH_PUBLIC_KEY DEVOPS_USER COOLIFY_PUBLIC_DOMAIN COOLIFY_ROOT_USERNAME COOLIFY_ROOT_USER_EMAIL COOLIFY_ROOT_USER_PASSWORD USER_PASSWORDS_ENCRYPTION_PASSWORD; do
   require_var "$v"
 done
 
@@ -65,16 +65,11 @@ if [[ ! "$COOLIFY_ROOT_USERNAME" =~ ^[A-Za-z0-9._-]+$ ]]; then
   exit 1
 fi
 
-for user in $(split_csv_to_lines "$CREATE_USERS"); do
-  if [[ "$user" == *:* ]]; then
-    echo "ERROR: CREATE_USERS contains invalid username (colon not allowed): $user" >&2
-    exit 1
-  fi
-  if ! is_valid_unix_username "$user"; then
-    echo "ERROR: CREATE_USERS contains invalid UNIX username: $user" >&2
-    exit 1
-  fi
-done
+DEVOPS_USER="${DEVOPS_USER:-devops}"
+if ! is_valid_unix_username "$DEVOPS_USER"; then
+  echo "ERROR: DEVOPS_USER is not a valid UNIX username: $DEVOPS_USER" >&2
+  exit 1
+fi
 
 COOLIFY_SUDO_NOPASSWD_USER="${COOLIFY_SUDO_NOPASSWD_USER:-coolify}"
 if ! is_valid_unix_username "$COOLIFY_SUDO_NOPASSWD_USER"; then
@@ -82,67 +77,19 @@ if ! is_valid_unix_username "$COOLIFY_SUDO_NOPASSWD_USER"; then
   exit 1
 fi
 
-# Ensure the dedicated Coolify SSH/sudo user is always managed.
-CREATE_USERS="$(csv_append_unique "$CREATE_USERS" "$COOLIFY_SUDO_NOPASSWD_USER")"
-SUDO_USERS="$(csv_append_unique "$SUDO_USERS" "$COOLIFY_SUDO_NOPASSWD_USER")"
-DOCKER_USERS="$(csv_append_unique "$DOCKER_USERS" "$COOLIFY_SUDO_NOPASSWD_USER")"
-COOLIFY_GROUP_USERS="$(csv_append_unique "$COOLIFY_GROUP_USERS" "$COOLIFY_SUDO_NOPASSWD_USER")"
-
-validate_user_list_subset() {
-  local list_name="$1"
-  local list_value="$2"
-  local user=""
-  for user in $(split_csv_to_lines "$list_value"); do
-    if [[ "$user" == *:* ]]; then
-      echo "ERROR: ${list_name} contains invalid username (colon not allowed): $user" >&2
-      exit 1
-    fi
-    if ! is_valid_unix_username "$user"; then
-      echo "ERROR: ${list_name} contains invalid UNIX username: $user" >&2
-      exit 1
-    fi
-    if ! csv_contains_value "$CREATE_USERS" "$user"; then
-      echo "ERROR: ${list_name} contains user not present in CREATE_USERS: $user" >&2
-      exit 1
-    fi
-  done
-}
-
-validate_user_list_subset "SUDO_USERS" "$SUDO_USERS"
-validate_user_list_subset "DOCKER_USERS" "$DOCKER_USERS"
-validate_user_list_subset "COOLIFY_GROUP_USERS" "$COOLIFY_GROUP_USERS"
-
-PRIMARY_SUDO_USER="${PRIMARY_SUDO_USER:-}"
-SECONDARY_SUDO_USER="${SECONDARY_SUDO_USER:-}"
-if [[ -z "$PRIMARY_SUDO_USER" ]]; then
-  PRIMARY_SUDO_USER="$(split_csv_to_lines "$SUDO_USERS" | head -n1 || true)"
-fi
-PRIMARY_SUDO_USER="${PRIMARY_SUDO_USER:-devops}"
-
-if [[ -z "$PRIMARY_SUDO_USER" ]]; then
-  echo "ERROR: PRIMARY_SUDO_USER resolved to empty value" >&2
-  exit 1
-fi
-
-if ! is_valid_unix_username "$PRIMARY_SUDO_USER"; then
-  echo "ERROR: PRIMARY_SUDO_USER is not a valid UNIX username: $PRIMARY_SUDO_USER" >&2
-  exit 1
-fi
-
-if [[ -n "$SECONDARY_SUDO_USER" ]] && ! is_valid_unix_username "$SECONDARY_SUDO_USER"; then
-  echo "ERROR: SECONDARY_SUDO_USER is not a valid UNIX username: $SECONDARY_SUDO_USER" >&2
-  exit 1
-fi
-
-if ! csv_contains_value "$CREATE_USERS" "$PRIMARY_SUDO_USER"; then
-  echo "ERROR: PRIMARY_SUDO_USER must be present in CREATE_USERS: $PRIMARY_SUDO_USER" >&2
-  exit 1
-fi
-
-if [[ -n "$SECONDARY_SUDO_USER" ]] && ! csv_contains_value "$CREATE_USERS" "$SECONDARY_SUDO_USER"; then
-  echo "ERROR: SECONDARY_SUDO_USER must be present in CREATE_USERS: $SECONDARY_SUDO_USER" >&2
-  exit 1
-fi
+MANAGED_USERS_CSV="$DEVOPS_USER"
+MANAGED_USERS_CSV="$(csv_append_unique "$MANAGED_USERS_CSV" "$COOLIFY_SUDO_NOPASSWD_USER")"
+for user in $(split_csv_to_lines "${ADDITIONAL_SUDO_USERS:-}"); do
+  if [[ "$user" == *:* ]]; then
+    echo "ERROR: ADDITIONAL_SUDO_USERS contains invalid username (colon not allowed): $user" >&2
+    exit 1
+  fi
+  if ! is_valid_unix_username "$user"; then
+    echo "ERROR: ADDITIONAL_SUDO_USERS contains invalid UNIX username: $user" >&2
+    exit 1
+  fi
+  MANAGED_USERS_CSV="$(csv_append_unique "$MANAGED_USERS_CSV" "$user")"
+done
 
 SSH_KEY_ROTATE="${SSH_KEY_ROTATE:-0}"
 
@@ -226,12 +173,60 @@ ensure_ssh_key_present() {
   fi
 }
 
+remove_ssh_key_exact_line() {
+  local user="$1"
+  local ssh_key="$2"
+  local home_dir
+  local auth_keys
+  local tmp_file
+  [[ -n "$ssh_key" ]] || return 0
+
+  home_dir="$(getent passwd "$user" | cut -d: -f6)"
+  [[ -n "$home_dir" ]] || return 0
+  auth_keys="$home_dir/.ssh/authorized_keys"
+  [[ -f "$auth_keys" ]] || return 0
+
+  tmp_file="$(mktemp)"
+  grep -Fxv -- "$ssh_key" "$auth_keys" >"$tmp_file" || true
+  install -o "$user" -g "$user" -m 600 "$tmp_file" "$auth_keys"
+  rm -f "$tmp_file"
+}
+
+set_ssh_key_restricted_to_source_ranges() {
+  local user="$1"
+  local ssh_key="$2"
+  local source_ranges="$3"
+  local home_dir
+  local auth_keys
+  local tmp_file
+  local entry
+  [[ -n "$ssh_key" ]] || return 0
+  [[ -n "$source_ranges" ]] || return 0
+
+  home_dir="$(getent passwd "$user" | cut -d: -f6)"
+  [[ -n "$home_dir" ]] || return 0
+  install -d -m 700 -o "$user" -g "$user" "$home_dir/.ssh"
+  auth_keys="$home_dir/.ssh/authorized_keys"
+  touch "$auth_keys"
+  chown "$user:$user" "$auth_keys"
+  chmod 600 "$auth_keys"
+
+  # Remove previous entries for this key (restricted or unrestricted), then add
+  # one canonical localhost/private-only entry for Coolify.
+  tmp_file="$(mktemp)"
+  grep -Fv -- "$ssh_key" "$auth_keys" >"$tmp_file" || true
+  entry="from=\"${source_ranges}\",no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-user-rc ${ssh_key}"
+  printf '%s\n' "$entry" >>"$tmp_file"
+  install -o "$user" -g "$user" -m 600 "$tmp_file" "$auth_keys"
+  rm -f "$tmp_file"
+}
+
 sync_sshd_allowusers() {
   local allow_users
   local sshd_cfg
   local tmp_cfg
   sshd_cfg="/etc/ssh/sshd_config.d/10-bootstrap-hardening.conf"
-  allow_users="$(split_csv_to_lines "$CREATE_USERS" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+  allow_users="$(split_csv_to_lines "$MANAGED_USERS_CSV" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
   [[ -n "$allow_users" ]] || return 0
 
   if [[ ! -f "$sshd_cfg" ]]; then
@@ -438,8 +433,8 @@ apply_sudo_policy() {
 
   if ! {
     : > "$tmp_file"
-    for user in $(split_csv_to_lines "$SUDO_USERS"); do
-      if [[ "$user" == "$PRIMARY_SUDO_USER" || "$user" == "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
+    for user in $(split_csv_to_lines "$MANAGED_USERS_CSV"); do
+      if [[ "$user" == "$DEVOPS_USER" || "$user" == "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
         printf '%s ALL=(ALL:ALL) NOPASSWD:ALL\n' "$user" >> "$tmp_file"
       else
         printf '%s ALL=(ALL:ALL) ALL\n' "$user" >> "$tmp_file"
@@ -462,11 +457,15 @@ apply_sudo_policy() {
 }
 
 # Ensure all declared users exist.
-for user in $(split_csv_to_lines "$CREATE_USERS"); do
+for user in $(split_csv_to_lines "$MANAGED_USERS_CSV"); do
   ensure_user_exists "$user"
-  ensure_ssh_key "$user" "$SSH_PUBLIC_KEY"
+  if [[ "$user" != "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
+    ensure_ssh_key "$user" "$SSH_PUBLIC_KEY"
+  fi
 done
-ensure_ssh_key "$COOLIFY_SUDO_NOPASSWD_USER" "$SSH_PUBLIC_KEY"
+# The dedicated Coolify localhost user must not inherit the operator's public
+# SSH key. Keep access for this user restricted to the dedicated localhost key.
+remove_ssh_key_exact_line "$COOLIFY_SUDO_NOPASSWD_USER" "$SSH_PUBLIC_KEY"
 
 bash "$script_dir/ensure-user-passwords.sh" "$ENV_FILE"
 sync_sshd_allowusers
@@ -527,6 +526,7 @@ sync_coolify_localhost_ssh_user() {
   local key_dir="/data/coolify/ssh/keys"
   local key_path="${key_dir}/id.${COOLIFY_SUDO_NOPASSWD_USER}@host.docker.internal"
   local key_pub_path="${key_path}.pub"
+  local allowed_from='127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7'
   local key_pub=""
   local attempt=0
 
@@ -551,7 +551,8 @@ sync_coolify_localhost_ssh_user() {
 
   key_pub="$(cat "$key_pub_path" 2>/dev/null || true)"
   if [[ -n "$key_pub" ]]; then
-    ensure_ssh_key_present "$COOLIFY_SUDO_NOPASSWD_USER" "$key_pub"
+    set_ssh_key_restricted_to_source_ranges "$COOLIFY_SUDO_NOPASSWD_USER" "$key_pub" "$allowed_from"
+    remove_ssh_key_exact_line "$COOLIFY_SUDO_NOPASSWD_USER" "$SSH_PUBLIC_KEY"
   fi
 
   while (( attempt < 15 )); do
@@ -656,19 +657,19 @@ if command -v docker >/dev/null 2>&1; then
   groupadd -f docker
 fi
 
-for user in $(split_csv_to_lines "$SUDO_USERS"); do
+for user in $(split_csv_to_lines "$MANAGED_USERS_CSV"); do
   ensure_user_exists "$user"
   usermod -aG sudo "$user"
 done
 apply_sudo_policy
 
-for user in $(split_csv_to_lines "$COOLIFY_GROUP_USERS"); do
+for user in $(split_csv_to_lines "$MANAGED_USERS_CSV"); do
   ensure_user_exists "$user"
   usermod -aG coolify "$user"
 done
 
 if getent group docker >/dev/null 2>&1; then
-  for user in $(split_csv_to_lines "$DOCKER_USERS"); do
+  for user in $(split_csv_to_lines "$MANAGED_USERS_CSV"); do
     ensure_user_exists "$user"
     usermod -aG docker "$user"
   done

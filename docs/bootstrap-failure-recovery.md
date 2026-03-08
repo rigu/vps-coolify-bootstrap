@@ -12,7 +12,7 @@ The sequence is explicit and safe to execute end-to-end.
 ## 0) Preparation (do not skip)
 
 1. Keep provider web console access open (rescue path if SSH is broken).
-2. Run recovery as `root` (provider console) or as `PRIMARY_SUDO_USER` / `COOLIFY_SUDO_NOPASSWD_USER` (passwordless `sudo`).
+2. Run recovery as `root` (provider console) or as `DEVOPS_USER` / `COOLIFY_SUDO_NOPASSWD_USER` (passwordless `sudo`).
 3. Keep local source of truth ready:
    - local repo: `public-vps-coolify-bootstrap`
    - local env file: `bootstrap-artifacts/bootstrap.env`
@@ -21,7 +21,7 @@ The sequence is explicit and safe to execute end-to-end.
 ```bash
 export SERVER_IP="<server-ip>"
 export SSH_PORT="<ssh-port>"
-export PRIMARY_SUDO_USER="<primary-sudo-user>"
+export DEVOPS_USER="<devops-user>"
 ```
 
 ## 1) Confirm first-boot init failure state
@@ -52,13 +52,13 @@ Typical root causes:
 ## 3) Validate minimum host baseline
 
 ```bash
-# Extract PRIMARY/SECONDARY sudo users from server-side bootstrap env.
-primary_user="$(sudo sed -n 's/^PRIMARY_SUDO_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
-secondary_user="$(sudo sed -n 's/^SECONDARY_SUDO_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
-primary_user="${primary_user:-devops}"
-secondary_user="${secondary_user:-coolify}"
-id "$primary_user" || true
-id "$secondary_user" || true
+# Extract DEVOPS/COOLIFY users from server-side bootstrap env.
+devops_user="$(sudo sed -n 's/^DEVOPS_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
+coolify_user="$(sudo sed -n 's/^COOLIFY_SUDO_NOPASSWD_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
+devops_user="${devops_user:-devops}"
+coolify_user="${coolify_user:-coolify}"
+id "$devops_user" || true
+id "$coolify_user" || true
 command -v docker || true
 sudo systemctl is-active ssh.service fail2ban unattended-upgrades || true
 sudo ufw status verbose || true
@@ -97,7 +97,7 @@ Then verify required keys on server:
 
 ```bash
 sudo awk -F= '
-/^(SSH_PORT|PRIMARY_SUDO_USER|SECONDARY_SUDO_USER|COOLIFY_SUDO_NOPASSWD_USER|SSH_PUBLIC_KEY|CREATE_USERS|SUDO_USERS|DOCKER_USERS|COOLIFY_GROUP_USERS|COOLIFY_PUBLIC_DOMAIN|CLOSE_COOLIFY_REALTIME_PORTS|COOLIFY_REALTIME_DOMAIN|COOLIFY_ROOT_USERNAME|COOLIFY_ROOT_USER_EMAIL|COOLIFY_ROOT_USER_PASSWORD|USER_PASSWORDS_ENCRYPTION_PASSWORD)=/ {
+/^(SSH_PORT|DEVOPS_USER|COOLIFY_SUDO_NOPASSWD_USER|ADDITIONAL_SUDO_USERS|SSH_PUBLIC_KEY|COOLIFY_PUBLIC_DOMAIN|CLOSE_COOLIFY_REALTIME_PORTS|COOLIFY_REALTIME_DOMAIN|COOLIFY_ROOT_USERNAME|COOLIFY_ROOT_USER_EMAIL|COOLIFY_ROOT_USER_PASSWORD|USER_PASSWORDS_ENCRYPTION_PASSWORD)=/ {
   print $1"=<set>"
 }
 ' /etc/vps-coolify-bootstrap/bootstrap.env
@@ -125,9 +125,9 @@ sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-
 
 This script is idempotent and executes the following actions in order:
 - create/repair users and SSH keys (including `COOLIFY_SUDO_NOPASSWD_USER`)
-- during this on-host replay, set passwords for `CREATE_USERS` accounts that are currently locked/unset (not a local pre-generation step)
+- during this on-host replay, set passwords for managed users (`DEVOPS_USER`, `COOLIFY_SUDO_NOPASSWD_USER`, `ADDITIONAL_SUDO_USERS`) only when account is locked/unset or missing from vault (not a local pre-generation step)
 - store generated credentials encrypted in `/etc/vps-coolify-bootstrap/user-passwords.enc`
-- sync `AllowUsers` from `CREATE_USERS`
+- sync `AllowUsers` from effective managed users
 - enforce SSH runtime/config checks
 - terminate stale `sshd` listeners on `22` when `SSH_PORT` is not `22`
 - reset/apply UFW baseline rules (`SSH_PORT`, `80`, `443`)
@@ -135,7 +135,7 @@ This script is idempotent and executes the following actions in order:
 - install/start Coolify if missing
 - sync Coolify localhost server connection to `COOLIFY_SUDO_NOPASSWD_USER` + `SSH_PORT` and dedicated localhost SSH key
 - sync realtime host env (`PUSHER_HOST`, `PUSHER_PORT`, `PUSHER_SCHEME`) from `COOLIFY_REALTIME_DOMAIN`
-- enforce sudo/docker/coolify memberships and sudo policy (passwordless for `PRIMARY_SUDO_USER` and `COOLIFY_SUDO_NOPASSWD_USER` by default)
+- enforce sudo/docker/coolify memberships and sudo policy (passwordless for `DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` by default)
 - sync `DOCKER-USER` guards for `6001/6002` based on `CLOSE_COOLIFY_REALTIME_PORTS`
 
 Important: Docker-published ports can bypass UFW rules. Validate exposed ports
@@ -149,9 +149,9 @@ sudo ufw status verbose
 sudo docker ps --format 'table {{.Names}}\t{{.Status}}'
 sudo iptables -S DOCKER-USER | grep -E '6001|6002' || true
 sudo ip6tables -S DOCKER-USER 2>/dev/null | grep -E '6001|6002' || true
-primary_user="$(sudo sed -n 's/^PRIMARY_SUDO_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
-primary_user="${primary_user:-devops}"
-id "$primary_user" || true
+devops_user="$(sudo sed -n 's/^DEVOPS_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
+devops_user="${devops_user:-devops}"
+id "$devops_user" || true
 getent group sudo docker coolify
 sudo bash /opt/vps-coolify-bootstrap/scripts/verify-bootstrap-state.sh /etc/vps-coolify-bootstrap/bootstrap.env
 ```
@@ -167,7 +167,7 @@ Expected:
 ## 8) Validate remote access from your machine
 
 ```bash
-ssh -p "$SSH_PORT" "$PRIMARY_SUDO_USER@$SERVER_IP" "whoami && hostname && id"
+ssh -p "$SSH_PORT" "$DEVOPS_USER@$SERVER_IP" "whoami && hostname && id"
 ```
 
 If login fails but provider console works, re-check:
@@ -231,7 +231,7 @@ sudo systemctl restart fail2ban
 ### C) Fix sudo policy for Coolify-managed SSH user
 
 Coolify server validation runs non-interactively and needs passwordless sudo.
-By default, `PRIMARY_SUDO_USER` and `COOLIFY_SUDO_NOPASSWD_USER` are passwordless.
+By default, `DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` are passwordless.
 
 Check effective sudo mode:
 
@@ -310,7 +310,7 @@ fi
 
 ## Decrypt generated user credentials (when needed)
 
-Must be run as `PRIMARY_SUDO_USER` or `COOLIFY_SUDO_NOPASSWD_USER` (both
+Must be run as `DEVOPS_USER` or `COOLIFY_SUDO_NOPASSWD_USER` (both
 passwordless sudo) or root via provider console. Other sudo users cannot decrypt because they need their
 password for `sudo`, and their password is inside this vault.
 

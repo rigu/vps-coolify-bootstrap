@@ -34,11 +34,13 @@ case "$CLOSE_COOLIFY_REALTIME_PORTS" in
 esac
 
 COOLIFY_SUDO_NOPASSWD_USER="${COOLIFY_SUDO_NOPASSWD_USER:-coolify}"
-PRIMARY_SUDO_USER="${PRIMARY_SUDO_USER:-}"
-  if [[ -z "$PRIMARY_SUDO_USER" ]]; then
-  PRIMARY_SUDO_USER="$(split_csv_to_lines "${SUDO_USERS:-}" | head -n1 || true)"
-  PRIMARY_SUDO_USER="${PRIMARY_SUDO_USER:-devops}"
-fi
+DEVOPS_USER="${DEVOPS_USER:-devops}"
+
+managed_users_csv="$DEVOPS_USER"
+managed_users_csv="$(csv_append_unique "$managed_users_csv" "$COOLIFY_SUDO_NOPASSWD_USER")"
+for user in $(split_csv_to_lines "${ADDITIONAL_SUDO_USERS:-}"); do
+  managed_users_csv="$(csv_append_unique "$managed_users_csv" "$user")"
+done
 
 failures=0
 warnings=0
@@ -134,7 +136,6 @@ else
 fi
 
 echo "=== User and sudo policy ==="
-managed_users_csv="$(csv_append_unique "${CREATE_USERS:-}" "$COOLIFY_SUDO_NOPASSWD_USER")"
 while IFS= read -r user; do
   if id "$user" >/dev/null 2>&1; then
     pass "user exists: $user"
@@ -145,20 +146,14 @@ done < <(split_csv_to_lines "$managed_users_csv")
 
 while IFS= read -r user; do
   check_member_of_group "$user" "sudo"
-done < <(split_csv_to_lines "${SUDO_USERS:-}")
-
-while IFS= read -r user; do
   check_member_of_group "$user" "docker"
-done < <(split_csv_to_lines "${DOCKER_USERS:-}")
-
-while IFS= read -r user; do
   check_member_of_group "$user" "coolify"
-done < <(split_csv_to_lines "${COOLIFY_GROUP_USERS:-}")
+done < <(split_csv_to_lines "$managed_users_csv")
 
-if grep -Eq "^${PRIMARY_SUDO_USER}[[:space:]]+ALL=\\(ALL:ALL\\)[[:space:]]+NOPASSWD:ALL$" /etc/sudoers.d/99-bootstrap-sudo-policy 2>/dev/null; then
-  pass "PRIMARY_SUDO_USER has NOPASSWD sudo policy (${PRIMARY_SUDO_USER})"
+if grep -Eq "^${DEVOPS_USER}[[:space:]]+ALL=\\(ALL:ALL\\)[[:space:]]+NOPASSWD:ALL$" /etc/sudoers.d/99-bootstrap-sudo-policy 2>/dev/null; then
+  pass "DEVOPS_USER has NOPASSWD sudo policy (${DEVOPS_USER})"
 else
-  fail "PRIMARY_SUDO_USER missing NOPASSWD policy (${PRIMARY_SUDO_USER})"
+  fail "DEVOPS_USER missing NOPASSWD policy (${DEVOPS_USER})"
 fi
 
 if grep -Eq "^${COOLIFY_SUDO_NOPASSWD_USER}[[:space:]]+ALL=\\(ALL:ALL\\)[[:space:]]+NOPASSWD:ALL$" /etc/sudoers.d/99-bootstrap-sudo-policy 2>/dev/null; then
@@ -188,10 +183,21 @@ fi
 
 coolify_user_home="$(getent passwd "$COOLIFY_SUDO_NOPASSWD_USER" | cut -d: -f6 || true)"
 if [[ -n "$coolify_user_home" ]] && [[ -f "${coolify_user_home}/.ssh/authorized_keys" ]] && [[ -f "$coolify_local_pub" ]]; then
-  if grep -Fxq "$(cat "$coolify_local_pub")" "${coolify_user_home}/.ssh/authorized_keys"; then
-    pass "Coolify localhost public key is present in ${COOLIFY_SUDO_NOPASSWD_USER} authorized_keys"
+  local_pub_key="$(cat "$coolify_local_pub")"
+  if grep -Fq -- "$local_pub_key" "${coolify_user_home}/.ssh/authorized_keys"; then
+    if grep -F -- "$local_pub_key" "${coolify_user_home}/.ssh/authorized_keys" | grep -q 'from="'; then
+      pass "Coolify localhost public key is present with source restriction in ${COOLIFY_SUDO_NOPASSWD_USER} authorized_keys"
+    else
+      fail "Coolify localhost public key exists but is missing source restriction in ${COOLIFY_SUDO_NOPASSWD_USER} authorized_keys"
+    fi
   else
     fail "Coolify localhost public key missing in ${COOLIFY_SUDO_NOPASSWD_USER} authorized_keys"
+  fi
+
+  if grep -Fxq -- "${SSH_PUBLIC_KEY:-}" "${coolify_user_home}/.ssh/authorized_keys"; then
+    fail "operator SSH key should not be present in ${COOLIFY_SUDO_NOPASSWD_USER} authorized_keys"
+  else
+    pass "operator SSH key is not present in ${COOLIFY_SUDO_NOPASSWD_USER} authorized_keys"
   fi
 else
   fail "cannot validate ${COOLIFY_SUDO_NOPASSWD_USER} authorized_keys against Coolify localhost key"

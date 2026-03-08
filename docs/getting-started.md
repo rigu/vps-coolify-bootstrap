@@ -61,7 +61,7 @@ For full behavior details and replay implications, see:
 
 | Variable | Runtime behavior | Required to set? |
 |---|---|---|
-| `PRIMARY_SUDO_USER` | If empty, resolved from the first `SUDO_USERS` value; falls back to `devops` | NO |
+| `DEVOPS_USER` | Primary operational account; defaults to `devops` if not set | NO |
 | `SSH_KEY_ROTATE` | Default `0`: append SSH key; `1`: replace `authorized_keys` | NO |
 | `CLOSE_COOLIFY_REALTIME_PORTS` | Default `false`: keep public `6001/6002`; set `true` to enforce `DOCKER-USER` guards and close public ingress | NO |
 
@@ -79,11 +79,10 @@ For full behavior details and replay implications, see:
 | Variable | Runtime behavior | Required to set? |
 |---|---|---|
 | `SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_PATH` | Required for SSH access; **AUTO-DETECTED** if a valid key exists on your machine, otherwise set manually | YES |
-| `COOLIFY_SUDO_NOPASSWD_USER` | Dedicated user for Coolify SSH operations; auto-managed, forced into user/group lists, and granted passwordless sudo | NO |
+| `COOLIFY_SUDO_NOPASSWD_USER` | Dedicated user for Coolify localhost SSH operations; auto-managed, forced into user/group lists, granted passwordless sudo, and configured with a dedicated localhost/private-only SSH key (not for direct public SSH access) | NO |
+| `ADDITIONAL_SUDO_USERS` | Optional comma-separated additional admins; effective managed users are `DEVOPS_USER` + `COOLIFY_SUDO_NOPASSWD_USER` + `ADDITIONAL_SUDO_USERS` | NO |
 | `COOLIFY_REALTIME_DOMAIN` | Dedicated realtime host. If set, bootstrap writes `PUSHER_HOST`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https` in Coolify `.env`; if empty, bootstrap removes those keys. Required when `CLOSE_COOLIFY_REALTIME_PORTS=true` | NO (YES when closing `6001/6002`) |
 | `SSH_PORT` | Applied in SSH config and service restart flow | NO |
-| `SECONDARY_SUDO_USER` | Validated against `CREATE_USERS` | NO |
-| `CREATE_USERS` / `SUDO_USERS` / `DOCKER_USERS` / `COOLIFY_GROUP_USERS` | Users/groups and policy reconciliation at bootstrap/replay | NO |
 | `TIMEZONE` | Applied during first-boot VPS init phase | NO |
 
 ### D) Generated passwords and secrets
@@ -91,7 +90,7 @@ For full behavior details and replay implications, see:
 | Variable | Runtime behavior | Required to set? |
 |---|---|---|
 | `USER_PASSWORDS_ENCRYPTION_PASSWORD` | **AUTO-GENERATED** locally only when value is empty/`CHANGE_ME` (`openssl rand -hex 16`); used to encrypt user vault | NO |
-| account passwords for managed users | `ensure-user-passwords.sh` runs on the VPS host during bootstrap/replay (not as a local pre-generation step), sets passwords only for locked/unset users in `CREATE_USERS` plus `COOLIFY_SUDO_NOPASSWD_USER`, then stores them encrypted in `/etc/vps-coolify-bootstrap/user-passwords.enc` | YES (set local password for `PRIMARY_SUDO_USER` on first login) |
+| account passwords for managed users | `ensure-user-passwords.sh` runs on the VPS host during bootstrap/replay (not as a local pre-generation step). It sets a new password only when needed: account is locked/unset in `/etc/shadow` (empty hash or starts with `!` / `*`) or account has no entry in the encrypted vault yet. Existing unlocked accounts with existing vault entries are not rotated. Managed users are `DEVOPS_USER` + `COOLIFY_SUDO_NOPASSWD_USER` + `ADDITIONAL_SUDO_USERS`. | YES (set local password for `DEVOPS_USER` on first login) |
 
 Other bootstrap source variables (usually unchanged):
 - `BOOTSTRAP_REPO_URL=https://github.com/rigu/vps-coolify-bootstrap.git`
@@ -168,11 +167,11 @@ After first boot, use this checklist:
 2. Connect by SSH from your machine using configured values from `bootstrap-artifacts/bootstrap.env`:
 
    ```bash
-   ssh -p <SSH_PORT> <PRIMARY_SUDO_USER>@<SERVER_IP>
+   ssh -p <SSH_PORT> <DEVOPS_USER>@<SERVER_IP>
    ```
 
    Default port is `2222` unless you changed `SSH_PORT`.
-   Use `PRIMARY_SUDO_USER` for operational work that needs `sudo`.
+   Use `DEVOPS_USER` for operational work that needs `sudo`.
 
    Host key change note (`REMOTE HOST IDENTIFICATION HAS CHANGED`):
    this usually happens after VPS reprovision/reinstall (new SSH host keys).
@@ -188,24 +187,24 @@ After first boot, use this checklist:
 
    ```powershell
    ssh-keygen -R "[<SERVER_IP>]:<SSH_PORT>"
-   ssh -p <SSH_PORT> <PRIMARY_SUDO_USER>@<SERVER_IP>
+   ssh -p <SSH_PORT> <DEVOPS_USER>@<SERVER_IP>
    ```
 
    Linux/macOS:
 
    ```bash
    ssh-keygen -R "[<SERVER_IP>]:<SSH_PORT>"
-   ssh -p <SSH_PORT> <PRIMARY_SUDO_USER>@<SERVER_IP>
+   ssh -p <SSH_PORT> <DEVOPS_USER>@<SERVER_IP>
    ```
 
-3. IMPORTANT: On first login, set a local password for `PRIMARY_SUDO_USER`:
+3. IMPORTANT: On first login, set a local password for `DEVOPS_USER`:
 
    ```bash
    sudo passwd "$(whoami)"
    ```
 
    Do this before handing operational access to other admins.
-   `PRIMARY_SUDO_USER` has passwordless sudo by policy, but a local password is
+   `DEVOPS_USER` has passwordless sudo by policy, but a local password is
    still required for emergency recovery paths (for example console login).
 
 4. Validate host baseline after login:

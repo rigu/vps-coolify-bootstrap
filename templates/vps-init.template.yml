@@ -4,19 +4,17 @@ package_update: true
 package_upgrade: true
 
 users:
-  - name: PRIMARY_SUDO_USER_HERE
+  - name: DEVOPS_USER_HERE
     groups: [sudo]
     shell: /bin/bash
     sudo: ["ALL=(ALL:ALL) NOPASSWD:ALL"]
     ssh_authorized_keys:
       - SSH_PUBLIC_KEY_HERE
 
-  - name: SECONDARY_SUDO_USER_HERE
+  - name: COOLIFY_SUDO_NOPASSWD_USER_HERE
     groups: [sudo]
     shell: /bin/bash
-    sudo: ["ALL=(ALL:ALL) ALL"]
-    ssh_authorized_keys:
-      - SSH_PUBLIC_KEY_HERE
+    sudo: ["ALL=(ALL:ALL) NOPASSWD:ALL"]
 
 ssh_pwauth: false
 disable_root: true
@@ -69,7 +67,7 @@ write_files:
       LoginGraceTime 30
       ClientAliveInterval 300
       ClientAliveCountMax 2
-      AllowUsers PRIMARY_SUDO_USER_HERE SECONDARY_SUDO_USER_HERE
+      AllowUsers DEVOPS_USER_HERE COOLIFY_SUDO_NOPASSWD_USER_HERE
 
   - path: /etc/fail2ban/jail.d/10-bootstrap-sshd.local
     permissions: "0644"
@@ -92,15 +90,11 @@ write_files:
     permissions: "0600"
     content: |
       SSH_PORT=SSH_PORT_HERE
-      PRIMARY_SUDO_USER='PRIMARY_SUDO_USER_HERE'
-      SECONDARY_SUDO_USER='SECONDARY_SUDO_USER_HERE'
+      DEVOPS_USER='DEVOPS_USER_HERE'
       COOLIFY_SUDO_NOPASSWD_USER='COOLIFY_SUDO_NOPASSWD_USER_HERE'
       SSH_PUBLIC_KEY='SSH_PUBLIC_KEY_HERE'
       SSH_KEY_ROTATE=SSH_KEY_ROTATE_HERE
-      CREATE_USERS=CREATE_USERS_HERE
-      SUDO_USERS=SUDO_USERS_HERE
-      DOCKER_USERS=DOCKER_USERS_HERE
-      COOLIFY_GROUP_USERS=COOLIFY_GROUP_USERS_HERE
+      ADDITIONAL_SUDO_USERS=ADDITIONAL_SUDO_USERS_HERE
       CLOSE_COOLIFY_REALTIME_PORTS=CLOSE_COOLIFY_REALTIME_PORTS_HERE
       COOLIFY_REALTIME_DOMAIN='COOLIFY_REALTIME_DOMAIN_HERE'
       COOLIFY_PUBLIC_DOMAIN='COOLIFY_PUBLIC_DOMAIN_HERE'
@@ -133,6 +127,6 @@ runcmd:
 
 final_message: |
   Bootstrap complete.
-  Verify SSH access first: ssh -p SSH_PORT_HERE PRIMARY_SUDO_USER_HERE@<your-server-ip>
+  Verify SSH access first: ssh -p SSH_PORT_HERE DEVOPS_USER_HERE@<your-server-ip>
   Coolify URL: https://COOLIFY_PUBLIC_DOMAIN_HERE
   Then complete Coolify onboarding in browser.

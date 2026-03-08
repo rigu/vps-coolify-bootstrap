@@ -11,56 +11,47 @@ current task (user policy, replay, hardening, updates, monitoring).
 
 ## User and group policy
 
-`env/bootstrap.env.example` policy lists:
+`env/bootstrap.env.example` now defines user policy by role:
 
-- `CREATE_USERS`
-- `SUDO_USERS`
-- `DOCKER_USERS`
-- `COOLIFY_GROUP_USERS`
+- `DEVOPS_USER` (default `devops`)
+- `COOLIFY_SUDO_NOPASSWD_USER` (default `coolify`)
+- `ADDITIONAL_SUDO_USERS` (optional CSV)
 
-Default values: `devops,coolify`
+Effective managed users are:
+`DEVOPS_USER` + `COOLIFY_SUDO_NOPASSWD_USER` + `ADDITIONAL_SUDO_USERS`.
 
-Bootstrap also uses:
-
-- `PRIMARY_SUDO_USER`
-- `SECONDARY_SUDO_USER`
-- `COOLIFY_SUDO_NOPASSWD_USER`
-
-Keep both aligned with policy lists.
-`bootstrap-host.sh` enforces this at runtime: every user in `SUDO_USERS`,
-`DOCKER_USERS`, and `COOLIFY_GROUP_USERS` must also exist in `CREATE_USERS`,
-and usernames must match `^[a-z_][a-z0-9_-]*[$]?$`.
+`bootstrap-host.sh` enforces this at runtime:
+- each managed user is created if missing
+- each managed user is added to `sudo`, `docker`, and `coolify`
+- usernames must match `^[a-z_][a-z0-9_-]*[$]?$`
 
 ### More than two sudo users
 
 Example:
 
 ```env
-PRIMARY_SUDO_USER=devops
-SECONDARY_SUDO_USER=coolify
+DEVOPS_USER=devops
 COOLIFY_SUDO_NOPASSWD_USER=coolify
-CREATE_USERS=devops,coolify,admin,ops,dev
-SUDO_USERS=devops,coolify,admin,ops,dev
-DOCKER_USERS=devops,coolify,ops
-COOLIFY_GROUP_USERS=devops,coolify,ops
+ADDITIONAL_SUDO_USERS=admin,ops,dev
 ```
 
 Re-render the VPS-Coolify init file or replay bootstrap to apply changes.
 Other required variables are omitted for brevity; keep required `CHANGE_ME`
 values (domain, credentials, encryption password, SSH key) fully configured.
 
-Important: extra users beyond the first two can SSH only after `bootstrap-host.sh`
-completes successfully and re-syncs `AllowUsers` from `CREATE_USERS`.
+Important: users listed in `ADDITIONAL_SUDO_USERS` can SSH only after
+`bootstrap-host.sh` completes successfully and re-syncs `AllowUsers` from the
+effective managed user set.
 
 ### First-login password hardening
 
-On the first SSH login as `PRIMARY_SUDO_USER`, set a local account password:
+On the first SSH login as `DEVOPS_USER`, set a local account password:
 
 ```bash
 sudo passwd "$(whoami)"
 ```
 
-`PRIMARY_SUDO_USER` has passwordless sudo for operations, but setting a local
+`DEVOPS_USER` has passwordless sudo for operations, but setting a local
 password is still required for emergency/recovery flows (for example provider
 console access when SSH key auth is unavailable).
 
@@ -69,11 +60,11 @@ console access when SSH key auth is unavailable).
 Generated user passwords are stored encrypted at
 `/etc/vps-coolify-bootstrap/user-passwords.enc`. Decrypting requires `sudo`.
 
-`PRIMARY_SUDO_USER` and `COOLIFY_SUDO_NOPASSWD_USER` have passwordless sudo
+`DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` have passwordless sudo
 (`NOPASSWD:ALL`). Other sudo users need their password to run `sudo` — but
 their password is inside the vault.
 
-To retrieve passwords for other users, log in as `PRIMARY_SUDO_USER` or
+To retrieve passwords for other users, log in as `DEVOPS_USER` or
 `COOLIFY_SUDO_NOPASSWD_USER` and
 run this recommended sequence (reads the exact password from server
 `bootstrap.env` and preserves it through `sudo`):
@@ -104,6 +95,8 @@ Bootstrap now syncs Coolify localhost server connection settings automatically:
 - server user -> `COOLIFY_SUDO_NOPASSWD_USER`
 - server port -> `SSH_PORT`
 - localhost private key -> `/data/coolify/ssh/keys/id.<COOLIFY_SUDO_NOPASSWD_USER>@host.docker.internal`
+- `authorized_keys` entry for that key is restricted with `from="..."` to localhost/private ranges
+- operator key (`SSH_PUBLIC_KEY`) is not kept for this user
 
 If UI still shows drift, run replay again and verify with:
 
@@ -137,9 +130,9 @@ variables beyond the quick reference in Getting Started.
 
 ### A) Auto-resolved on host
 
-- `PRIMARY_SUDO_USER`
+- `DEVOPS_USER`
   - When: bootstrap/replay runtime, before sudo policy is written
-  - How: if empty, resolved from first `SUDO_USERS` entry; fallback `devops`
+  - How: defaults to `devops` when unset
   - Must change: NO
 - `COOLIFY_SUDO_NOPASSWD_USER`
   - When: bootstrap/replay runtime
@@ -187,9 +180,9 @@ variables beyond the quick reference in Getting Started.
   - When: bootstrap/replay SSH hardening
   - How: applied via `sshd_config.d` and service restart
   - Must change: NO
-- `SECONDARY_SUDO_USER`, `CREATE_USERS`, `SUDO_USERS`, `DOCKER_USERS`, `COOLIFY_GROUP_USERS`
+- `ADDITIONAL_SUDO_USERS`
   - When: runtime user/group reconciliation
-  - How: validated subsets and applied memberships/policy
+  - How: optional CSV; each user is validated and merged into effective managed users
   - Must change: NO unless team model differs
 - `TIMEZONE`
   - When: early VPS init phase
@@ -202,10 +195,10 @@ variables beyond the quick reference in Getting Started.
   - When: local generation before provisioning if placeholder/empty
   - How: **AUTO-GENERATED** by `generate-secrets.*` only when value is empty/`CHANGE_ME` (`openssl rand -hex 16` in Bash)
   - Must change: NO after secure generation
-- account passwords for users in `CREATE_USERS` and `COOLIFY_SUDO_NOPASSWD_USER`
+- account passwords for managed users (`DEVOPS_USER`, `COOLIFY_SUDO_NOPASSWD_USER`, `ADDITIONAL_SUDO_USERS`)
   - When: during bootstrap/replay runtime on the VPS host in `ensure-user-passwords.sh`
-  - How: not pre-generated locally; set only for locked/unset accounts, then encrypted to `/etc/vps-coolify-bootstrap/user-passwords.enc`
-  - Must change: YES for `PRIMARY_SUDO_USER` on first login (`sudo passwd "$(whoami)"`)
+  - How: not pre-generated locally; password is generated only when account is locked/unset (`/etc/shadow` empty hash or prefixed `!`/`*`) or when vault has no entry for that user; unlocked accounts already present in vault are not rotated; then vault is encrypted to `/etc/vps-coolify-bootstrap/user-passwords.enc`
+  - Must change: YES for `DEVOPS_USER` on first login (`sudo passwd "$(whoami)"`)
 
 ## Replay bootstrap policy (idempotent)
 
@@ -220,7 +213,7 @@ reprovisioning.
 
 When to run replay:
 
-- after changing policy values (`SSH_PORT`, users, sudo/group lists)
+- after changing policy values (`SSH_PORT`, `DEVOPS_USER`, `COOLIFY_SUDO_NOPASSWD_USER`, `ADDITIONAL_SUDO_USERS`)
 - after partial first-boot execution
 - after emergency manual fixes that may have introduced drift
 - after updating bootstrap scripts and wanting to apply new safeguards
@@ -236,9 +229,9 @@ What replay does not do:
 What replay enforces:
 
 - SSH hardening (`sshd_config`, `AllowUsers`, service state)
-- sudo policy (`PRIMARY_SUDO_USER` and `COOLIFY_SUDO_NOPASSWD_USER` passwordless by default)
+- sudo policy (`DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` passwordless by default)
 - user/group memberships (`sudo`, `docker`, `coolify`)
-- on-host password generation for locked/unset users in `CREATE_USERS` (during bootstrap/replay) and encrypted vault update
+- on-host password generation for locked/unset managed users (during bootstrap/replay) and encrypted vault update
 - UFW baseline (`SSH_PORT`, `80`, `443`)
 - `fail2ban` and `unattended-upgrades`
 - Coolify localhost connection user/port/private-key synchronization (`COOLIFY_SUDO_NOPASSWD_USER`, `SSH_PORT`)
@@ -247,7 +240,7 @@ What replay enforces:
 
 Operational notes:
 
-- run replay as `PRIMARY_SUDO_USER`, `COOLIFY_SUDO_NOPASSWD_USER`, or root via provider console
+- run replay as `DEVOPS_USER`, `COOLIFY_SUDO_NOPASSWD_USER`, or root via provider console
 - replay resets UFW baseline; re-apply custom rules after replay
 - replay restarts SSH service; keep provider console open
 - replay can terminate stale `sshd` listeners on `22` when `SSH_PORT` is not `22`
