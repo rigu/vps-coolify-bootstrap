@@ -332,7 +332,8 @@ Input validation enforced by scripts:
 
 - `COOLIFY_ROOT_USERNAME` must match `^[A-Za-z0-9._-]+$`
 - `COOLIFY_ROOT_USER_EMAIL` must be valid email format
-- `COOLIFY_ROOT_USER_PASSWORD` and `USER_PASSWORDS_ENCRYPTION_PASSWORD` must be at least 16 characters
+- `COOLIFY_ROOT_USER_PASSWORD` must be at least 16 characters and include lowercase, uppercase, digit, and symbol
+- `USER_PASSWORDS_ENCRYPTION_PASSWORD` must be at least 16 characters
 - `SSH_PORT` must be numeric in range `1-65535`
 - `CLOSE_COOLIFY_REALTIME_PORTS` must be `true/false` (or `1/0`)
 - when `CLOSE_COOLIFY_REALTIME_PORTS=true`, effective realtime domain is `COOLIFY_REALTIME_DOMAIN` if set, otherwise `COOLIFY_PUBLIC_DOMAIN`

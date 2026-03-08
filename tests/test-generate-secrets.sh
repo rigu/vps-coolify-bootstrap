@@ -30,7 +30,11 @@ test_creates_missing_env_and_generates_passwords_and_ssh_detection() {
 
   raw="$(env_value "$env_file" COOLIFY_ROOT_USER_PASSWORD)"
   pass="$(strip_env_quotes "$raw")"
-  [[ "$pass" =~ ^[0-9a-f]{24}$ ]] || { echo "Invalid COOLIFY_ROOT_USER_PASSWORD: $pass" >&2; return 1; }
+  (( ${#pass} >= 16 )) || { echo "COOLIFY_ROOT_USER_PASSWORD too short: $pass" >&2; return 1; }
+  [[ "$pass" =~ [a-z] ]] || { echo "COOLIFY_ROOT_USER_PASSWORD missing lowercase: $pass" >&2; return 1; }
+  [[ "$pass" =~ [A-Z] ]] || { echo "COOLIFY_ROOT_USER_PASSWORD missing uppercase: $pass" >&2; return 1; }
+  [[ "$pass" =~ [0-9] ]] || { echo "COOLIFY_ROOT_USER_PASSWORD missing digit: $pass" >&2; return 1; }
+  [[ "$pass" =~ [^[:alnum:]] ]] || { echo "COOLIFY_ROOT_USER_PASSWORD missing symbol: $pass" >&2; return 1; }
 
   raw="$(env_value "$env_file" USER_PASSWORDS_ENCRYPTION_PASSWORD)"
   enc="$(strip_env_quotes "$raw")"

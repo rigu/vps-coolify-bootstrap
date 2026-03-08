@@ -43,7 +43,8 @@ flowchart TD
   M --> N["Disable ssh.socket, disable legacy Port directives, validate sshd, restart ssh.service, enforce only SSH_PORT (no :22 listener)"]
   N --> O["Apply UFW rules and enable fail2ban + unattended-upgrades"]
   O --> P["Install Coolify if missing"]
-  P --> R["Apply groups + sudo policy"]
+  P --> P1["Ensure Coolify root account exists (RootUserSeeder + DB check)"]
+  P1 --> R["Apply groups + sudo policy"]
   R --> Q["Sync localhost-only Coolify SSH user + restricted key + SSH port"]
   Q --> Q1["Sync realtime host env from effective realtime domain (COOLIFY_REALTIME_DOMAIN or COOLIFY_PUBLIC_DOMAIN fallback)"]
   Q1 --> S["Sync DOCKER-USER guards for 6001/6002 from CLOSE_COOLIFY_REALTIME_PORTS"]
@@ -213,13 +214,13 @@ Template safety constraint:
 
 ### 9) Password/secret configuration types
 
-- `COOLIFY_ROOT_USER_PASSWORD`: minimum 16 chars
+- `COOLIFY_ROOT_USER_PASSWORD`: minimum 16 chars and must include lowercase, uppercase, digit, and symbol
 - `USER_PASSWORDS_ENCRYPTION_PASSWORD`: minimum 16 chars
 
 Generation behavior:
 
 - local generation by `generate-secrets.*` only when empty/placeholder
-- root password: `openssl rand -hex 12` (24 hex chars)
+- root password: strong 24-char value with lowercase, uppercase, digit, and symbol
 - encryption password: `openssl rand -hex 16` (32 hex chars)
 
 Runtime password vault behavior:

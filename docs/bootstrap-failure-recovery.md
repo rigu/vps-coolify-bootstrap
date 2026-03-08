@@ -148,7 +148,8 @@ sudo sed -n 's/^COOLIFY_ROOT_USER_PASSWORD=//p' /etc/vps-coolify-bootstrap/boots
 sudo sed -n 's/^USER_PASSWORDS_ENCRYPTION_PASSWORD=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d "'\r" | awk '{print length($0)}'
 ```
 
-Password length must be at least 16.
+`COOLIFY_ROOT_USER_PASSWORD` must be at least 16 characters and include lowercase, uppercase, digit, and symbol.
+`USER_PASSWORDS_ENCRYPTION_PASSWORD` must be at least 16 characters.
 
 ## 6) Replay bootstrap manually (authoritative recovery step)
 

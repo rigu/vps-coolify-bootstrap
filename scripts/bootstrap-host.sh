@@ -28,6 +28,16 @@ for v in SSH_PORT COOLIFY_PUBLIC_DOMAIN COOLIFY_ROOT_USERNAME COOLIFY_ROOT_USER_
   require_var "$v"
 done
 
+is_valid_coolify_root_password() {
+  local password="$1"
+  (( ${#password} >= 16 )) || return 1
+  [[ "$password" =~ [a-z] ]] || return 1
+  [[ "$password" =~ [A-Z] ]] || return 1
+  [[ "$password" =~ [0-9] ]] || return 1
+  [[ "$password" =~ [^[:alnum:]] ]] || return 1
+  return 0
+}
+
 if [[ ! "$SSH_PORT" =~ ^[0-9]+$ ]]; then
   bootstrap_error "SSH_PORT must be numeric (1-65535)"
   exit 1
@@ -38,8 +48,8 @@ if (( ssh_port_num < 1 || ssh_port_num > 65535 )); then
   exit 1
 fi
 
-if (( ${#COOLIFY_ROOT_USER_PASSWORD} < 16 )); then
-  bootstrap_error "COOLIFY_ROOT_USER_PASSWORD must be at least 16 chars"
+if ! is_valid_coolify_root_password "$COOLIFY_ROOT_USER_PASSWORD"; then
+  bootstrap_error "COOLIFY_ROOT_USER_PASSWORD must be >=16 chars and include lowercase, uppercase, digit, and symbol"
   exit 1
 fi
 
@@ -791,6 +801,49 @@ ensure_coolify_proxy_path_access() {
   return 1
 }
 
+coolify_root_user_exists() {
+  local root_email="$COOLIFY_ROOT_USER_EMAIL"
+  docker exec -e BOOTSTRAP_ROOT_EMAIL="$root_email" coolify php <<'PHP' >/dev/null 2>&1
+<?php
+require '/var/www/html/vendor/autoload.php';
+$app = require '/var/www/html/bootstrap/app.php';
+$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+$kernel->bootstrap();
+
+$email = strtolower((string) getenv('BOOTSTRAP_ROOT_EMAIL'));
+$query = \App\Models\User::query()->where('id', 0);
+if ($email !== '') {
+    $query->orWhere('email', $email);
+}
+$exists = $query->exists();
+exit($exists ? 0 : 1);
+PHP
+}
+
+ensure_coolify_root_user_seeded() {
+  if ! is_coolify_running; then
+    bootstrap_warn "Coolify container is not running; skipping root-user seeding check."
+    return 0
+  fi
+
+  local attempt=1
+  local max_attempts=12
+  while (( attempt <= max_attempts )); do
+    # Keep seeding idempotent: RootUserSeeder skips if root already exists.
+    docker exec coolify php artisan db:seed --class=RootUserSeeder --force >/dev/null 2>&1 || true
+    if coolify_root_user_exists; then
+      bootstrap_success "Coolify root user exists (id=0 or configured root email)."
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+
+  bootstrap_error "Coolify root user is missing after seeding attempts."
+  bootstrap_error "verify COOLIFY_ROOT_USER_EMAIL and COOLIFY_ROOT_USER_PASSWORD complexity, then replay bootstrap."
+  return 1
+}
+
 if ! is_coolify_running; then
   export DEBIAN_FRONTEND=noninteractive
   # Official Coolify installer path. Trade-off: remote script execution via curl|bash.
@@ -804,6 +857,8 @@ if ! is_coolify_running; then
 else
   bootstrap_success "Coolify already running; install step skipped."
 fi
+ensure_coolify_root_user_seeded
+bootstrap_success "Coolify root user seeding/verification completed."
 
 groupadd -f coolify
 if command -v docker >/dev/null 2>&1; then

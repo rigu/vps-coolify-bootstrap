@@ -71,6 +71,17 @@ function Test-ValidUnixUsername {
     return ($User -match '^[a-z_][a-z0-9_-]*[$]?$')
 }
 
+function Test-ValidCoolifyRootPassword {
+    param([string]$Password)
+    if ([string]::IsNullOrEmpty($Password)) { return $false }
+    if ($Password.Length -lt 16) { return $false }
+    if ($Password -notmatch '[a-z]') { return $false }
+    if ($Password -notmatch '[A-Z]') { return $false }
+    if ($Password -notmatch '[0-9]') { return $false }
+    if ($Password -notmatch '[^A-Za-z0-9]') { return $false }
+    return $true
+}
+
 $devopsUser = if ($cfg.ContainsKey("DEVOPS_USER") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["DEVOPS_USER"])) { [string]$cfg["DEVOPS_USER"] } else { "devops" }
 if ($devopsUser -notmatch '^[a-z_][a-z0-9_-]*[$]?$') { throw "DEVOPS_USER contains invalid UNIX username: $devopsUser" }
 if ($devopsUser -eq "root") { throw "DEVOPS_USER must not be root." }
@@ -141,7 +152,9 @@ if (-not [string]::IsNullOrWhiteSpace($ssh)) {
     Write-Warning "Generated VPS init YML will not include ssh_authorized_keys for DEVOPS_USER."
     Write-Warning "Ensure alternate first-access method (provider console/password/manual key injection)."
 }
-if ([string]$cfg["COOLIFY_ROOT_USER_PASSWORD"].Length -lt 16) { throw "COOLIFY_ROOT_USER_PASSWORD must be at least 16 characters." }
+if (-not (Test-ValidCoolifyRootPassword -Password ([string]$cfg["COOLIFY_ROOT_USER_PASSWORD"])) ) {
+    throw "COOLIFY_ROOT_USER_PASSWORD must be >=16 chars and include lowercase, uppercase, digit, and symbol."
+}
 if ([string]$cfg["USER_PASSWORDS_ENCRYPTION_PASSWORD"].Length -lt 16) { throw "USER_PASSWORDS_ENCRYPTION_PASSWORD must be at least 16 characters." }
 $sshKeyRotate = if ($cfg.ContainsKey("SSH_KEY_ROTATE") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SSH_KEY_ROTATE"])) { [string]$cfg["SSH_KEY_ROTATE"] } else { "0" }
 if ($sshKeyRotate -ne "0" -and $sshKeyRotate -ne "1") { throw "SSH_KEY_ROTATE must be 0 or 1." }

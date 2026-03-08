@@ -117,7 +117,11 @@ Run-Test "generate-secrets.ps1 creates env + secrets + ssh autodetect" {
         $ssh = Strip-Quotes (Env-Value -File $envFile -Key "SSH_PUBLIC_KEY")
         $sshPath = Strip-Quotes (Env-Value -File $envFile -Key "SSH_PUBLIC_KEY_PATH")
 
-        Assert-Match $pw '^[0-9a-f]{24}$' "COOLIFY_ROOT_USER_PASSWORD should be 24 hex chars"
+        Assert-True ($pw.Length -ge 16) "COOLIFY_ROOT_USER_PASSWORD should be at least 16 chars"
+        Assert-Match $pw '[a-z]' "COOLIFY_ROOT_USER_PASSWORD should contain lowercase"
+        Assert-Match $pw '[A-Z]' "COOLIFY_ROOT_USER_PASSWORD should contain uppercase"
+        Assert-Match $pw '[0-9]' "COOLIFY_ROOT_USER_PASSWORD should contain digits"
+        Assert-Match $pw '[^A-Za-z0-9]' "COOLIFY_ROOT_USER_PASSWORD should contain symbols"
         Assert-Match $enc '^[0-9a-f]{32}$' "USER_PASSWORDS_ENCRYPTION_PASSWORD should be 32 hex chars"
         Assert-Match $ssh '^ssh-ed25519\s+' "SSH_PUBLIC_KEY should be auto-detected"
         Assert-Match $sshPath 'id_ed25519\.pub$' "SSH_PUBLIC_KEY_PATH should be auto-detected"
@@ -217,7 +221,7 @@ COOLIFY_REALTIME_DOMAIN=
 COOLIFY_PUBLIC_DOMAIN=hub.example.com
 COOLIFY_ROOT_USERNAME=admin_main
 COOLIFY_ROOT_USER_EMAIL=admin@example.com
-COOLIFY_ROOT_USER_PASSWORD=0123456789abcdef01234567
+COOLIFY_ROOT_USER_PASSWORD=Str0ng!Passw0rdAbC1
 USER_PASSWORDS_ENCRYPTION_PASSWORD=0123456789abcdef0123456789abcdef
 BOOTSTRAP_REPO_URL=https://github.com/rigu/vps-coolify-bootstrap.git
 BOOTSTRAP_REPO_REF=main
@@ -266,7 +270,7 @@ COOLIFY_REALTIME_DOMAIN=
 COOLIFY_PUBLIC_DOMAIN=hub.example.com
 COOLIFY_ROOT_USERNAME=admin_main
 COOLIFY_ROOT_USER_EMAIL=admin@example.com
-COOLIFY_ROOT_USER_PASSWORD=0123456789abcdef01234567
+COOLIFY_ROOT_USER_PASSWORD=Str0ng!Passw0rdAbC1
 USER_PASSWORDS_ENCRYPTION_PASSWORD=0123456789abcdef0123456789abcdef
 BOOTSTRAP_REPO_URL=https://github.com/rigu/vps-coolify-bootstrap.git
 BOOTSTRAP_REPO_REF=main
@@ -306,7 +310,7 @@ COOLIFY_REALTIME_DOMAIN=CHANGE_ME_realtime.example.com
 COOLIFY_PUBLIC_DOMAIN=hub.example.com
 COOLIFY_ROOT_USERNAME=admin_main
 COOLIFY_ROOT_USER_EMAIL=admin@example.com
-COOLIFY_ROOT_USER_PASSWORD=0123456789abcdef01234567
+COOLIFY_ROOT_USER_PASSWORD=Str0ng!Passw0rdAbC1
 USER_PASSWORDS_ENCRYPTION_PASSWORD=0123456789abcdef0123456789abcdef
 BOOTSTRAP_REPO_URL=https://github.com/rigu/vps-coolify-bootstrap.git
 BOOTSTRAP_REPO_REF=main
@@ -345,7 +349,7 @@ COOLIFY_REALTIME_DOMAIN=
 COOLIFY_PUBLIC_DOMAIN=hub.example.com
 COOLIFY_ROOT_USERNAME=admin_main
 COOLIFY_ROOT_USER_EMAIL=admin@example.com
-COOLIFY_ROOT_USER_PASSWORD=0123456789abcdef01234567
+COOLIFY_ROOT_USER_PASSWORD=Str0ng!Passw0rdAbC1
 USER_PASSWORDS_ENCRYPTION_PASSWORD=0123456789abcdef0123456789abcdef
 BOOTSTRAP_REPO_URL=https://github.com/rigu/vps-coolify-bootstrap.git
 BOOTSTRAP_REPO_REF=main
@@ -393,7 +397,7 @@ COOLIFY_REALTIME_DOMAIN=
 COOLIFY_PUBLIC_DOMAIN=hub.example.com
 COOLIFY_ROOT_USERNAME=admin_main
 COOLIFY_ROOT_USER_EMAIL=admin@example.com
-COOLIFY_ROOT_USER_PASSWORD=0123456789abcdef01234567
+COOLIFY_ROOT_USER_PASSWORD=Str0ng!Passw0rdAbC1
 USER_PASSWORDS_ENCRYPTION_PASSWORD=0123456789abcdef0123456789abcdef
 BOOTSTRAP_REPO_URL=https://github.com/rigu/vps-coolify-bootstrap.git
 BOOTSTRAP_REPO_REF=main
@@ -446,7 +450,7 @@ COOLIFY_REALTIME_DOMAIN=
 COOLIFY_PUBLIC_DOMAIN=hub.example.com
 COOLIFY_ROOT_USERNAME=admin_main
 COOLIFY_ROOT_USER_EMAIL=admin@example.com
-COOLIFY_ROOT_USER_PASSWORD=0123456789abcdef01234567
+COOLIFY_ROOT_USER_PASSWORD=Str0ng!Passw0rdAbC1
 USER_PASSWORDS_ENCRYPTION_PASSWORD=0123456789abcdef0123456789abcdef
 BOOTSTRAP_REPO_URL=https://github.com/rigu/vps-coolify-bootstrap.git
 BOOTSTRAP_REPO_REF=main
@@ -487,7 +491,7 @@ COOLIFY_REALTIME_DOMAIN=
 COOLIFY_PUBLIC_DOMAIN=
 COOLIFY_ROOT_USERNAME=admin_main
 COOLIFY_ROOT_USER_EMAIL=admin@example.com
-COOLIFY_ROOT_USER_PASSWORD=0123456789abcdef01234567
+COOLIFY_ROOT_USER_PASSWORD=Str0ng!Passw0rdAbC1
 USER_PASSWORDS_ENCRYPTION_PASSWORD=0123456789abcdef0123456789abcdef
 BOOTSTRAP_REPO_URL=https://github.com/rigu/vps-coolify-bootstrap.git
 BOOTSTRAP_REPO_REF=main

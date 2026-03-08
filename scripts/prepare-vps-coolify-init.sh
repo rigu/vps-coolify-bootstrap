@@ -161,6 +161,16 @@ is_valid_unix_username() {
   [[ "$user" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]
 }
 
+is_valid_coolify_root_password() {
+  local password="$1"
+  (( ${#password} >= 16 )) || return 1
+  [[ "$password" =~ [a-z] ]] || return 1
+  [[ "$password" =~ [A-Z] ]] || return 1
+  [[ "$password" =~ [0-9] ]] || return 1
+  [[ "$password" =~ [^[:alnum:]] ]] || return 1
+  return 0
+}
+
 for k in TIMEZONE SSH_PORT COOLIFY_PUBLIC_DOMAIN COOLIFY_ROOT_USERNAME COOLIFY_ROOT_USER_EMAIL COOLIFY_ROOT_USER_PASSWORD USER_PASSWORDS_ENCRYPTION_PASSWORD BOOTSTRAP_REPO_URL BOOTSTRAP_REPO_REF; do
   require_key "$k"
 done
@@ -341,8 +351,8 @@ for v in "$ssh_public_key" "${cfg[TIMEZONE]}" "${cfg[COOLIFY_PUBLIC_DOMAIN]}" "$
 done
 
 coolify_password="${cfg[COOLIFY_ROOT_USER_PASSWORD]}"
-if (( ${#coolify_password} < 16 )); then
-  echo "ERROR: COOLIFY_ROOT_USER_PASSWORD must be at least 16 characters." >&2
+if ! is_valid_coolify_root_password "$coolify_password"; then
+  echo "ERROR: COOLIFY_ROOT_USER_PASSWORD must be >=16 chars and include lowercase, uppercase, digit, and symbol." >&2
   exit 1
 fi
 

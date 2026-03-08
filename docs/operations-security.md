@@ -171,7 +171,7 @@ variables beyond the quick reference in Getting Started.
   - Required: YES
 - `COOLIFY_ROOT_USER_PASSWORD`
   - When: local generation before provisioning if placeholder/empty
-  - How: **AUTO-GENERATED** by `generate-secrets.*` only when value is empty/`CHANGE_ME` (`openssl rand -hex 12` in Bash)
+  - How: **AUTO-GENERATED** by `generate-secrets.*` only when value is empty/`CHANGE_ME` (24 chars with lowercase, uppercase, digit, and symbol)
   - Required: NO
 
 ### C) Server user variables
@@ -369,6 +369,19 @@ For production:
 Use this procedure for every Coolify upgrade so hardening policy is re-applied
 after the upstream installer changes files/containers.
 
+Common drift after upgrade (important):
+- domain drift: if `COOLIFY_PUBLIC_DOMAIN` (or `COOLIFY_REALTIME_DOMAIN`) was changed in Coolify UI but not in `/etc/vps-coolify-bootstrap/bootstrap.env`, replay can re-apply old domain-based realtime settings from env.
+- firewall drift: manual Docker/firewall edits can remove or reorder `DOCKER-USER` rules for realtime ports (`6001/6002`), so closed mode may no longer be enforced.
+
+Post-upgrade quick re-sync (recommended every time):
+
+```bash
+cd /opt/vps-coolify-bootstrap
+sudo git pull --ff-only origin main
+sudo bash scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env
+sudo bash scripts/verify-bootstrap-state.sh /etc/vps-coolify-bootstrap/bootstrap.env
+```
+
 1. Keep provider console access open and connect by SSH.
 
    ```bash
@@ -441,7 +454,7 @@ Configure Docker log retention (`max-size`, `max-file`) and verify host logrotat
 
 ## Known operational notes
 
-- minimum `COOLIFY_ROOT_USER_PASSWORD` length: 16
+- `COOLIFY_ROOT_USER_PASSWORD`: minimum 16 chars and must include lowercase, uppercase, digit, and symbol
 - `bootstrap-artifacts/vps-coolify-init.generated.yml` contains secrets and must not be committed
 - bootstrap replay resets UFW baseline each run
 - `SSH_KEY_ROTATE=0` appends keys, `SSH_KEY_ROTATE=1` replaces keys

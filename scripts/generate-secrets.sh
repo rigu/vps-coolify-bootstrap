@@ -92,7 +92,26 @@ if ! command -v openssl >/dev/null 2>&1; then
 fi
 
 pw_gen_password() {
-  openssl rand -hex 12
+  local lower upper digit symbol rest candidate
+  local symbol_pool='!@#$%^&*()-_=+'
+  local symbol_index
+
+  while true; do
+    lower="$(openssl rand -base64 48 | tr -dc '[:lower:]' | head -c 1 || true)"
+    upper="$(openssl rand -base64 48 | tr -dc '[:upper:]' | head -c 1 || true)"
+    digit="$(openssl rand -base64 48 | tr -dc '0-9' | head -c 1 || true)"
+    rest="$(openssl rand -base64 128 | tr -dc 'A-Za-z0-9' | head -c 20 || true)"
+    if [[ -z "$lower" || -z "$upper" || -z "$digit" || ${#rest} -lt 20 ]]; then
+      continue
+    fi
+    symbol_index=$(( 0x$(openssl rand -hex 1) % ${#symbol_pool} ))
+    symbol="${symbol_pool:$symbol_index:1}"
+    candidate="${lower}${upper}${digit}${symbol}${rest}"
+    if (( ${#candidate} == 24 )); then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
 }
 
 pw_gen_encryption_password() {

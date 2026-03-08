@@ -46,6 +46,43 @@ function New-RandomSecret {
     return $hex.Substring(0, $Length)
 }
 
+function Get-RandomPoolChar {
+    param([string]$Pool)
+    if ([string]::IsNullOrEmpty($Pool)) { throw "Pool must not be empty." }
+    $idx = [System.Security.Cryptography.RandomNumberGenerator]::GetInt32($Pool.Length)
+    return $Pool[$idx]
+}
+
+function New-StrongPassword {
+    param([int]$Length = 24)
+
+    if ($Length -lt 16) { throw "Strong password length must be at least 16." }
+
+    $lower = "abcdefghijklmnopqrstuvwxyz"
+    $upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    $digits = "0123456789"
+    $symbols = "!@#$%^&*()-_=+"
+    $all = $lower + $upper + $digits
+
+    $chars = New-Object System.Collections.Generic.List[char]
+    $chars.Add((Get-RandomPoolChar -Pool $lower))
+    $chars.Add((Get-RandomPoolChar -Pool $upper))
+    $chars.Add((Get-RandomPoolChar -Pool $digits))
+    $chars.Add((Get-RandomPoolChar -Pool $symbols))
+    while ($chars.Count -lt $Length) {
+        $chars.Add((Get-RandomPoolChar -Pool $all))
+    }
+
+    for ($i = $chars.Count - 1; $i -gt 0; $i--) {
+        $j = [System.Security.Cryptography.RandomNumberGenerator]::GetInt32($i + 1)
+        $tmp = $chars[$i]
+        $chars[$i] = $chars[$j]
+        $chars[$j] = $tmp
+    }
+
+    return -join $chars
+}
+
 function Test-ValidSshPublicKey {
     param([string]$Key)
     return $Key -match '^ssh-(ed25519|rsa|ecdsa-[^\s]+)\s+'
@@ -136,7 +173,7 @@ foreach ($line in Get-Content -LiteralPath $envPath) {
         $sawCoolifyPassword = $true
         $current = $line.Substring("COOLIFY_ROOT_USER_PASSWORD=".Length)
         if ($ForcePassword -or [string]::IsNullOrWhiteSpace($current) -or $current -match "CHANGE_ME") {
-            $newLines.Add("COOLIFY_ROOT_USER_PASSWORD=$(Format-EnvValue -Value (New-RandomSecret -Length 24))")
+            $newLines.Add("COOLIFY_ROOT_USER_PASSWORD=$(Format-EnvValue -Value (New-StrongPassword -Length 24))")
         } else {
             $newLines.Add($line)
         }
@@ -158,7 +195,7 @@ foreach ($line in Get-Content -LiteralPath $envPath) {
 }
 
 if (-not $sawCoolifyPassword) {
-    $newLines.Add("COOLIFY_ROOT_USER_PASSWORD=$(Format-EnvValue -Value (New-RandomSecret -Length 24))")
+    $newLines.Add("COOLIFY_ROOT_USER_PASSWORD=$(Format-EnvValue -Value (New-StrongPassword -Length 24))")
 }
 
 if (-not $sawEncryptionPassword) {
