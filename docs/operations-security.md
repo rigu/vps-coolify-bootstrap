@@ -143,11 +143,11 @@ variables beyond the quick reference in Getting Started.
   - Must change: NO
 - `SSH_KEY_ROTATE`
   - When: runtime during SSH key synchronization
-  - How: default `0` appends key; `1` replaces `authorized_keys`
+  - How: applies to `DEVOPS_USER` + `ADDITIONAL_SUDO_USERS`; default `0` appends key, `1` replaces their `authorized_keys`; does not apply to `COOLIFY_SUDO_NOPASSWD_USER`
   - Must change: NO
   - Example:
-    - `SSH_KEY_ROTATE=0`: keep existing keys and ensure current `SSH_PUBLIC_KEY` is present
-    - `SSH_KEY_ROTATE=1`: replace existing keys with current `SSH_PUBLIC_KEY` during replay/boot
+    - `SSH_KEY_ROTATE=0`: keep existing keys and ensure current `SSH_PUBLIC_KEY` is present for `DEVOPS_USER` + `ADDITIONAL_SUDO_USERS`
+    - `SSH_KEY_ROTATE=1`: replace keys for `DEVOPS_USER` + `ADDITIONAL_SUDO_USERS` with current `SSH_PUBLIC_KEY` during replay/boot
 - `CLOSE_COOLIFY_REALTIME_PORTS`
   - When: runtime during `DOCKER-USER` guard sync
   - How: default `false` keeps ports public; `true` adds guards to block public ingress to `6001/6002`
@@ -177,7 +177,7 @@ variables beyond the quick reference in Getting Started.
 - `SSH_PUBLIC_KEY` / `SSH_PUBLIC_KEY_PATH`
   - When: local preparation step and host bootstrap key installation
   - How: **AUTO-DETECTED** if a valid key exists on your machine (`~/.ssh/*.pub`); `generate-secrets.*` fills `SSH_PUBLIC_KEY` and `SSH_PUBLIC_KEY_PATH` when placeholders are present
-  - Must change: YES (valid key required)
+  - Must change: NO for bootstrap execution; YES recommended for direct SSH key-based first access
 - `COOLIFY_REALTIME_DOMAIN`
   - When: runtime when value is set; required when `CLOSE_COOLIFY_REALTIME_PORTS=true`
   - How: written as `PUSHER_HOST`, `PUSHER_PORT=443`, and `PUSHER_SCHEME=https` in `/data/coolify/source/.env` whenever value is set (independent of `CLOSE_COOLIFY_REALTIME_PORTS`); removed when empty
