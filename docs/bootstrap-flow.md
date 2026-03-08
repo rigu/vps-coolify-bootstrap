@@ -1,7 +1,7 @@
 ---
 layout: page
 title: Bootstrap Flow
-description: Detailed first-boot execution order, cloud-init behavior, and bootstrap flow for Coolify provisioning.
+description: Detailed first-boot execution order, VPS init behavior, and bootstrap flow for Coolify provisioning.
 ---
 
 # Bootstrap Flow
@@ -11,10 +11,10 @@ description: Detailed first-boot execution order, cloud-init behavior, and boots
 `prepare-vps-coolify-init.sh` or `prepare-vps-coolify-init.ps1` renders
 `bootstrap-artifacts/vps-coolify-init.generated.yml` from:
 
-- `templates/cloud-init.template.yml`
+- `templates/vps-init.template.yml` (VPS init template)
 - `bootstrap-artifacts/bootstrap.env`
 
-On first boot, cloud-init:
+On first boot, the VPS init agent:
 
 1. sets the timezone and runs package update/upgrade
 2. creates initial users (`PRIMARY_SUDO_USER`, `SECONDARY_SUDO_USER`) and SSH bootstrap key
@@ -32,7 +32,7 @@ On first boot, cloud-init:
 flowchart TD
   A[Prepare env + secrets] --> B[Render VPS-Coolify init]
   B --> C[Provision Ubuntu 24 VPS]
-  C --> D[cloud-init first boot]
+  C --> D["VPS init first boot (cloud-init)"]
   D --> E[Install packages + write baseline files]
   E --> F[Clone BOOTSTRAP_REPO_URL at BOOTSTRAP_REPO_REF]
   F --> G[Apply sysctl --system]

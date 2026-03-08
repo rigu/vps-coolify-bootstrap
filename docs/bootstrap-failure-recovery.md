@@ -1,12 +1,12 @@
 ---
 layout: page
 title: Bootstrap Failure Recovery
-description: Step-by-step runbook to recover failed first-boot cloud-init/bootstrap execution.
+description: Step-by-step runbook to recover failed first-boot VPS init/bootstrap execution.
 ---
 
 # Bootstrap Failure Recovery
 
-Use this runbook when first-boot cloud-init does not finish successfully.
+Use this runbook when first-boot VPS init does not finish successfully.
 The sequence is explicit and safe to execute end-to-end.
 
 ## 0) Preparation (do not skip)
@@ -24,7 +24,7 @@ export SSH_PORT="<ssh-port>"
 export PRIMARY_SUDO_USER="<primary-sudo-user>"
 ```
 
-## 1) Confirm cloud-init failure state
+## 1) Confirm first-boot init failure state
 
 ```bash
 sudo cloud-init status --wait
@@ -32,7 +32,7 @@ sudo cloud-init status --long
 sudo cloud-init query --all | head -n 40
 ```
 
-If status is `done`, cloud-init finished, and you should troubleshoot service-level issues instead.
+If status is `done`, the first-boot init service finished, and you should troubleshoot service-level issues instead.
 If status is `error` or still not complete, continue.
 
 ## 2) Collect first error evidence
@@ -68,7 +68,7 @@ If core services are missing or inactive, continue with manual bootstrap replay.
 
 ## 4) Ensure bootstrap repo exists on server
 
-Check if cloud-init cloned the bootstrap repo:
+Check if the first-boot init stage cloned the bootstrap repo:
 
 ```bash
 sudo test -d /opt/vps-coolify-bootstrap && echo "repo present" || echo "repo missing"
@@ -305,7 +305,7 @@ if grep -n "CHANGE_ME\\|_HERE" bootstrap-artifacts/vps-coolify-init.generated.ym
   echo "fix placeholders before provisioning"
 fi
 ```
-5. Recreate the VPS and paste `bootstrap-artifacts/vps-coolify-init.generated.yml` into the provider user-data/cloud-init field during server creation (first-boot execution). If the provider UI has no such field, use provider API/CLI for user-data or run manual bootstrap from the provider console as described in Getting Started.
+5. Recreate the VPS and paste `bootstrap-artifacts/vps-coolify-init.generated.yml` into the provider user-data field (VPS init format) during server creation (first-boot execution). If the provider UI has no such field, use provider API/CLI for user-data or run manual bootstrap from the provider console as described in Getting Started.
 6. Re-validate using Steps 1, 7, and 8.
 
 ## Decrypt generated user credentials (when needed)

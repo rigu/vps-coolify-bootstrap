@@ -106,7 +106,7 @@ Validate-UserListSubset -ListName "SUDO_USERS" -Csv ([string]$cfg["SUDO_USERS"])
 Validate-UserListSubset -ListName "DOCKER_USERS" -Csv ([string]$cfg["DOCKER_USERS"]) -CreateUsers $createUsers
 Validate-UserListSubset -ListName "COOLIFY_GROUP_USERS" -Csv ([string]$cfg["COOLIFY_GROUP_USERS"]) -CreateUsers $createUsers
 
-$templatePath = if ($cfg.ContainsKey("TEMPLATE_FILE") -and $cfg["TEMPLATE_FILE"]) { $cfg["TEMPLATE_FILE"] } else { "../templates/cloud-init.template.yml" }
+$templatePath = if ($cfg.ContainsKey("TEMPLATE_FILE") -and $cfg["TEMPLATE_FILE"]) { $cfg["TEMPLATE_FILE"] } else { "../templates/vps-init.template.yml" }
 $outputPath = if ($cfg.ContainsKey("OUTPUT_FILE") -and $cfg["OUTPUT_FILE"]) { $cfg["OUTPUT_FILE"] } else { "../bootstrap-artifacts/vps-coolify-init.generated.yml" }
 if (-not [System.IO.Path]::IsPathRooted($templatePath)) { $templatePath = Join-Path (Split-Path -Parent $envPath) $templatePath }
 if (-not [System.IO.Path]::IsPathRooted($outputPath)) { $outputPath = Join-Path (Split-Path -Parent $envPath) $outputPath }
@@ -236,6 +236,6 @@ if ($outputDir -and -not (Test-Path -LiteralPath $outputDir -PathType Container)
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($outputPath, $content, $utf8NoBom)
 $size = (Get-Item -LiteralPath $outputPath).Length
-if ($size -gt 32768) { throw "Generated VPS-Coolify init file is ${size} bytes (>32768 Hetzner cloud-init user-data limit)." }
+if ($size -gt 32768) { throw "Generated VPS-Coolify init file is ${size} bytes (>32768 Hetzner user-data limit for VPS init format)." }
 Write-Host "Generated: $outputPath"
 Write-Host "WARNING: Generated VPS-Coolify init file contains secrets. On shared Windows systems, verify ACLs (for example with icacls)."

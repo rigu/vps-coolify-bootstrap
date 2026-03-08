@@ -196,7 +196,7 @@ variables beyond the quick reference in Getting Started.
   - How: validated subsets and applied memberships/policy
   - Must change: NO unless team model differs
 - `TIMEZONE`
-  - When: early cloud-init
+  - When: early VPS init phase
   - How: applied as system timezone
   - Must change: NO
 

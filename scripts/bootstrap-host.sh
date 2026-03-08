@@ -463,7 +463,7 @@ apply_sudo_policy() {
   fi
   rm -f "$tmp_file"
 
-  # Prevent cloud-init sudoers defaults from overriding long-term policy.
+  # Prevent VPS init sudoers defaults from overriding long-term policy.
   rm -f /etc/sudoers.d/90-cloud-init-users /etc/sudoers.d/cloud-init-users 2>/dev/null || true
 }
 

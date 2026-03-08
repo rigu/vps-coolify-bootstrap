@@ -16,12 +16,12 @@ Scope note:
 
 Use when:
 - you are creating a new VPS
-- your provider supports user-data / cloud-init input
+- your provider supports user-data input (VPS init format)
 
 How it is triggered:
 1. Render `bootstrap-artifacts/vps-coolify-init.generated.yml`.
 2. Paste it in provider `User data` during VPS creation.
-3. On first boot, cloud-init runs `scripts/bootstrap-host.sh`.
+3. On first boot, VPS init runs `scripts/bootstrap-host.sh`.
 
 What bootstrap does:
 - installs system baseline (SSH hardening, UFW, fail2ban, unattended upgrades)
@@ -81,7 +81,7 @@ What replay does not do:
 ## Mode 4) Recovery deployment after failed first boot
 
 Use when:
-- cloud-init/bootstrap failed
+- first-boot init/bootstrap failed
 - server is in partially configured state
 
 How it is triggered:

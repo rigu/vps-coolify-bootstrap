@@ -10,7 +10,7 @@ Production-ready public bootstrap for **Coolify on Ubuntu 24.04 LTS**.
 
 ## What this gives you
 
-- cloud-init-based first-boot provisioning
+- first-boot provisioning via VPS init user-data
 - hardened SSH baseline (`AllowUsers`, no password auth, custom port)
 - dedicated `COOLIFY_SUDO_NOPASSWD_USER` (default `coolify`) for non-root Coolify SSH operations
 - UFW baseline + fail2ban + unattended upgrades
@@ -34,7 +34,7 @@ Production-ready public bootstrap for **Coolify on Ubuntu 24.04 LTS**.
 - `env/` env templates
 - `bootstrap-artifacts/` local generated secrets and VPS-Coolify init output (not committed)
 - `scripts/` bootstrap + helper scripts (Bash + PowerShell)
-- `templates/` `cloud-init.template.yml`
+- `templates/` `vps-init.template.yml`
 - `docs/` operational runbooks and documentation
 
 ## Primary Sources

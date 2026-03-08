@@ -85,7 +85,7 @@ For full behavior details and replay implications, see:
 | `SSH_PORT` | Applied in SSH config and service restart flow | NO |
 | `SECONDARY_SUDO_USER` | Validated against `CREATE_USERS` | NO |
 | `CREATE_USERS` / `SUDO_USERS` / `DOCKER_USERS` / `COOLIFY_GROUP_USERS` | Users/groups and policy reconciliation at bootstrap/replay | NO |
-| `TIMEZONE` | Applied by cloud-init during first boot | NO |
+| `TIMEZONE` | Applied during first-boot VPS init phase | NO |
 
 ### D) Generated passwords and secrets
 
@@ -135,18 +135,18 @@ Generated output defaults to `bootstrap-artifacts/vps-coolify-init.generated.yml
 
 ## 3) Provision VPS
 
-Use `bootstrap-artifacts/vps-coolify-init.generated.yml` as cloud-init user-data in your VPS provider.
+Use `bootstrap-artifacts/vps-coolify-init.generated.yml` as user-data (VPS init format) in your VPS provider.
 
-How to apply it at VPS creation time (example: Hetzner Cloud):
+How to apply it at VPS creation time (example: Hetzner):
 
 1. Start a new server creation flow and select Ubuntu 24.04.
-2. In the create-server form, open the `Cloud config` / `User data` section.
+2. In the create-server form, open the `VPS init` / `User data` section.
 3. Open `bootstrap-artifacts/vps-coolify-init.generated.yml` locally and copy the full file content (including the first line `#cloud-config`).
 4. Paste that content into the provider `User data` field before clicking create.
 5. Create the server. This init file is executed on first boot.
 6. Important: adding/changing user-data after the VPS was already created does not apply retroactively to that existing server.
 
-If your provider has no user-data/cloud-init field:
+If your provider has no user-data field:
 
 1. Check provider API/CLI first; many providers support user-data there even if the UI does not.
 2. If user-data is not available at all, use provider console access and run the bootstrap manually on the host.
@@ -155,11 +155,11 @@ If your provider has no user-data/cloud-init field:
 5. Run `sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env`.
 6. For this manual path, follow the full validation checklist below and the recovery runbook.
 
-At first boot, cloud-init clones `BOOTSTRAP_REPO_URL` at `BOOTSTRAP_REPO_REF` and runs `scripts/bootstrap-host.sh`.
+At first boot, the VPS init service clones `BOOTSTRAP_REPO_URL` at `BOOTSTRAP_REPO_REF` and runs `scripts/bootstrap-host.sh`.
 
 After first boot, use this checklist:
 
-1. Wait for cloud-init/bootstrap to finish on the server (provider console):
+1. Wait for first-boot VPS init/bootstrap to finish on the server (provider console):
 
    ```bash
    sudo cloud-init status --wait

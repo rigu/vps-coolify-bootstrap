@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Render VPS-Coolify init (cloud-init user-data) from template + env file.
+Render VPS-Coolify init user-data (VPS init format) from template + env file.
 
 Usage:
   scripts/prepare-vps-coolify-init.sh [--env-file <path>] [--overwrite]
@@ -256,7 +256,7 @@ fi
 cfg[COOLIFY_REALTIME_DOMAIN]="$coolify_realtime_domain"
 
 env_dir="$(cd "$(dirname "$env_file")" && pwd)"
-template_file="${cfg[TEMPLATE_FILE]:-../templates/cloud-init.template.yml}"
+template_file="${cfg[TEMPLATE_FILE]:-../templates/vps-init.template.yml}"
 output_file="${cfg[OUTPUT_FILE]:-../bootstrap-artifacts/vps-coolify-init.generated.yml}"
 template_path="$(resolve_path "$template_file" "$env_dir")"
 output_path="$(resolve_path "$output_file" "$env_dir")"
@@ -372,7 +372,7 @@ chmod 600 "$output_path"
 
 size="$(wc -c < "$output_path" | tr -d '[:space:]')"
 if (( size > 32768 )); then
-  echo "ERROR: Generated VPS-Coolify init file is ${size} bytes (>32768 Hetzner cloud-init user-data limit)." >&2
+  echo "ERROR: Generated VPS-Coolify init file is ${size} bytes (>32768 Hetzner user-data limit for VPS init format)." >&2
   exit 1
 fi
 

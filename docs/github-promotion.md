@@ -15,12 +15,12 @@ This checklist complements repository files and requires some GitHub UI settings
 In `Settings -> General -> About`:
 
 - Description:
-  - `Production-ready VPS bootstrap for Coolify on Ubuntu 24 with cloud-init hardening and recovery runbooks.`
+  - `Production-ready VPS bootstrap for Coolify on Ubuntu 24 with VPS init hardening and recovery runbooks.`
 - Website:
   - `https://rigu.github.io/vps-coolify-bootstrap/`
 - Topics:
   - `coolify`
-  - `cloud-init`
+  - `vps-init`
   - `ubuntu-24-04`
   - `vps`
   - `devops`

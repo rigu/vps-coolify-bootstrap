@@ -8,10 +8,10 @@ authors:
 repository-code: "https://github.com/rigu/vps-coolify-bootstrap"
 url: "https://github.com/rigu/vps-coolify-bootstrap"
 license: "MIT"
-abstract: "Production-ready VPS bootstrap for Coolify on Ubuntu 24.04 using cloud-init, host hardening, and recovery runbooks."
+abstract: "Production-ready VPS bootstrap for Coolify on Ubuntu 24.04 using VPS init user-data, host hardening, and recovery runbooks."
 keywords:
   - coolify
-  - cloud-init
+  - vps-init-user-data
   - ubuntu
   - vps
   - devops
