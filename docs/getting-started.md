@@ -244,7 +244,7 @@ For full behavior details and replay implications, see:
 
 ### A) Auto-resolved on host
 
-Detailed variable notes:
+**Variable Details**
 - `DEVOPS_USER`: main operational account used for day-to-day admin work, replay, and controlled sudo operations. If missing, scripts use `devops`.
 - `SSH_KEY_ROTATE`: controls key sync behavior for `DEVOPS_USER` and `ADDITIONAL_SUDO_USERS`. `0` keeps existing keys and ensures current key is present; `1` replaces `authorized_keys` with current key.
 - `CLOSE_COOLIFY_REALTIME_PORTS`: controls host-level exposure of `6001/6002` through `DOCKER-USER` rules. `false` keeps direct public ingress possible; `true` blocks public ingress and expects domain-based realtime path.
@@ -257,7 +257,7 @@ Detailed variable notes:
 
 ### B) Coolify admin variables
 
-Detailed variable notes:
+**Variable Details**
 - `COOLIFY_PUBLIC_DOMAIN`: canonical public domain for Coolify UI and reverse-proxy entrypoint after onboarding.
 - `COOLIFY_ROOT_USERNAME`: root account username created by installer workflow.
 - `COOLIFY_ROOT_USER_EMAIL`: root account email used as login identifier in UI.
@@ -272,7 +272,7 @@ Detailed variable notes:
 
 ### C) Server user variables
 
-Detailed variable notes:
+**Variable Details**
 - `SSH_PUBLIC_KEY` / `SSH_PUBLIC_KEY_PATH`: operator key source used for first SSH key injection and later key reconciliation. Missing values no longer stop bootstrap, but initial SSH key access may require manual recovery path.
 - `COOLIFY_SUDO_NOPASSWD_USER`: dedicated localhost automation user for Coolify server integration. It is forced into managed groups and gets dedicated localhost/private-only SSH key restrictions.
 - `ADDITIONAL_SUDO_USERS`: optional extra admin users (space/comma/semicolon separated). They are validated, created if missing, and added to sudo/docker/coolify groups.
@@ -291,7 +291,7 @@ Detailed variable notes:
 
 ### D) Generated passwords and secrets
 
-Detailed variable notes:
+**Variable Details**
 - `USER_PASSWORDS_ENCRYPTION_PASSWORD`: encryption key used to protect `/etc/vps-coolify-bootstrap/user-passwords.enc`. Keep this value in a secure external vault.
 - `account passwords for managed users`: generated on-host by `ensure-user-passwords.sh` only when needed (locked/unset user or missing vault entry). Existing unlocked users with vault entries are preserved.
 
