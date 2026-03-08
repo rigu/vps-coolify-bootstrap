@@ -11,6 +11,7 @@ header_pages:
   - index.md
   - getting-started.md
   - bootstrap-flow.md
+  - coolify-deployment-modes.md
   - operations-security.md
   - bootstrap-failure-recovery.md
   - github-promotion.md

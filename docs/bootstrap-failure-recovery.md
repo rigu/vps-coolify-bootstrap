@@ -12,7 +12,7 @@ The sequence is explicit and safe to execute end-to-end.
 ## 0) Preparation (do not skip)
 
 1. Keep provider web console access open (rescue path if SSH is broken).
-2. Run recovery as `root` (provider console) or as `PRIMARY_SUDO_USER` (passwordless `sudo`).
+2. Run recovery as `root` (provider console) or as `PRIMARY_SUDO_USER` / `COOLIFY_SUDO_NOPASSWD_USER` (passwordless `sudo`).
 3. Keep local source of truth ready:
    - local repo: `public-vps-coolify-bootstrap`
    - local env file: `bootstrap-artifacts/bootstrap.env`
@@ -97,7 +97,7 @@ Then verify required keys on server:
 
 ```bash
 sudo awk -F= '
-/^(SSH_PORT|PRIMARY_SUDO_USER|SECONDARY_SUDO_USER|SSH_PUBLIC_KEY|CREATE_USERS|SUDO_USERS|DOCKER_USERS|COOLIFY_GROUP_USERS|COOLIFY_PUBLIC_DOMAIN|ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS|COOLIFY_ROOT_USERNAME|COOLIFY_ROOT_USER_EMAIL|COOLIFY_ROOT_USER_PASSWORD|USER_PASSWORDS_ENCRYPTION_PASSWORD)=/ {
+/^(SSH_PORT|PRIMARY_SUDO_USER|SECONDARY_SUDO_USER|COOLIFY_SUDO_NOPASSWD_USER|SSH_PUBLIC_KEY|COOLIFY_SSH_PUBLIC_KEY|CREATE_USERS|SUDO_USERS|DOCKER_USERS|COOLIFY_GROUP_USERS|COOLIFY_PUBLIC_DOMAIN|CLOSE_COOLIFY_REALTIME_PORTS|COOLIFY_REALTIME_DOMAIN|COOLIFY_ROOT_USERNAME|COOLIFY_ROOT_USER_EMAIL|COOLIFY_ROOT_USER_PASSWORD|USER_PASSWORDS_ENCRYPTION_PASSWORD)=/ {
   print $1"=<set>"
 }
 ' /etc/vps-coolify-bootstrap/bootstrap.env
@@ -124,7 +124,7 @@ sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-
 ```
 
 This script is idempotent and executes the following actions in order:
-- create/repair users and SSH keys
+- create/repair users and SSH keys (including `COOLIFY_SUDO_NOPASSWD_USER` with `COOLIFY_SSH_PUBLIC_KEY`)
 - during this on-host replay, set passwords for `CREATE_USERS` accounts that are currently locked/unset (not a local pre-generation step)
 - store generated credentials encrypted in `/etc/vps-coolify-bootstrap/user-passwords.enc`
 - sync `AllowUsers` from `CREATE_USERS`
@@ -133,8 +133,10 @@ This script is idempotent and executes the following actions in order:
 - reset/apply UFW baseline rules (`SSH_PORT`, `80`, `443`)
 - enable `fail2ban` and `unattended-upgrades`
 - install/start Coolify if missing
-- enforce sudo/docker/coolify memberships and sudo policy (passwordless only for `PRIMARY_SUDO_USER` by default)
-- apply `DOCKER-USER` guards for `6001/6002` unless `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS=1`
+- sync Coolify localhost server connection to `COOLIFY_SUDO_NOPASSWD_USER` + `SSH_PORT` and dedicated localhost SSH key
+- sync realtime host env (`PUSHER_HOST`, `PUSHER_PORT`, `PUSHER_SCHEME`) from `COOLIFY_REALTIME_DOMAIN`
+- enforce sudo/docker/coolify memberships and sudo policy (passwordless for `PRIMARY_SUDO_USER` and `COOLIFY_SUDO_NOPASSWD_USER` by default)
+- sync `DOCKER-USER` guards for `6001/6002` based on `CLOSE_COOLIFY_REALTIME_PORTS`
 
 Important: Docker-published ports can bypass UFW rules. Validate exposed ports
 after recovery with `ss -tulpen` and `docker ps --format 'table {{.Names}}\t{{.Ports}}'`.
@@ -151,6 +153,7 @@ primary_user="$(sudo sed -n 's/^PRIMARY_SUDO_USER=//p' /etc/vps-coolify-bootstra
 primary_user="${primary_user:-deploy}"
 id "$primary_user" || true
 getent group sudo docker coolify
+sudo bash /opt/vps-coolify-bootstrap/scripts/verify-bootstrap-state.sh /etc/vps-coolify-bootstrap/bootstrap.env
 ```
 
 Expected:
@@ -158,7 +161,8 @@ Expected:
 - UFW enabled and allowing configured SSH port + `80/443`
 - Docker available
 - Coolify container running (name usually `coolify`)
-- `DOCKER-USER` rules present for `6001/6002` unless explicitly disabled by env
+- Coolify localhost server (id `0`) uses `COOLIFY_SUDO_NOPASSWD_USER` and configured `SSH_PORT`
+- `DOCKER-USER` rules present for `6001/6002` when `CLOSE_COOLIFY_REALTIME_PORTS=true`
 
 ## 8) Validate remote access from your machine
 
@@ -173,6 +177,85 @@ If login fails but provider console works, re-check:
 - `REMOTE HOST IDENTIFICATION HAS CHANGED` warning (Windows/Linux/macOS):
   verify host fingerprint in provider console (`sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`),
   then run `ssh-keygen -R "[$SERVER_IP]:$SSH_PORT"` locally and reconnect
+
+## 8A) Recover Coolify "Server is not reachable" onboarding errors
+
+Use this section when Coolify UI shows:
+- `ssh: connect to host ... port ...: Connection refused`
+- `sudo: a terminal is required ...` / `sudo: a password is required`
+- `ParseAddr(".../64"): unexpected character`
+
+### A) Validate host/port/user used by Coolify
+
+For a local server managed by the same Coolify instance:
+- Host: `host.docker.internal`
+- Port: `SSH_PORT` from `bootstrap.env`
+- User: `COOLIFY_SUDO_NOPASSWD_USER` (recommended, default `coolify`) or another user with explicit passwordless sudo policy
+
+Important: bootstrap replay already syncs the local Coolify server to
+`COOLIFY_SUDO_NOPASSWD_USER`. If UI still shows `root`, run Step 6 again.
+
+Do not use `127.0.0.1` for this case.
+
+```bash
+sudo docker exec coolify getent hosts host.docker.internal
+sudo ss -lntp | grep sshd
+```
+
+### B) Clear fail2ban/UFW blocks against Docker bridge source IPs
+
+```bash
+sudo fail2ban-client status sshd
+sudo ufw status numbered
+```
+
+If you see a banned Docker bridge IP (for example `10.0.1.5`), unban it and remove the related UFW reject rule:
+
+```bash
+sudo fail2ban-client set sshd unbanip 10.0.1.5
+sudo ufw delete <rule-number-for-reject>
+sudo ufw insert 1 allow from 10.0.0.0/8 to any port "$SSH_PORT" proto tcp
+sudo ufw reload
+```
+
+Optional persistent fail2ban allow-list for private bridge ranges:
+
+```bash
+sudo tee /etc/fail2ban/jail.d/20-local-ignore-docker.conf >/dev/null <<'EOF'
+[DEFAULT]
+ignoreip = 127.0.0.1/8 ::1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+EOF
+sudo systemctl restart fail2ban
+```
+
+### C) Fix sudo policy for Coolify-managed SSH user
+
+Coolify server validation runs non-interactively and needs passwordless sudo.
+By default, `PRIMARY_SUDO_USER` and `COOLIFY_SUDO_NOPASSWD_USER` are passwordless.
+
+Check effective sudo mode:
+
+```bash
+sudo -u <coolify-ssh-user> -H bash -lc 'sudo -n true && echo OK_NOPASSWD'
+```
+
+If this fails, set policy permanently by updating `COOLIFY_SUDO_NOPASSWD_USER` in server `bootstrap.env` and replaying bootstrap, or add an explicit override file loaded after bootstrap policy:
+
+```bash
+sudo tee /etc/sudoers.d/zz-coolify-nopasswd >/dev/null <<'EOF'
+coolify ALL=(ALL:ALL) NOPASSWD:ALL
+EOF
+sudo chmod 440 /etc/sudoers.d/zz-coolify-nopasswd
+sudo visudo -c
+```
+
+### D) Fix invalid IPv6 format in Coolify server settings
+
+If logs show `ParseAddr(".../64")`, remove CIDR suffix from host IPv6.
+- valid host example: `2a01:4f8:1c1c:ad5f::1`
+- invalid for host field: `2a01:4f8:1c1c:ad5f::1/64`
+
+Then revalidate server connection in Coolify UI.
 
 ## 9) If replay still fails, capture focused diagnostics
 
@@ -227,8 +310,8 @@ fi
 
 ## Decrypt generated user credentials (when needed)
 
-Must be run as `PRIMARY_SUDO_USER` (who has passwordless sudo) or root via
-provider console. Other sudo users cannot decrypt because they need their
+Must be run as `PRIMARY_SUDO_USER` or `COOLIFY_SUDO_NOPASSWD_USER` (both
+passwordless sudo) or root via provider console. Other sudo users cannot decrypt because they need their
 password for `sudo`, and their password is inside this vault.
 
 ```bash

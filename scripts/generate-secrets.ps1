@@ -88,6 +88,7 @@ $detectedSshKeyPath = if ($hasDetectedSshKey) { [string]$detectedSshEntry.Path }
 $sawCoolifyPassword = $false
 $sawEncryptionPassword = $false
 $sawSshPublicKey = $false
+$sawCoolifySshPublicKey = $false
 $sawSshPublicKeyPath = $false
 $newLines = New-Object System.Collections.Generic.List[string]
 
@@ -116,11 +117,23 @@ foreach ($line in Get-Content -LiteralPath $envPath) {
         continue
     }
 
+    if ($line.StartsWith("COOLIFY_SSH_PUBLIC_KEY=")) {
+        $sawCoolifySshPublicKey = $true
+        $current = $line.Substring("COOLIFY_SSH_PUBLIC_KEY=".Length)
+        $shouldReplace = $ForceSshKey -or [string]::IsNullOrWhiteSpace($current) -or $current -match "CHANGE_ME"
+        if ($shouldReplace -and $hasDetectedSshKey) {
+            $newLines.Add("COOLIFY_SSH_PUBLIC_KEY=$(Format-EnvValue -Value $detectedSshKey)")
+        } else {
+            $newLines.Add($line)
+        }
+        continue
+    }
+
     if ($line.StartsWith("COOLIFY_ROOT_USER_PASSWORD=")) {
         $sawCoolifyPassword = $true
         $current = $line.Substring("COOLIFY_ROOT_USER_PASSWORD=".Length)
         if ($ForcePassword -or [string]::IsNullOrWhiteSpace($current) -or $current -match "CHANGE_ME") {
-            $newLines.Add("COOLIFY_ROOT_USER_PASSWORD=$(New-RandomSecret -Length 24)")
+            $newLines.Add("COOLIFY_ROOT_USER_PASSWORD=$(Format-EnvValue -Value (New-RandomSecret -Length 24))")
         } else {
             $newLines.Add($line)
         }
@@ -131,7 +144,7 @@ foreach ($line in Get-Content -LiteralPath $envPath) {
         $sawEncryptionPassword = $true
         $current = $line.Substring("USER_PASSWORDS_ENCRYPTION_PASSWORD=".Length)
         if ($ForceEncryptionPassword -or [string]::IsNullOrWhiteSpace($current) -or $current -match "CHANGE_ME") {
-            $newLines.Add("USER_PASSWORDS_ENCRYPTION_PASSWORD=$(New-RandomSecret -Length 32)")
+            $newLines.Add("USER_PASSWORDS_ENCRYPTION_PASSWORD=$(Format-EnvValue -Value (New-RandomSecret -Length 32))")
         } else {
             $newLines.Add($line)
         }
@@ -142,15 +155,18 @@ foreach ($line in Get-Content -LiteralPath $envPath) {
 }
 
 if (-not $sawCoolifyPassword) {
-    $newLines.Add("COOLIFY_ROOT_USER_PASSWORD=$(New-RandomSecret -Length 24)")
+    $newLines.Add("COOLIFY_ROOT_USER_PASSWORD=$(Format-EnvValue -Value (New-RandomSecret -Length 24))")
 }
 
 if (-not $sawEncryptionPassword) {
-    $newLines.Add("USER_PASSWORDS_ENCRYPTION_PASSWORD=$(New-RandomSecret -Length 32)")
+    $newLines.Add("USER_PASSWORDS_ENCRYPTION_PASSWORD=$(Format-EnvValue -Value (New-RandomSecret -Length 32))")
 }
 
 if (-not $sawSshPublicKey -and $hasDetectedSshKey) {
     $newLines.Add("SSH_PUBLIC_KEY=$(Format-EnvValue -Value $detectedSshKey)")
+}
+if (-not $sawCoolifySshPublicKey -and $hasDetectedSshKey) {
+    $newLines.Add("COOLIFY_SSH_PUBLIC_KEY=$(Format-EnvValue -Value $detectedSshKey)")
 }
 if (-not $sawSshPublicKeyPath -and $hasDetectedSshKey) {
     $newLines.Add("SSH_PUBLIC_KEY_PATH=$(Format-EnvValue -Value $detectedSshKeyPath)")
@@ -162,7 +178,7 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 Write-Host "Updated: $envPath"
 Write-Host "WARNING: Env file contains secrets. On shared Windows systems, verify ACLs (for example with icacls)."
 if ($hasDetectedSshKey) {
-    Write-Host "SSH public key and SSH_PUBLIC_KEY_PATH auto-detected and applied when needed."
+    Write-Host "SSH_PUBLIC_KEY, COOLIFY_SSH_PUBLIC_KEY, and SSH_PUBLIC_KEY_PATH auto-detected and applied when needed."
 } else {
-    Write-Host "No local SSH public key detected; set SSH_PUBLIC_KEY or SSH_PUBLIC_KEY_PATH manually."
+    Write-Host "No local SSH public key detected; set SSH_PUBLIC_KEY/COOLIFY_SSH_PUBLIC_KEY or SSH_PUBLIC_KEY_PATH manually."
 }

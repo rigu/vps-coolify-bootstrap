@@ -160,6 +160,7 @@ trap 'rm -f "$tmp"' EXIT
 saw_coolify_password=0
 saw_encryption_password=0
 saw_ssh_public_key=0
+saw_coolify_ssh_public_key=0
 saw_ssh_public_key_path=0
 while IFS= read -r line || [ -n "$line" ]; do
   case "$line" in
@@ -189,11 +190,24 @@ while IFS= read -r line || [ -n "$line" ]; do
         echo "$line" >> "$tmp"
       fi
       ;;
+    COOLIFY_SSH_PUBLIC_KEY=*)
+      saw_coolify_ssh_public_key=1
+      current="${line#*=}"
+      if [ "$force_ssh_key" -eq 1 ] || [ -z "$current" ] || [[ "$current" == *CHANGE_ME* ]]; then
+        if [ "$has_detected_ssh_key" -eq 1 ]; then
+          echo "COOLIFY_SSH_PUBLIC_KEY=$(format_env_value "$detected_ssh_key")" >> "$tmp"
+        else
+          echo "$line" >> "$tmp"
+        fi
+      else
+        echo "$line" >> "$tmp"
+      fi
+      ;;
     COOLIFY_ROOT_USER_PASSWORD=*)
       saw_coolify_password=1
       current="${line#*=}"
       if [ "$force_password" -eq 1 ] || [ -z "$current" ] || [[ "$current" == *CHANGE_ME* ]]; then
-        echo "COOLIFY_ROOT_USER_PASSWORD=$(pw_gen_password)" >> "$tmp"
+        echo "COOLIFY_ROOT_USER_PASSWORD=$(format_env_value "$(pw_gen_password)")" >> "$tmp"
       else
         echo "$line" >> "$tmp"
       fi
@@ -202,7 +216,7 @@ while IFS= read -r line || [ -n "$line" ]; do
       saw_encryption_password=1
       current="${line#*=}"
       if [ "$force_encryption_password" -eq 1 ] || [ -z "$current" ] || [[ "$current" == *CHANGE_ME* ]]; then
-        echo "USER_PASSWORDS_ENCRYPTION_PASSWORD=$(pw_gen_encryption_password)" >> "$tmp"
+        echo "USER_PASSWORDS_ENCRYPTION_PASSWORD=$(format_env_value "$(pw_gen_encryption_password)")" >> "$tmp"
       else
         echo "$line" >> "$tmp"
       fi
@@ -214,15 +228,18 @@ while IFS= read -r line || [ -n "$line" ]; do
 done < "$env_file"
 
 if [ "$saw_coolify_password" -eq 0 ]; then
-  echo "COOLIFY_ROOT_USER_PASSWORD=$(pw_gen_password)" >> "$tmp"
+  echo "COOLIFY_ROOT_USER_PASSWORD=$(format_env_value "$(pw_gen_password)")" >> "$tmp"
 fi
 
 if [ "$saw_encryption_password" -eq 0 ]; then
-  echo "USER_PASSWORDS_ENCRYPTION_PASSWORD=$(pw_gen_encryption_password)" >> "$tmp"
+  echo "USER_PASSWORDS_ENCRYPTION_PASSWORD=$(format_env_value "$(pw_gen_encryption_password)")" >> "$tmp"
 fi
 
 if [ "$saw_ssh_public_key" -eq 0 ] && [ "$has_detected_ssh_key" -eq 1 ]; then
   echo "SSH_PUBLIC_KEY=$(format_env_value "$detected_ssh_key")" >> "$tmp"
+fi
+if [ "$saw_coolify_ssh_public_key" -eq 0 ] && [ "$has_detected_ssh_key" -eq 1 ]; then
+  echo "COOLIFY_SSH_PUBLIC_KEY=$(format_env_value "$detected_ssh_key")" >> "$tmp"
 fi
 if [ "$saw_ssh_public_key_path" -eq 0 ] && [ "$has_detected_ssh_key" -eq 1 ]; then
   echo "SSH_PUBLIC_KEY_PATH=$(format_env_value "$detected_ssh_key_path")" >> "$tmp"
@@ -232,7 +249,7 @@ mv "$tmp" "$env_file"
 chmod 600 "$env_file"
 echo "Updated: $env_file"
 if [ "$has_detected_ssh_key" -eq 1 ]; then
-  echo "SSH public key and SSH_PUBLIC_KEY_PATH auto-detected and applied when needed."
+  echo "SSH_PUBLIC_KEY, COOLIFY_SSH_PUBLIC_KEY, and SSH_PUBLIC_KEY_PATH auto-detected and applied when needed."
 else
-  echo "No local SSH public key detected; set SSH_PUBLIC_KEY or SSH_PUBLIC_KEY_PATH manually."
+  echo "No local SSH public key detected; set SSH_PUBLIC_KEY/COOLIFY_SSH_PUBLIC_KEY or SSH_PUBLIC_KEY_PATH manually."
 fi

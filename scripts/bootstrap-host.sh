@@ -76,6 +76,24 @@ for user in $(split_csv_to_lines "$CREATE_USERS"); do
   fi
 done
 
+COOLIFY_SUDO_NOPASSWD_USER="${COOLIFY_SUDO_NOPASSWD_USER:-coolify}"
+if ! is_valid_unix_username "$COOLIFY_SUDO_NOPASSWD_USER"; then
+  echo "ERROR: COOLIFY_SUDO_NOPASSWD_USER is not a valid UNIX username: $COOLIFY_SUDO_NOPASSWD_USER" >&2
+  exit 1
+fi
+
+COOLIFY_SSH_PUBLIC_KEY="${COOLIFY_SSH_PUBLIC_KEY:-$SSH_PUBLIC_KEY}"
+if [[ -n "$COOLIFY_SSH_PUBLIC_KEY" ]] && [[ ! "$COOLIFY_SSH_PUBLIC_KEY" =~ ^ssh-(ed25519|rsa|ecdsa-[^[:space:]]+)[[:space:]] ]]; then
+  echo "ERROR: invalid COOLIFY_SSH_PUBLIC_KEY format" >&2
+  exit 1
+fi
+
+# Ensure the dedicated Coolify SSH/sudo user is always managed.
+CREATE_USERS="$(csv_append_unique "$CREATE_USERS" "$COOLIFY_SUDO_NOPASSWD_USER")"
+SUDO_USERS="$(csv_append_unique "$SUDO_USERS" "$COOLIFY_SUDO_NOPASSWD_USER")"
+DOCKER_USERS="$(csv_append_unique "$DOCKER_USERS" "$COOLIFY_SUDO_NOPASSWD_USER")"
+COOLIFY_GROUP_USERS="$(csv_append_unique "$COOLIFY_GROUP_USERS" "$COOLIFY_SUDO_NOPASSWD_USER")"
+
 validate_user_list_subset() {
   local list_name="$1"
   local list_value="$2"
@@ -139,9 +157,33 @@ if [[ "$SSH_KEY_ROTATE" != "0" && "$SSH_KEY_ROTATE" != "1" ]]; then
   exit 1
 fi
 
-ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS="${ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS:-0}"
-if [[ "$ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS" != "0" && "$ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS" != "1" ]]; then
-  echo "ERROR: ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS must be 0 or 1" >&2
+CLOSE_COOLIFY_REALTIME_PORTS="${CLOSE_COOLIFY_REALTIME_PORTS:-}"
+if [[ -z "$CLOSE_COOLIFY_REALTIME_PORTS" ]] && [[ -n "${ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS:-}" ]]; then
+  # Backward compatibility with legacy variable.
+  if [[ "$ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS" == "0" ]]; then
+    CLOSE_COOLIFY_REALTIME_PORTS="true"
+  elif [[ "$ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS" == "1" ]]; then
+    CLOSE_COOLIFY_REALTIME_PORTS="false"
+  fi
+fi
+CLOSE_COOLIFY_REALTIME_PORTS="${CLOSE_COOLIFY_REALTIME_PORTS:-false}"
+case "$CLOSE_COOLIFY_REALTIME_PORTS" in
+  true|false) ;;
+  1) CLOSE_COOLIFY_REALTIME_PORTS="true" ;;
+  0) CLOSE_COOLIFY_REALTIME_PORTS="false" ;;
+  *)
+    echo "ERROR: CLOSE_COOLIFY_REALTIME_PORTS must be true/false or 1/0" >&2
+    exit 1
+    ;;
+esac
+
+COOLIFY_REALTIME_DOMAIN="${COOLIFY_REALTIME_DOMAIN:-}"
+if [[ -n "$COOLIFY_REALTIME_DOMAIN" ]] && [[ "$COOLIFY_REALTIME_DOMAIN" =~ [[:space:]/] ]]; then
+  echo "ERROR: COOLIFY_REALTIME_DOMAIN must be a hostname without spaces or /" >&2
+  exit 1
+fi
+if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]] && [[ -z "$COOLIFY_REALTIME_DOMAIN" ]]; then
+  echo "ERROR: COOLIFY_REALTIME_DOMAIN is required when CLOSE_COOLIFY_REALTIME_PORTS=true" >&2
   exit 1
 fi
 
@@ -154,21 +196,39 @@ ensure_user_exists() {
 
 ensure_ssh_key() {
   local user="$1"
+  local ssh_key="$2"
   local home_dir
+  [[ -n "$ssh_key" ]] || return 0
   home_dir="$(getent passwd "$user" | cut -d: -f6)"
   [[ -n "$home_dir" ]] || return 0
   install -d -m 700 -o "$user" -g "$user" "$home_dir/.ssh"
   if [[ "$SSH_KEY_ROTATE" == "1" ]]; then
-    printf '%s\n' "$SSH_PUBLIC_KEY" > "$home_dir/.ssh/authorized_keys"
+    printf '%s\n' "$ssh_key" > "$home_dir/.ssh/authorized_keys"
     chown "$user:$user" "$home_dir/.ssh/authorized_keys"
     chmod 600 "$home_dir/.ssh/authorized_keys"
   else
     touch "$home_dir/.ssh/authorized_keys"
     chown "$user:$user" "$home_dir/.ssh/authorized_keys"
     chmod 600 "$home_dir/.ssh/authorized_keys"
-    if ! grep -Fxq "$SSH_PUBLIC_KEY" "$home_dir/.ssh/authorized_keys"; then
-      printf '%s\n' "$SSH_PUBLIC_KEY" >> "$home_dir/.ssh/authorized_keys"
+    if ! grep -Fxq "$ssh_key" "$home_dir/.ssh/authorized_keys"; then
+      printf '%s\n' "$ssh_key" >> "$home_dir/.ssh/authorized_keys"
     fi
+  fi
+}
+
+ensure_ssh_key_present() {
+  local user="$1"
+  local ssh_key="$2"
+  local home_dir
+  [[ -n "$ssh_key" ]] || return 0
+  home_dir="$(getent passwd "$user" | cut -d: -f6)"
+  [[ -n "$home_dir" ]] || return 0
+  install -d -m 700 -o "$user" -g "$user" "$home_dir/.ssh"
+  touch "$home_dir/.ssh/authorized_keys"
+  chown "$user:$user" "$home_dir/.ssh/authorized_keys"
+  chmod 600 "$home_dir/.ssh/authorized_keys"
+  if ! grep -Fxq "$ssh_key" "$home_dir/.ssh/authorized_keys"; then
+    printf '%s\n' "$ssh_key" >> "$home_dir/.ssh/authorized_keys"
   fi
 }
 
@@ -248,48 +308,146 @@ add_docker_user_rule_if_missing() {
   fi
 }
 
-apply_coolify_realtime_port_guards() {
-  if [[ "$ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS" == "1" ]]; then
-    echo "INFO: ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS=1, skipping DOCKER-USER guards for 6001/6002."
-    return 0
-  fi
+remove_docker_user_rule_if_present() {
+  local table_bin="$1"
+  shift
+  while "$table_bin" -C DOCKER-USER "$@" >/dev/null 2>&1; do
+    "$table_bin" -D DOCKER-USER "$@" >/dev/null 2>&1 || true
+  done
+}
 
+sync_coolify_realtime_port_guards() {
   if ! command -v iptables >/dev/null 2>&1; then
-    echo "WARNING: iptables is not available; cannot enforce DOCKER-USER guards for 6001/6002."
+    echo "WARNING: iptables is not available; cannot manage DOCKER-USER guards for 6001/6002."
     return 0
   fi
 
   if ! iptables -nL DOCKER-USER >/dev/null 2>&1; then
-    echo "WARNING: DOCKER-USER chain is unavailable; cannot enforce guards for 6001/6002."
+    echo "WARNING: DOCKER-USER chain is unavailable; cannot manage guards for 6001/6002."
     return 0
   fi
 
-  # Drop public forwarded traffic to Coolify realtime ports by default.
-  add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -j DROP
-  add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -s 127.0.0.1/32 -j RETURN
-  add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -s 10.0.0.0/8 -j RETURN
-  add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -s 172.16.0.0/12 -j RETURN
-  add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -s 192.168.0.0/16 -j RETURN
-  add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -s 100.64.0.0/10 -j RETURN
+  if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
+    # Drop public forwarded traffic to Coolify realtime ports by default.
+    add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -j DROP
+    add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -s 127.0.0.1/32 -j RETURN
+    add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -s 10.0.0.0/8 -j RETURN
+    add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -s 172.16.0.0/12 -j RETURN
+    add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -s 192.168.0.0/16 -j RETURN
+    add_docker_user_rule_if_missing iptables -p tcp -m multiport --dports 6001,6002 -s 100.64.0.0/10 -j RETURN
+  else
+    remove_docker_user_rule_if_present iptables -p tcp -m multiport --dports 6001,6002 -s 100.64.0.0/10 -j RETURN
+    remove_docker_user_rule_if_present iptables -p tcp -m multiport --dports 6001,6002 -s 192.168.0.0/16 -j RETURN
+    remove_docker_user_rule_if_present iptables -p tcp -m multiport --dports 6001,6002 -s 172.16.0.0/12 -j RETURN
+    remove_docker_user_rule_if_present iptables -p tcp -m multiport --dports 6001,6002 -s 10.0.0.0/8 -j RETURN
+    remove_docker_user_rule_if_present iptables -p tcp -m multiport --dports 6001,6002 -s 127.0.0.1/32 -j RETURN
+    remove_docker_user_rule_if_present iptables -p tcp -m multiport --dports 6001,6002 -j DROP
+  fi
 
   if command -v ip6tables >/dev/null 2>&1 && ip6tables -nL DOCKER-USER >/dev/null 2>&1; then
-    add_docker_user_rule_if_missing ip6tables -p tcp -m multiport --dports 6001,6002 -j DROP
-    add_docker_user_rule_if_missing ip6tables -p tcp -m multiport --dports 6001,6002 -s ::1/128 -j RETURN
-    add_docker_user_rule_if_missing ip6tables -p tcp -m multiport --dports 6001,6002 -s fc00::/7 -j RETURN
-    add_docker_user_rule_if_missing ip6tables -p tcp -m multiport --dports 6001,6002 -s fe80::/10 -j RETURN
+    if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
+      add_docker_user_rule_if_missing ip6tables -p tcp -m multiport --dports 6001,6002 -j DROP
+      add_docker_user_rule_if_missing ip6tables -p tcp -m multiport --dports 6001,6002 -s ::1/128 -j RETURN
+      add_docker_user_rule_if_missing ip6tables -p tcp -m multiport --dports 6001,6002 -s fc00::/7 -j RETURN
+      add_docker_user_rule_if_missing ip6tables -p tcp -m multiport --dports 6001,6002 -s fe80::/10 -j RETURN
+    else
+      remove_docker_user_rule_if_present ip6tables -p tcp -m multiport --dports 6001,6002 -s fe80::/10 -j RETURN
+      remove_docker_user_rule_if_present ip6tables -p tcp -m multiport --dports 6001,6002 -s fc00::/7 -j RETURN
+      remove_docker_user_rule_if_present ip6tables -p tcp -m multiport --dports 6001,6002 -s ::1/128 -j RETURN
+      remove_docker_user_rule_if_present ip6tables -p tcp -m multiport --dports 6001,6002 -j DROP
+    fi
+  fi
+}
+
+set_env_kv() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  local tmp_file
+  tmp_file="$(mktemp)"
+  awk -v key="$key" -v value="$value" '
+    BEGIN { found=0 }
+    index($0, key "=") == 1 { print key "=" value; found=1; next }
+    { print }
+    END { if (!found) print key "=" value }
+  ' "$file" > "$tmp_file"
+  cat "$tmp_file" > "$file"
+  rm -f "$tmp_file"
+}
+
+delete_env_kv() {
+  local file="$1"
+  local key="$2"
+  sed -i "/^${key}=/d" "$file"
+}
+
+configure_coolify_realtime_domain() {
+  local coolify_env="/data/coolify/source/.env"
+  local changed=0
+  local current=""
+  if [[ ! -f "$coolify_env" ]]; then
+    echo "WARNING: $coolify_env not found; cannot manage realtime host env automatically."
+    return 0
+  fi
+
+  if [[ -n "$COOLIFY_REALTIME_DOMAIN" ]]; then
+    current="$(sed -n 's/^PUSHER_HOST=//p' "$coolify_env" | tail -n1 || true)"
+    if [[ "$current" != "$COOLIFY_REALTIME_DOMAIN" ]]; then
+      set_env_kv "$coolify_env" "PUSHER_HOST" "$COOLIFY_REALTIME_DOMAIN"
+      changed=1
+    fi
+
+    current="$(sed -n 's/^PUSHER_PORT=//p' "$coolify_env" | tail -n1 || true)"
+    if [[ "$current" != "443" ]]; then
+      set_env_kv "$coolify_env" "PUSHER_PORT" "443"
+      changed=1
+    fi
+
+    current="$(sed -n 's/^PUSHER_SCHEME=//p' "$coolify_env" | tail -n1 || true)"
+    if [[ "$current" != "https" ]]; then
+      set_env_kv "$coolify_env" "PUSHER_SCHEME" "https"
+      changed=1
+    fi
+
+    echo "INFO: configured Coolify realtime host ${COOLIFY_REALTIME_DOMAIN} (PUSHER_PORT=443, PUSHER_SCHEME=https)."
+  else
+    if grep -qE '^PUSHER_HOST=' "$coolify_env"; then
+      delete_env_kv "$coolify_env" "PUSHER_HOST"
+      changed=1
+    fi
+    if grep -qE '^PUSHER_PORT=' "$coolify_env"; then
+      delete_env_kv "$coolify_env" "PUSHER_PORT"
+      changed=1
+    fi
+    if grep -qE '^PUSHER_SCHEME=' "$coolify_env"; then
+      delete_env_kv "$coolify_env" "PUSHER_SCHEME"
+      changed=1
+    fi
+  fi
+
+  if (( changed == 1 )) && command -v docker >/dev/null 2>&1; then
+    if docker ps --format '{{.Names}}' | grep -qx 'coolify'; then
+      docker restart coolify >/dev/null 2>&1 || true
+    fi
+    if docker ps --format '{{.Names}}' | grep -qx 'coolify-realtime'; then
+      docker restart coolify-realtime >/dev/null 2>&1 || true
+    fi
   fi
 }
 
 apply_sudo_policy() {
   local policy_file
   local tmp_file
+  local user
   policy_file="/etc/sudoers.d/99-bootstrap-sudo-policy"
   tmp_file="$(mktemp)"
 
   if ! {
-    printf '%s ALL=(ALL:ALL) NOPASSWD:ALL\n' "$PRIMARY_SUDO_USER" > "$tmp_file"
+    : > "$tmp_file"
     for user in $(split_csv_to_lines "$SUDO_USERS"); do
-      if [[ "$user" != "$PRIMARY_SUDO_USER" ]]; then
+      if [[ "$user" == "$PRIMARY_SUDO_USER" || "$user" == "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
+        printf '%s ALL=(ALL:ALL) NOPASSWD:ALL\n' "$user" >> "$tmp_file"
+      else
         printf '%s ALL=(ALL:ALL) ALL\n' "$user" >> "$tmp_file"
       fi
     done
@@ -312,8 +470,9 @@ apply_sudo_policy() {
 # Ensure all declared users exist.
 for user in $(split_csv_to_lines "$CREATE_USERS"); do
   ensure_user_exists "$user"
-  ensure_ssh_key "$user"
+  ensure_ssh_key "$user" "$SSH_PUBLIC_KEY"
 done
+ensure_ssh_key "$COOLIFY_SUDO_NOPASSWD_USER" "$COOLIFY_SSH_PUBLIC_KEY"
 
 bash "$script_dir/ensure-user-passwords.sh" "$ENV_FILE"
 sync_sshd_allowusers
@@ -370,6 +529,123 @@ is_coolify_running() {
     awk '$1=="coolify" || $2=="coolify"{found=1} END{exit(found?0:1)}'
 }
 
+sync_coolify_localhost_ssh_user() {
+  local key_dir="/data/coolify/ssh/keys"
+  local key_path="${key_dir}/id.${COOLIFY_SUDO_NOPASSWD_USER}@host.docker.internal"
+  local key_pub_path="${key_path}.pub"
+  local key_pub=""
+  local attempt=0
+
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "WARNING: docker not found; skipping Coolify localhost SSH user sync."
+    return 0
+  fi
+  if ! docker ps --format '{{.Names}}' | grep -qx 'coolify'; then
+    echo "WARNING: coolify container is not running; skipping localhost SSH user sync."
+    return 0
+  fi
+
+  install -d -m 750 "$key_dir"
+  chown 9999:root "$key_dir" 2>/dev/null || true
+  if [[ ! -s "$key_path" ]] || [[ ! -s "$key_pub_path" ]]; then
+    rm -f "$key_path" "$key_pub_path"
+    ssh-keygen -t ed25519 -a 100 -f "$key_path" -q -N "" -C "coolify-localhost"
+  fi
+  chown 9999:root "$key_path" "$key_pub_path" 2>/dev/null || true
+  chmod 600 "$key_path" 2>/dev/null || true
+  chmod 644 "$key_pub_path" 2>/dev/null || true
+
+  key_pub="$(cat "$key_pub_path" 2>/dev/null || true)"
+  if [[ -n "$key_pub" ]]; then
+    ensure_ssh_key_present "$COOLIFY_SUDO_NOPASSWD_USER" "$key_pub"
+  fi
+
+  while (( attempt < 15 )); do
+    if docker exec -i \
+      -e BOOTSTRAP_COOLIFY_SSH_USER="$COOLIFY_SUDO_NOPASSWD_USER" \
+      -e BOOTSTRAP_COOLIFY_SSH_PORT="$SSH_PORT" \
+      coolify php <<'PHP'
+<?php
+chdir('/var/www/html');
+require '/var/www/html/vendor/autoload.php';
+$app = require '/var/www/html/bootstrap/app.php';
+$kernel = $app->make(\Illuminate\Contracts\Console\Kernel::class);
+$kernel->bootstrap();
+
+$targetUser = preg_replace('/[^A-Za-z0-9_-]/', '', (string) getenv('BOOTSTRAP_COOLIFY_SSH_USER'));
+$targetPort = (int) getenv('BOOTSTRAP_COOLIFY_SSH_PORT');
+if ($targetUser === '' || $targetPort < 1 || $targetPort > 65535) {
+    fwrite(STDERR, "invalid bootstrap Coolify SSH user/port\n");
+    exit(11);
+}
+
+$server = \App\Models\Server::find(0);
+if (! $server) {
+    fwrite(STDERR, "Coolify localhost server (id=0) not found\n");
+    exit(12);
+}
+
+$keyPath = '/var/www/html/storage/app/ssh/keys/id.' . $targetUser . '@host.docker.internal';
+if (! is_file($keyPath)) {
+    fwrite(STDERR, "Coolify key file missing: $keyPath\n");
+    exit(13);
+}
+$keyContent = trim((string) file_get_contents($keyPath));
+if ($keyContent === '') {
+    fwrite(STDERR, "Coolify key file empty: $keyPath\n");
+    exit(14);
+}
+
+$teamId = (int) ($server->team_id ?? 0);
+$fingerprint = \App\Models\PrivateKey::generateFingerprint($keyContent);
+$privateKey = null;
+
+if (! empty($fingerprint)) {
+    $privateKey = \App\Models\PrivateKey::query()
+        ->where('team_id', $teamId)
+        ->where('fingerprint', $fingerprint)
+        ->first();
+}
+
+if (! $privateKey) {
+    $privateKey = \App\Models\PrivateKey::find(0);
+}
+
+if (! $privateKey) {
+    $privateKey = new \App\Models\PrivateKey();
+    $privateKey->id = 0;
+    $privateKey->team_id = $teamId;
+}
+
+if ((string) $privateKey->private_key !== $keyContent) {
+    $privateKey->name = "localhost's key";
+    $privateKey->description = 'Managed by VPS bootstrap for localhost SSH.';
+    $privateKey->private_key = $keyContent;
+    $privateKey->is_git_related = false;
+    $privateKey->save();
+    $privateKey->storeInFileSystem();
+}
+
+$server->user = $targetUser;
+$server->ip = 'host.docker.internal';
+$server->port = $targetPort;
+$server->private_key_id = (int) $privateKey->id;
+$server->save();
+
+echo "bootstrap-coolify-localhost-user={$server->user}\n";
+echo "bootstrap-coolify-localhost-port={$server->port}\n";
+PHP
+    then
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+
+  echo "WARNING: failed to synchronize Coolify localhost server SSH user automatically after retries."
+  return 0
+}
+
 if ! is_coolify_running; then
   export DEBIAN_FRONTEND=noninteractive
   # Official Coolify installer path. Trade-off: remote script execution via curl|bash.
@@ -404,16 +680,19 @@ if getent group docker >/dev/null 2>&1; then
   done
 fi
 
-apply_coolify_realtime_port_guards
+sync_coolify_localhost_ssh_user
+configure_coolify_realtime_domain
+sync_coolify_realtime_port_guards
 
 # Docker published ports bypass UFW because Docker writes iptables rules directly.
 if command -v ss >/dev/null 2>&1 && ss -tuln | awk '{print $4}' | grep -Eq '[:.]6001$|[:.]6002$'; then
   echo "WARNING: port 6001 and/or 6002 is listening on host."
-  if [[ "$ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS" == "1" ]]; then
-    echo "WARNING: realtime ports are intentionally public by configuration."
-  else
+  if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
     echo "WARNING: DOCKER-USER guards were applied to block public ingress to 6001/6002."
     echo "WARNING: verify effective policy with: sudo iptables -S DOCKER-USER"
+    echo "WARNING: realtime domain in use: ${COOLIFY_REALTIME_DOMAIN}"
+  else
+    echo "WARNING: realtime ports are intentionally public by configuration."
   fi
 fi
 

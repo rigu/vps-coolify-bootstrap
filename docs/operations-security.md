@@ -24,6 +24,7 @@ Bootstrap also uses:
 
 - `PRIMARY_SUDO_USER`
 - `SECONDARY_SUDO_USER`
+- `COOLIFY_SUDO_NOPASSWD_USER`
 
 Keep both aligned with policy lists.
 `bootstrap-host.sh` enforces this at runtime: every user in `SUDO_USERS`,
@@ -37,6 +38,7 @@ Example:
 ```env
 PRIMARY_SUDO_USER=deploy
 SECONDARY_SUDO_USER=coolify
+COOLIFY_SUDO_NOPASSWD_USER=coolify
 CREATE_USERS=deploy,coolify,admin,ops,dev
 SUDO_USERS=deploy,coolify,admin,ops,dev
 DOCKER_USERS=deploy,coolify,ops
@@ -67,12 +69,12 @@ console access when SSH key auth is unavailable).
 Generated user passwords are stored encrypted at
 `/etc/vps-coolify-bootstrap/user-passwords.enc`. Decrypting requires `sudo`.
 
-Only `PRIMARY_SUDO_USER` has passwordless sudo (`NOPASSWD:ALL`). All other
-sudo users need their password to run `sudo` — but their password is inside
-the vault. This is by design: `PRIMARY_SUDO_USER` is the operational
-recovery account.
+`PRIMARY_SUDO_USER` and `COOLIFY_SUDO_NOPASSWD_USER` have passwordless sudo
+(`NOPASSWD:ALL`). Other sudo users need their password to run `sudo` — but
+their password is inside the vault.
 
-To retrieve passwords for other users, log in as `PRIMARY_SUDO_USER` and
+To retrieve passwords for other users, log in as `PRIMARY_SUDO_USER` or
+`COOLIFY_SUDO_NOPASSWD_USER` and
 run this recommended sequence (reads the exact password from server
 `bootstrap.env` and preserves it through `sudo`):
 
@@ -89,6 +91,45 @@ sudo env USER_PASSWORDS_ENCRYPTION_PASSWORD="$USER_PASSWORDS_ENCRYPTION_PASSWORD
 
 Alternative: use the provider web console as root.
 
+### Using `coolify` as the managed SSH user
+
+Set `COOLIFY_SUDO_NOPASSWD_USER=coolify` (default) in server-side
+`/etc/vps-coolify-bootstrap/bootstrap.env`, then run replay:
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env
+```
+
+Bootstrap now syncs Coolify localhost server connection settings automatically:
+- server user -> `COOLIFY_SUDO_NOPASSWD_USER`
+- server port -> `SSH_PORT`
+- localhost private key -> `/data/coolify/ssh/keys/id.<COOLIFY_SUDO_NOPASSWD_USER>@host.docker.internal`
+
+If UI still shows drift, run replay again and verify with:
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/verify-bootstrap-state.sh /etc/vps-coolify-bootstrap/bootstrap.env
+```
+
+Validation command:
+
+```bash
+sudo -u coolify -H bash -lc 'sudo -n true && echo OK_NOPASSWD'
+```
+
+Temporary/manual override (when replay is not yet possible):
+
+```bash
+sudo tee /etc/sudoers.d/zz-coolify-nopasswd >/dev/null <<'EOF'
+coolify ALL=(ALL:ALL) NOPASSWD:ALL
+EOF
+sudo chmod 440 /etc/sudoers.d/zz-coolify-nopasswd
+sudo visudo -c
+```
+
+Why `zz-` prefix: bootstrap writes `/etc/sudoers.d/99-bootstrap-sudo-policy`.
+Files loaded later can override prior sudo tag behavior (`PASSWD`/`NOPASSWD`).
+
 ## Bootstrap env reference
 
 Use this section when you need detailed runtime behavior for `bootstrap.env`
@@ -100,13 +141,17 @@ variables beyond the quick reference in Getting Started.
   - When: bootstrap/replay runtime, before sudo policy is written
   - How: if empty, resolved from first `SUDO_USERS` entry; fallback `deploy`
   - Must change: NO
+- `COOLIFY_SUDO_NOPASSWD_USER`
+  - When: bootstrap/replay runtime
+  - How: defaults to `coolify`; auto-added to managed user/group lists and passwordless sudo policy
+  - Must change: NO
 - `SSH_KEY_ROTATE`
   - When: runtime during SSH key synchronization
   - How: default `0` appends key; `1` replaces `authorized_keys`
   - Must change: NO
-- `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS`
-  - When: runtime during `DOCKER-USER` guard application
-  - How: default `0` blocks public ingress to `6001/6002`; `1` skips guards
+- `CLOSE_COOLIFY_REALTIME_PORTS`
+  - When: runtime during `DOCKER-USER` guard sync
+  - How: default `false` keeps ports public; `true` adds guards to block public ingress to `6001/6002`
   - Must change: NO
 
 ### B) Coolify admin variables
@@ -132,8 +177,16 @@ variables beyond the quick reference in Getting Started.
 
 - `SSH_PUBLIC_KEY` / `SSH_PUBLIC_KEY_PATH`
   - When: local preparation step and host bootstrap key installation
-  - How: **AUTO-DETECTED** if a valid key exists on your machine (`~/.ssh/*.pub`); `generate-secrets.*` fills both `SSH_PUBLIC_KEY` and `SSH_PUBLIC_KEY_PATH` when placeholders are present
+  - How: **AUTO-DETECTED** if a valid key exists on your machine (`~/.ssh/*.pub`); `generate-secrets.*` fills `SSH_PUBLIC_KEY`, `COOLIFY_SSH_PUBLIC_KEY`, and `SSH_PUBLIC_KEY_PATH` when placeholders are present
   - Must change: YES (valid key required)
+- `COOLIFY_SSH_PUBLIC_KEY`
+  - When: host bootstrap key installation for `COOLIFY_SUDO_NOPASSWD_USER`
+  - How: defaults to `SSH_PUBLIC_KEY` when empty; can be set to a dedicated key used only by Coolify-managed SSH user
+  - Must change: NO
+- `COOLIFY_REALTIME_DOMAIN`
+  - When: runtime when value is set; required when `CLOSE_COOLIFY_REALTIME_PORTS=true`
+  - How: written as `PUSHER_HOST`, `PUSHER_PORT=443`, and `PUSHER_SCHEME=https` in `/data/coolify/source/.env`; removed when empty
+  - Must change: YES when closing `6001/6002`
 - `SSH_PORT`
   - When: bootstrap/replay SSH hardening
   - How: applied via `sshd_config.d` and service restart
@@ -153,7 +206,7 @@ variables beyond the quick reference in Getting Started.
   - When: local generation before provisioning if placeholder/empty
   - How: **AUTO-GENERATED** by `generate-secrets.*` only when value is empty/`CHANGE_ME` (`openssl rand -hex 16` in Bash)
   - Must change: NO after secure generation
-- account passwords for users in `CREATE_USERS`
+- account passwords for users in `CREATE_USERS` and `COOLIFY_SUDO_NOPASSWD_USER`
   - When: during bootstrap/replay runtime on the VPS host in `ensure-user-passwords.sh`
   - How: not pre-generated locally; set only for locked/unset accounts, then encrypted to `/etc/vps-coolify-bootstrap/user-passwords.enc`
   - Must change: YES for `PRIMARY_SUDO_USER` on first login (`sudo passwd "$(whoami)"`)
@@ -187,16 +240,18 @@ What replay does not do:
 What replay enforces:
 
 - SSH hardening (`sshd_config`, `AllowUsers`, service state)
-- sudo policy (`PRIMARY_SUDO_USER` passwordless by default)
+- sudo policy (`PRIMARY_SUDO_USER` and `COOLIFY_SUDO_NOPASSWD_USER` passwordless by default)
 - user/group memberships (`sudo`, `docker`, `coolify`)
 - on-host password generation for locked/unset users in `CREATE_USERS` (during bootstrap/replay) and encrypted vault update
 - UFW baseline (`SSH_PORT`, `80`, `443`)
 - `fail2ban` and `unattended-upgrades`
-- `DOCKER-USER` guards for `6001/6002` unless `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS=1`
+- Coolify localhost connection user/port/private-key synchronization (`COOLIFY_SUDO_NOPASSWD_USER`, `SSH_PORT`)
+- realtime host env synchronization (`PUSHER_HOST`, `PUSHER_PORT`, `PUSHER_SCHEME`) from `COOLIFY_REALTIME_DOMAIN`
+- `DOCKER-USER` guards for `6001/6002` when `CLOSE_COOLIFY_REALTIME_PORTS=true`
 
 Operational notes:
 
-- run replay as `PRIMARY_SUDO_USER` or root via provider console
+- run replay as `PRIMARY_SUDO_USER`, `COOLIFY_SUDO_NOPASSWD_USER`, or root via provider console
 - replay resets UFW baseline; re-apply custom rules after replay
 - replay restarts SSH service; keep provider console open
 - replay can terminate stale `sshd` listeners on `22` when `SSH_PORT` is not `22`
@@ -208,6 +263,7 @@ sudo systemctl is-active ssh.service fail2ban unattended-upgrades
 sudo ufw status verbose
 sudo ss -lntp | grep -E ':(22|6001|6002|8000)\b' || true
 sudo iptables -S DOCKER-USER | grep -E '6001|6002' || true
+sudo bash /opt/vps-coolify-bootstrap/scripts/verify-bootstrap-state.sh /etc/vps-coolify-bootstrap/bootstrap.env
 ```
 
 ## Post-onboarding security (required)
@@ -224,11 +280,11 @@ sudo docker ps --format 'table {{.Names}}\t{{.Ports}}'
 
 Pay special attention to Coolify internal ports `6001` and `6002`; they should not be public unless explicitly required.
 
-Bootstrap default behavior:
+Bootstrap behavior:
 
-- if `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS=0` (default), bootstrap adds
-  `DOCKER-USER` guard rules to block public ingress to `6001/6002`
-- if `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS=1`, bootstrap skips those guards
+- if `CLOSE_COOLIFY_REALTIME_PORTS=true`, bootstrap adds `DOCKER-USER`
+  guard rules to block public ingress to `6001/6002`
+- if `CLOSE_COOLIFY_REALTIME_PORTS=false` (default), bootstrap removes those guards
 
 Check effective rules:
 

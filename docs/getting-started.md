@@ -49,8 +49,8 @@ after running PowerShell scripts.
 `generate-secrets.*` performs **AUTO-DETECTED** SSH key lookup on your local machine.
 It checks common public key files in `~/.ssh` (for example `id_ed25519.pub`,
 `id_ecdsa.pub`, `id_rsa.pub`, then other `*.pub`) and fills both
-`SSH_PUBLIC_KEY` and `SSH_PUBLIC_KEY_PATH` when current values are empty or still `CHANGE_ME`.
-If no valid key is found, set `SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_PATH` manually.
+`SSH_PUBLIC_KEY`, `COOLIFY_SSH_PUBLIC_KEY`, and `SSH_PUBLIC_KEY_PATH` when current values are empty or still `CHANGE_ME`.
+If no valid key is found, set `SSH_PUBLIC_KEY` / `COOLIFY_SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_PATH` manually.
 
 ## Bootstrap env quick reference
 
@@ -63,7 +63,7 @@ For full behavior details and replay implications, see:
 |---|---|---|
 | `PRIMARY_SUDO_USER` | If empty, resolved from the first `SUDO_USERS` value; falls back to `deploy` | NO |
 | `SSH_KEY_ROTATE` | Default `0`: append SSH key; `1`: replace `authorized_keys` | NO |
-| `ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS` | Default `0` blocks public `6001/6002`, `1` skips guards | NO |
+| `CLOSE_COOLIFY_REALTIME_PORTS` | Default `false`: keep public `6001/6002`; set `true` to enforce `DOCKER-USER` guards and close public ingress | NO |
 
 ### B) Coolify admin variables
 
@@ -79,6 +79,9 @@ For full behavior details and replay implications, see:
 | Variable | Runtime behavior | Required to set? |
 |---|---|---|
 | `SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_PATH` | Required for SSH access; **AUTO-DETECTED** if a valid key exists on your machine, otherwise set manually | YES |
+| `COOLIFY_SUDO_NOPASSWD_USER` | Dedicated user for Coolify SSH operations; auto-managed, forced into user/group lists, and granted passwordless sudo | NO |
+| `COOLIFY_SSH_PUBLIC_KEY` | SSH key installed specifically for `COOLIFY_SUDO_NOPASSWD_USER`; defaults to `SSH_PUBLIC_KEY` when empty | NO |
+| `COOLIFY_REALTIME_DOMAIN` | Dedicated realtime host. If set, bootstrap writes `PUSHER_HOST`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https` in Coolify `.env`; if empty, bootstrap removes those keys. Required when `CLOSE_COOLIFY_REALTIME_PORTS=true` | NO (YES when closing `6001/6002`) |
 | `SSH_PORT` | Applied in SSH config and service restart flow | NO |
 | `SECONDARY_SUDO_USER` | Validated against `CREATE_USERS` | NO |
 | `CREATE_USERS` / `SUDO_USERS` / `DOCKER_USERS` / `COOLIFY_GROUP_USERS` | Users/groups and policy reconciliation at bootstrap/replay | NO |
@@ -89,7 +92,7 @@ For full behavior details and replay implications, see:
 | Variable | Runtime behavior | Required to set? |
 |---|---|---|
 | `USER_PASSWORDS_ENCRYPTION_PASSWORD` | **AUTO-GENERATED** locally only when value is empty/`CHANGE_ME` (`openssl rand -hex 16`); used to encrypt user vault | NO |
-| account passwords for `CREATE_USERS` | `ensure-user-passwords.sh` runs on the VPS host during bootstrap/replay (not as a local pre-generation step), sets passwords only for locked/unset users, then stores them encrypted in `/etc/vps-coolify-bootstrap/user-passwords.enc` | YES (set local password for `PRIMARY_SUDO_USER` on first login) |
+| account passwords for managed users | `ensure-user-passwords.sh` runs on the VPS host during bootstrap/replay (not as a local pre-generation step), sets passwords only for locked/unset users in `CREATE_USERS` plus `COOLIFY_SUDO_NOPASSWD_USER`, then stores them encrypted in `/etc/vps-coolify-bootstrap/user-passwords.enc` | YES (set local password for `PRIMARY_SUDO_USER` on first login) |
 
 Other bootstrap source variables (usually unchanged):
 - `BOOTSTRAP_REPO_URL=https://github.com/rigu/vps-coolify-bootstrap.git`
@@ -106,6 +109,8 @@ Input validation enforced by scripts:
 - `COOLIFY_ROOT_USER_EMAIL` must be valid email format
 - `COOLIFY_ROOT_USER_PASSWORD` and `USER_PASSWORDS_ENCRYPTION_PASSWORD` must be at least 16 characters
 - `SSH_PORT` must be numeric in range `1-65535`
+- `CLOSE_COOLIFY_REALTIME_PORTS` must be `true/false` (or `1/0`)
+- `COOLIFY_REALTIME_DOMAIN` is required when `CLOSE_COOLIFY_REALTIME_PORTS=true`
 - usernames in user lists must match `^[a-z_][a-z0-9_-]*[$]?$` and must not contain `:`
 
 Bootstrap runtime also terminates stale `sshd` listeners on port `22` when
@@ -214,11 +219,47 @@ After first boot, use this checklist:
    sudo docker ps
    ```
 
+   Full post-bootstrap verification script:
+
+   ```bash
+   sudo bash /opt/vps-coolify-bootstrap/scripts/verify-bootstrap-state.sh /etc/vps-coolify-bootstrap/bootstrap.env
+   ```
+
 5. Open Coolify and complete onboarding:
 
    Use `https://<COOLIFY_PUBLIC_DOMAIN>`.
    Log in with `COOLIFY_ROOT_USER_EMAIL` and `COOLIFY_ROOT_USER_PASSWORD` from your env file.
    `COOLIFY_ROOT_USERNAME` is still required during bootstrap, but the normal login identifier is email.
+   Bootstrap automatically syncs the local Coolify server connection (`server id 0`) to use
+   `COOLIFY_SUDO_NOPASSWD_USER` and `SSH_PORT`; if onboarding shows a different user/port, run a bootstrap replay.
+   If `80/443` is not available yet, use temporary bootstrap URL `http://<SERVER_IP>:8000`.
+
+### Onboarding troubleshooting (common)
+
+- `403 Forbidden` on `<COOLIFY_PUBLIC_DOMAIN>`:
+  usually DNS points to a different host. Verify `A`/`AAAA` records.
+- `AAAA` record format:
+  use a host IPv6 address only (for example `2a01:4f8:1c1c:ad5f::1`), never CIDR (`/64`).
+- `Connection refused` during Coolify server validation:
+  verify SSH port from server config and runtime listeners:
+
+  ```bash
+  sudo grep -Rns '^[[:space:]]*Port ' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf
+  sudo ss -lntp | grep sshd
+  ```
+
+- Local server validation from the same Coolify instance:
+  use `host.docker.internal` as host, not `127.0.0.1`.
+- Coolify SSH user:
+  bootstrap sets local server user to `COOLIFY_SUDO_NOPASSWD_USER` (default `coolify`).
+- Validate published web ports:
+
+  ```bash
+  sudo ss -lntp | grep -E ':(80|443|8000)\b' || true
+  sudo docker ps --format 'table {{.Names}}\t{{.Ports}}'
+  ```
+
+  If only `8000` is listening, finish onboarding first, then configure/redeploy proxy.
 
 6. Deploy workloads from private/project repositories:
 

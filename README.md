@@ -42,6 +42,7 @@ Canonical instructions were moved to GitHub Pages docs:
 - Local source: [docs/index.md](docs/index.md)
 - Getting started: [docs/getting-started.md](docs/getting-started.md)
 - Bootstrap flow: [docs/bootstrap-flow.md](docs/bootstrap-flow.md)
+- Coolify deployment modes: [docs/coolify-deployment-modes.md](docs/coolify-deployment-modes.md)
 - Operations and security: [docs/operations-security.md](docs/operations-security.md)
 - Failure recovery: [docs/bootstrap-failure-recovery.md](docs/bootstrap-failure-recovery.md)
 - GitHub promotion checklist: [docs/github-promotion.md](docs/github-promotion.md)

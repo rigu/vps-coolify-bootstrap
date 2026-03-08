@@ -12,9 +12,11 @@ Production-ready public bootstrap for **Coolify on Ubuntu 24.04 LTS**.
 
 - cloud-init-based first-boot provisioning
 - hardened SSH baseline (`AllowUsers`, no password auth, custom port)
+- dedicated `COOLIFY_SUDO_NOPASSWD_USER` (default `coolify`) for non-root Coolify SSH operations
 - UFW baseline + fail2ban + unattended upgrades
-- `DOCKER-USER` guards for Coolify realtime ports (`6001/6002`) by default
+- optional `DOCKER-USER` guards for Coolify realtime ports (`6001/6002`) controlled by env
 - deterministic env-driven render flow (Bash + PowerShell)
+- post-bootstrap verification script (`scripts/verify-bootstrap-state.sh`)
 - encrypted server-side user password vault
 - explicit first-boot failure recovery runbook
 
@@ -22,6 +24,7 @@ Production-ready public bootstrap for **Coolify on Ubuntu 24.04 LTS**.
 
 - [Getting Started](getting-started.md)
 - [Bootstrap Flow](bootstrap-flow.md)
+- [Coolify Deployment Modes](coolify-deployment-modes.md)
 - [Operations & Security](operations-security.md)
 - [Failure Recovery Runbook](bootstrap-failure-recovery.md)
 - [GitHub Promotion Checklist](github-promotion.md)

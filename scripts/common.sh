@@ -27,6 +27,18 @@ csv_contains_value() {
   return 1
 }
 
+csv_append_unique() {
+  local csv="$1"
+  local value="$2"
+  if csv_contains_value "$csv" "$value"; then
+    printf '%s\n' "$csv"
+  elif [[ -z "$csv" ]]; then
+    printf '%s\n' "$value"
+  else
+    printf '%s,%s\n' "$csv" "$value"
+  fi
+}
+
 trim_whitespace() {
   local value="$1"
   value="${value#"${value%%[![:space:]]*}"}"

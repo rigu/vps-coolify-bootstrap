@@ -30,6 +30,13 @@ if (( ${#USER_PASSWORDS_ENCRYPTION_PASSWORD} < 16 )); then
   exit 1
 fi
 
+COOLIFY_SUDO_NOPASSWD_USER="${COOLIFY_SUDO_NOPASSWD_USER:-coolify}"
+if ! is_valid_unix_username "$COOLIFY_SUDO_NOPASSWD_USER"; then
+  echo "ERROR: COOLIFY_SUDO_NOPASSWD_USER contains invalid UNIX username: $COOLIFY_SUDO_NOPASSWD_USER" >&2
+  exit 1
+fi
+managed_users_csv="$(csv_append_unique "$CREATE_USERS" "$COOLIFY_SUDO_NOPASSWD_USER")"
+
 if ! command -v openssl >/dev/null 2>&1; then
   echo "ERROR: openssl is required to encrypt generated password file" >&2
   exit 1
@@ -88,7 +95,7 @@ fi
 } > "$plaintext_file"
 
 changed_count=0
-for user in $(split_csv_to_lines "$CREATE_USERS"); do
+for user in $(split_csv_to_lines "$managed_users_csv"); do
   if [[ "$user" == *:* ]]; then
     echo "ERROR: CREATE_USERS contains invalid username (colon not allowed): $user" >&2
     exit 1
@@ -112,7 +119,7 @@ for user in $(split_csv_to_lines "$CREATE_USERS"); do
   fi
 done
 
-for user in $(split_csv_to_lines "$CREATE_USERS"); do
+for user in $(split_csv_to_lines "$managed_users_csv"); do
   if [[ -n "${user_passwords[$user]:-}" ]]; then
     printf '%s:%s\n' "$user" "${user_passwords[$user]}" >> "$plaintext_file"
   fi

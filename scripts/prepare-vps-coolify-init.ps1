@@ -51,6 +51,22 @@ if ($coolifyPublicDomain -match '[\s/]') { throw "COOLIFY_PUBLIC_DOMAIN must be 
 if ($cfg["COOLIFY_ROOT_USER_EMAIL"] -notmatch '^[^\s@]+@[^\s@]+\.[^\s@]+$') { throw "COOLIFY_ROOT_USER_EMAIL must be a valid email format." }
 if ($cfg["COOLIFY_ROOT_USERNAME"] -notmatch '^[A-Za-z0-9._-]+$') { throw "COOLIFY_ROOT_USERNAME must match ^[A-Za-z0-9._-]+$." }
 
+function Test-ValidUnixUsername {
+    param([string]$User)
+    return ($User -match '^[a-z_][a-z0-9_-]*[$]?$')
+}
+
+function Add-CsvValueUnique {
+    param(
+        [string]$Csv,
+        [string]$Value
+    )
+
+    $items = $Csv.Split(",") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    if ($items -contains $Value) { return ($items -join ",") }
+    return (($items + $Value) -join ",")
+}
+
 $createUsers = ([string]$cfg["CREATE_USERS"]).Split(",") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 $primarySudoUser = [string]$cfg["PRIMARY_SUDO_USER"]
 $secondarySudoUser = [string]$cfg["SECONDARY_SUDO_USER"]
@@ -58,10 +74,14 @@ if ($primarySudoUser -notmatch '^[a-z_][a-z0-9_-]*[$]?$') { throw "PRIMARY_SUDO_
 if ($secondarySudoUser -notmatch '^[a-z_][a-z0-9_-]*[$]?$') { throw "SECONDARY_SUDO_USER contains invalid UNIX username: $secondarySudoUser" }
 if (-not ($createUsers -contains $primarySudoUser)) { throw "PRIMARY_SUDO_USER must be present in CREATE_USERS." }
 if (-not ($createUsers -contains $secondarySudoUser)) { throw "SECONDARY_SUDO_USER must be present in CREATE_USERS." }
-function Test-ValidUnixUsername {
-    param([string]$User)
-    return ($User -match '^[a-z_][a-z0-9_-]*[$]?$')
-}
+$coolifySudoNopasswdUser = if ($cfg.ContainsKey("COOLIFY_SUDO_NOPASSWD_USER") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["COOLIFY_SUDO_NOPASSWD_USER"])) { [string]$cfg["COOLIFY_SUDO_NOPASSWD_USER"] } else { "coolify" }
+if (-not (Test-ValidUnixUsername -User $coolifySudoNopasswdUser)) { throw "COOLIFY_SUDO_NOPASSWD_USER contains invalid UNIX username: $coolifySudoNopasswdUser" }
+$cfg["COOLIFY_SUDO_NOPASSWD_USER"] = $coolifySudoNopasswdUser
+$cfg["CREATE_USERS"] = Add-CsvValueUnique -Csv ([string]$cfg["CREATE_USERS"]) -Value $coolifySudoNopasswdUser
+$cfg["SUDO_USERS"] = Add-CsvValueUnique -Csv ([string]$cfg["SUDO_USERS"]) -Value $coolifySudoNopasswdUser
+$cfg["DOCKER_USERS"] = Add-CsvValueUnique -Csv ([string]$cfg["DOCKER_USERS"]) -Value $coolifySudoNopasswdUser
+$cfg["COOLIFY_GROUP_USERS"] = Add-CsvValueUnique -Csv ([string]$cfg["COOLIFY_GROUP_USERS"]) -Value $coolifySudoNopasswdUser
+$createUsers = ([string]$cfg["CREATE_USERS"]).Split(",") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 
 function Validate-UserListSubset {
     param(
@@ -109,8 +129,32 @@ if ([string]$cfg["COOLIFY_ROOT_USER_PASSWORD"].Length -lt 16) { throw "COOLIFY_R
 if ([string]$cfg["USER_PASSWORDS_ENCRYPTION_PASSWORD"].Length -lt 16) { throw "USER_PASSWORDS_ENCRYPTION_PASSWORD must be at least 16 characters." }
 $sshKeyRotate = if ($cfg.ContainsKey("SSH_KEY_ROTATE") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SSH_KEY_ROTATE"])) { [string]$cfg["SSH_KEY_ROTATE"] } else { "0" }
 if ($sshKeyRotate -ne "0" -and $sshKeyRotate -ne "1") { throw "SSH_KEY_ROTATE must be 0 or 1." }
-$allowPublicCoolifyRealtimePorts = if ($cfg.ContainsKey("ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS"])) { [string]$cfg["ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS"] } else { "0" }
-if ($allowPublicCoolifyRealtimePorts -ne "0" -and $allowPublicCoolifyRealtimePorts -ne "1") { throw "ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS must be 0 or 1." }
+$closeCoolifyRealtimePorts = if ($cfg.ContainsKey("CLOSE_COOLIFY_REALTIME_PORTS") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["CLOSE_COOLIFY_REALTIME_PORTS"])) { [string]$cfg["CLOSE_COOLIFY_REALTIME_PORTS"] } else { "" }
+if ([string]::IsNullOrWhiteSpace($closeCoolifyRealtimePorts) -and $cfg.ContainsKey("ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS")) {
+    $legacyAllow = [string]$cfg["ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS"]
+    if ($legacyAllow -eq "0") { $closeCoolifyRealtimePorts = "true" }
+    if ($legacyAllow -eq "1") { $closeCoolifyRealtimePorts = "false" }
+}
+if ([string]::IsNullOrWhiteSpace($closeCoolifyRealtimePorts)) { $closeCoolifyRealtimePorts = "false" }
+switch ($closeCoolifyRealtimePorts.ToLowerInvariant()) {
+    "true" { $closeCoolifyRealtimePorts = "true" }
+    "false" { $closeCoolifyRealtimePorts = "false" }
+    "1" { $closeCoolifyRealtimePorts = "true" }
+    "0" { $closeCoolifyRealtimePorts = "false" }
+    default { throw "CLOSE_COOLIFY_REALTIME_PORTS must be true/false or 1/0." }
+}
+$cfg["CLOSE_COOLIFY_REALTIME_PORTS"] = $closeCoolifyRealtimePorts
+
+$coolifyRealtimeDomain = if ($cfg.ContainsKey("COOLIFY_REALTIME_DOMAIN")) { [string]$cfg["COOLIFY_REALTIME_DOMAIN"] } else { "" }
+if ($coolifyRealtimeDomain -match '[\s/]') { throw "COOLIFY_REALTIME_DOMAIN must be a hostname without spaces or /." }
+if ($closeCoolifyRealtimePorts -eq "true" -and [string]::IsNullOrWhiteSpace($coolifyRealtimeDomain)) {
+    throw "COOLIFY_REALTIME_DOMAIN is required when CLOSE_COOLIFY_REALTIME_PORTS=true."
+}
+$cfg["COOLIFY_REALTIME_DOMAIN"] = $coolifyRealtimeDomain
+
+$coolifySshPublicKey = if ($cfg.ContainsKey("COOLIFY_SSH_PUBLIC_KEY") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["COOLIFY_SSH_PUBLIC_KEY"])) { [string]$cfg["COOLIFY_SSH_PUBLIC_KEY"] } else { [string]$ssh }
+if ($coolifySshPublicKey -notmatch '^ssh-(ed25519|rsa|ecdsa-[^\s]+)\s') { throw "Invalid COOLIFY_SSH_PUBLIC_KEY format." }
+$cfg["COOLIFY_SSH_PUBLIC_KEY"] = $coolifySshPublicKey
 
 foreach ($v in @(
     [string]$cfg["COOLIFY_ROOT_USERNAME"],
@@ -120,10 +164,12 @@ foreach ($v in @(
     [string]$cfg["USER_PASSWORDS_ENCRYPTION_PASSWORD"],
     [string]$cfg["PRIMARY_SUDO_USER"],
     [string]$cfg["SECONDARY_SUDO_USER"],
+    [string]$cfg["COOLIFY_SUDO_NOPASSWD_USER"],
     [string]$cfg["CREATE_USERS"],
     [string]$cfg["SUDO_USERS"],
     [string]$cfg["DOCKER_USERS"],
     [string]$cfg["COOLIFY_GROUP_USERS"],
+    [string]$cfg["COOLIFY_SSH_PUBLIC_KEY"],
     [string]$cfg["BOOTSTRAP_REPO_URL"],
     [string]$cfg["BOOTSTRAP_REPO_REF"]
 )) {
@@ -132,8 +178,10 @@ foreach ($v in @(
 
 foreach ($v in @(
     [string]$ssh,
+    [string]$cfg["COOLIFY_SSH_PUBLIC_KEY"],
     [string]$cfg["TIMEZONE"],
     [string]$cfg["COOLIFY_PUBLIC_DOMAIN"],
+    [string]$cfg["COOLIFY_REALTIME_DOMAIN"],
     [string]$cfg["COOLIFY_ROOT_USERNAME"],
     [string]$cfg["COOLIFY_ROOT_USER_EMAIL"],
     [string]$cfg["COOLIFY_ROOT_USER_PASSWORD"],
@@ -150,13 +198,16 @@ $map = [ordered]@{
     "SSH_PORT_HERE" = [string]$cfg["SSH_PORT"]
     "PRIMARY_SUDO_USER_HERE" = [string]$cfg["PRIMARY_SUDO_USER"]
     "SECONDARY_SUDO_USER_HERE" = [string]$cfg["SECONDARY_SUDO_USER"]
+    "COOLIFY_SUDO_NOPASSWD_USER_HERE" = [string]$cfg["COOLIFY_SUDO_NOPASSWD_USER"]
+    "COOLIFY_SSH_PUBLIC_KEY_HERE" = [string]$cfg["COOLIFY_SSH_PUBLIC_KEY"]
     "SSH_PUBLIC_KEY_HERE" = [string]$ssh
     "SSH_KEY_ROTATE_HERE" = [string]$sshKeyRotate
     "CREATE_USERS_HERE" = [string]$cfg["CREATE_USERS"]
     "SUDO_USERS_HERE" = [string]$cfg["SUDO_USERS"]
     "DOCKER_USERS_HERE" = [string]$cfg["DOCKER_USERS"]
     "COOLIFY_GROUP_USERS_HERE" = [string]$cfg["COOLIFY_GROUP_USERS"]
-    "ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS_HERE" = [string]$allowPublicCoolifyRealtimePorts
+    "CLOSE_COOLIFY_REALTIME_PORTS_HERE" = [string]$cfg["CLOSE_COOLIFY_REALTIME_PORTS"]
+    "COOLIFY_REALTIME_DOMAIN_HERE" = [string]$cfg["COOLIFY_REALTIME_DOMAIN"]
     "COOLIFY_PUBLIC_DOMAIN_HERE" = [string]$cfg["COOLIFY_PUBLIC_DOMAIN"]
     "COOLIFY_ROOT_USERNAME_HERE" = [string]$cfg["COOLIFY_ROOT_USERNAME"]
     "COOLIFY_ROOT_USER_EMAIL_HERE" = [string]$cfg["COOLIFY_ROOT_USER_EMAIL"]
