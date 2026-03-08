@@ -22,6 +22,13 @@ Do not include:
 ```bash
 bash -n scripts/*.sh
 shellcheck scripts/*.sh
+python3 - <<'PY'
+import yaml
+for p in ("templates/vps-init.template.yml", "docs/_config.yml"):
+    with open(p, "r", encoding="utf-8") as f:
+        yaml.safe_load(f)
+print("YAML OK")
+PY
 bash scripts/prepare-vps-coolify-init.sh --help
 bash scripts/generate-secrets.sh --help
 ```
@@ -41,6 +48,12 @@ if ($parseErrors.Count -gt 0) { $parseErrors | ForEach-Object { Write-Error $_ }
 ```
 
 Run the same block in `pwsh` (PowerShell 7) or `powershell` (Windows PowerShell 5.x).
+
+If you have a provisioned test VPS, also run server-side state verification:
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/verify-bootstrap-state.sh /etc/vps-coolify-bootstrap/bootstrap.env
+```
 
 4. Update docs when behavior changes.
 5. Open PR with:

@@ -8,7 +8,7 @@ users:
     groups: [sudo]
     shell: /bin/bash
     sudo: ["ALL=(ALL:ALL) NOPASSWD:ALL"]
-    DEVOPS_SSH_AUTHORIZED_KEYS_BLOCK_HERE
+    # DEVOPS_SSH_AUTHORIZED_KEYS_BLOCK_HERE
 
   - name: COOLIFY_SUDO_NOPASSWD_USER_HERE
     groups: [sudo]

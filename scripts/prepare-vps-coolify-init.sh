@@ -127,9 +127,7 @@ csv_contains_value() {
   local csv="$1"
   local needle="$2"
   local item=""
-  IFS=',' read -r -a _items <<< "$csv"
-  for item in "${_items[@]}"; do
-    item="$(trim "$item")"
+  for item in $(split_user_list_to_lines "$csv"); do
     [[ "$item" == "$needle" ]] && return 0
   done
   return 1
@@ -305,7 +303,7 @@ fi
 
 devops_ssh_authorized_keys_block=""
 if [[ -n "$ssh_public_key" ]]; then
-  devops_ssh_authorized_keys_block=$'ssh_authorized_keys:\n      - '"$ssh_public_key"
+  devops_ssh_authorized_keys_block=$'    ssh_authorized_keys:\n      - '"$ssh_public_key"
 else
   echo "WARNING: SSH_PUBLIC_KEY and SSH_PUBLIC_KEY_PATH are empty or placeholder values." >&2
   echo "WARNING: Generated VPS init YML will not include ssh_authorized_keys for DEVOPS_USER." >&2
@@ -360,7 +358,7 @@ content="${content//TIMEZONE_HERE/${cfg[TIMEZONE]}}"
 content="${content//SSH_PORT_HERE/${cfg[SSH_PORT]}}"
 content="${content//DEVOPS_USER_HERE/${cfg[DEVOPS_USER]}}"
 content="${content//COOLIFY_SUDO_NOPASSWD_USER_HERE/${cfg[COOLIFY_SUDO_NOPASSWD_USER]}}"
-content="${content//DEVOPS_SSH_AUTHORIZED_KEYS_BLOCK_HERE/$devops_ssh_authorized_keys_block}"
+content="${content//    # DEVOPS_SSH_AUTHORIZED_KEYS_BLOCK_HERE/$devops_ssh_authorized_keys_block}"
 content="${content//BOOTSTRAP_SSH_PUBLIC_KEY_HERE/$ssh_public_key}"
 content="${content//SSH_KEY_ROTATE_HERE/$ssh_key_rotate}"
 content="${content//ADDITIONAL_SUDO_USERS_HERE/${cfg[ADDITIONAL_SUDO_USERS]}}"

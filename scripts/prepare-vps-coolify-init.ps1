@@ -120,7 +120,7 @@ if (-not [string]::IsNullOrWhiteSpace($ssh) -and $ssh -notmatch '^ssh-(ed25519|r
 
 $devopsSshAuthorizedKeysBlock = ""
 if (-not [string]::IsNullOrWhiteSpace($ssh)) {
-    $devopsSshAuthorizedKeysBlock = "ssh_authorized_keys:`n      - $ssh"
+    $devopsSshAuthorizedKeysBlock = "    ssh_authorized_keys:`n      - $ssh"
 } else {
     Write-Warning "SSH_PUBLIC_KEY and SSH_PUBLIC_KEY_PATH are empty or placeholder values."
     Write-Warning "Generated VPS init YML will not include ssh_authorized_keys for DEVOPS_USER."
@@ -189,7 +189,6 @@ $map = [ordered]@{
     "SSH_PORT_HERE" = [string]$cfg["SSH_PORT"]
     "DEVOPS_USER_HERE" = [string]$cfg["DEVOPS_USER"]
     "COOLIFY_SUDO_NOPASSWD_USER_HERE" = [string]$cfg["COOLIFY_SUDO_NOPASSWD_USER"]
-    "DEVOPS_SSH_AUTHORIZED_KEYS_BLOCK_HERE" = [string]$devopsSshAuthorizedKeysBlock
     "BOOTSTRAP_SSH_PUBLIC_KEY_HERE" = [string]$ssh
     "SSH_KEY_ROTATE_HERE" = [string]$sshKeyRotate
     "ADDITIONAL_SUDO_USERS_HERE" = [string]$cfg["ADDITIONAL_SUDO_USERS"]
@@ -204,11 +203,15 @@ $map = [ordered]@{
     "BOOTSTRAP_REPO_REF_HERE" = [string]$cfg["BOOTSTRAP_REPO_REF"]
 }
 foreach ($k in $map.Keys) { $content = $content.Replace($k, $map[$k]) }
+$content = $content.Replace("    # DEVOPS_SSH_AUTHORIZED_KEYS_BLOCK_HERE", $devopsSshAuthorizedKeysBlock)
 
 foreach ($token in $map.Keys) {
     if ($content.Contains($token)) {
         throw "Unreplaced placeholder: $token"
     }
+}
+if ($content.Contains("DEVOPS_SSH_AUTHORIZED_KEYS_BLOCK_HERE")) {
+    throw "Unreplaced placeholder: DEVOPS_SSH_AUTHORIZED_KEYS_BLOCK_HERE"
 }
 
 if ((Test-Path -LiteralPath $outputPath -PathType Leaf) -and -not $Overwrite) {
