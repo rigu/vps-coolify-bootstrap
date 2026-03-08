@@ -8,10 +8,16 @@ Generate/refresh secret values in bootstrap env file.
 
 Usage:
   scripts/generate-secrets.sh [--env-file <path>] [--force-password] [--force-encryption-password] [--force-ssh-key]
+
+Behavior:
+  - If env file is missing, script creates parent directory and copies env/bootstrap.env.example.
 USAGE
 }
 
 env_file="bootstrap-artifacts/bootstrap.env"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "$script_dir/.." && pwd)"
+env_example_file="$repo_root/env/bootstrap.env.example"
 force_password=0
 force_encryption_password=0
 force_ssh_key=0
@@ -46,10 +52,27 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ ! -f "$env_file" ]; then
-  echo "ERROR: Env file not found: $env_file" >&2
-  echo "Create it first from env/bootstrap.env.example (for example in bootstrap-artifacts/bootstrap.env)" >&2
+if [[ "$env_file" != /* ]]; then
+  env_file="$repo_root/$env_file"
+fi
+
+if [[ -d "$env_file" ]]; then
+  echo "ERROR: --env-file points to a directory, expected a file: $env_file" >&2
   exit 1
+fi
+
+if [[ ! -f "$env_example_file" ]]; then
+  echo "ERROR: missing template env file: $env_example_file" >&2
+  exit 1
+fi
+
+env_dir="$(dirname "$env_file")"
+mkdir -p "$env_dir"
+
+if [[ ! -f "$env_file" ]]; then
+  cp "$env_example_file" "$env_file"
+  chmod 600 "$env_file"
+  echo "Created: $env_file (from $env_example_file)"
 fi
 
 if ! command -v openssl >/dev/null 2>&1; then
@@ -160,7 +183,6 @@ trap 'rm -f "$tmp"' EXIT
 saw_coolify_password=0
 saw_encryption_password=0
 saw_ssh_public_key=0
-saw_coolify_ssh_public_key=0
 saw_ssh_public_key_path=0
 while IFS= read -r line || [ -n "$line" ]; do
   case "$line" in
@@ -183,19 +205,6 @@ while IFS= read -r line || [ -n "$line" ]; do
       if [ "$force_ssh_key" -eq 1 ] || [ -z "$current" ] || [[ "$current" == *CHANGE_ME* ]]; then
         if [ "$has_detected_ssh_key" -eq 1 ]; then
           echo "SSH_PUBLIC_KEY=$(format_env_value "$detected_ssh_key")" >> "$tmp"
-        else
-          echo "$line" >> "$tmp"
-        fi
-      else
-        echo "$line" >> "$tmp"
-      fi
-      ;;
-    COOLIFY_SSH_PUBLIC_KEY=*)
-      saw_coolify_ssh_public_key=1
-      current="${line#*=}"
-      if [ "$force_ssh_key" -eq 1 ] || [ -z "$current" ] || [[ "$current" == *CHANGE_ME* ]]; then
-        if [ "$has_detected_ssh_key" -eq 1 ]; then
-          echo "COOLIFY_SSH_PUBLIC_KEY=$(format_env_value "$detected_ssh_key")" >> "$tmp"
         else
           echo "$line" >> "$tmp"
         fi
@@ -238,9 +247,6 @@ fi
 if [ "$saw_ssh_public_key" -eq 0 ] && [ "$has_detected_ssh_key" -eq 1 ]; then
   echo "SSH_PUBLIC_KEY=$(format_env_value "$detected_ssh_key")" >> "$tmp"
 fi
-if [ "$saw_coolify_ssh_public_key" -eq 0 ] && [ "$has_detected_ssh_key" -eq 1 ]; then
-  echo "COOLIFY_SSH_PUBLIC_KEY=$(format_env_value "$detected_ssh_key")" >> "$tmp"
-fi
 if [ "$saw_ssh_public_key_path" -eq 0 ] && [ "$has_detected_ssh_key" -eq 1 ]; then
   echo "SSH_PUBLIC_KEY_PATH=$(format_env_value "$detected_ssh_key_path")" >> "$tmp"
 fi
@@ -249,7 +255,7 @@ mv "$tmp" "$env_file"
 chmod 600 "$env_file"
 echo "Updated: $env_file"
 if [ "$has_detected_ssh_key" -eq 1 ]; then
-  echo "SSH_PUBLIC_KEY, COOLIFY_SSH_PUBLIC_KEY, and SSH_PUBLIC_KEY_PATH auto-detected and applied when needed."
+  echo "SSH_PUBLIC_KEY and SSH_PUBLIC_KEY_PATH auto-detected and applied when needed."
 else
-  echo "No local SSH public key detected; set SSH_PUBLIC_KEY/COOLIFY_SSH_PUBLIC_KEY or SSH_PUBLIC_KEY_PATH manually."
+  echo "No local SSH public key detected; set SSH_PUBLIC_KEY or SSH_PUBLIC_KEY_PATH manually."
 fi

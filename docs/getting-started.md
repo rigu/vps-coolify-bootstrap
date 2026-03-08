@@ -49,8 +49,8 @@ after running PowerShell scripts.
 `generate-secrets.*` performs **AUTO-DETECTED** SSH key lookup on your local machine.
 It checks common public key files in `~/.ssh` (for example `id_ed25519.pub`,
 `id_ecdsa.pub`, `id_rsa.pub`, then other `*.pub`) and fills both
-`SSH_PUBLIC_KEY`, `COOLIFY_SSH_PUBLIC_KEY`, and `SSH_PUBLIC_KEY_PATH` when current values are empty or still `CHANGE_ME`.
-If no valid key is found, set `SSH_PUBLIC_KEY` / `COOLIFY_SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_PATH` manually.
+`SSH_PUBLIC_KEY` and `SSH_PUBLIC_KEY_PATH` when current values are empty or still `CHANGE_ME`.
+If no valid key is found, set `SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_PATH` manually.
 
 ## Bootstrap env quick reference
 
@@ -61,7 +61,7 @@ For full behavior details and replay implications, see:
 
 | Variable | Runtime behavior | Required to set? |
 |---|---|---|
-| `PRIMARY_SUDO_USER` | If empty, resolved from the first `SUDO_USERS` value; falls back to `deploy` | NO |
+| `PRIMARY_SUDO_USER` | If empty, resolved from the first `SUDO_USERS` value; falls back to `devops` | NO |
 | `SSH_KEY_ROTATE` | Default `0`: append SSH key; `1`: replace `authorized_keys` | NO |
 | `CLOSE_COOLIFY_REALTIME_PORTS` | Default `false`: keep public `6001/6002`; set `true` to enforce `DOCKER-USER` guards and close public ingress | NO |
 
@@ -80,7 +80,6 @@ For full behavior details and replay implications, see:
 |---|---|---|
 | `SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_PATH` | Required for SSH access; **AUTO-DETECTED** if a valid key exists on your machine, otherwise set manually | YES |
 | `COOLIFY_SUDO_NOPASSWD_USER` | Dedicated user for Coolify SSH operations; auto-managed, forced into user/group lists, and granted passwordless sudo | NO |
-| `COOLIFY_SSH_PUBLIC_KEY` | SSH key installed specifically for `COOLIFY_SUDO_NOPASSWD_USER`; defaults to `SSH_PUBLIC_KEY` when empty | NO |
 | `COOLIFY_REALTIME_DOMAIN` | Dedicated realtime host. If set, bootstrap writes `PUSHER_HOST`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https` in Coolify `.env`; if empty, bootstrap removes those keys. Required when `CLOSE_COOLIFY_REALTIME_PORTS=true` | NO (YES when closing `6001/6002`) |
 | `SSH_PORT` | Applied in SSH config and service restart flow | NO |
 | `SECONDARY_SUDO_USER` | Validated against `CREATE_USERS` | NO |

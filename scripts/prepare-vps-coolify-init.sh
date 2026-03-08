@@ -286,14 +286,7 @@ if [[ "$ssh_public_key" == *$'\n'* ]] || [[ ! "$ssh_public_key" =~ ^ssh-(ed25519
   exit 1
 fi
 
-coolify_ssh_public_key="${cfg[COOLIFY_SSH_PUBLIC_KEY]:-$ssh_public_key}"
-if [[ -n "$coolify_ssh_public_key" ]] && [[ ! "$coolify_ssh_public_key" =~ ^ssh-(ed25519|rsa|ecdsa-[^[:space:]]+)[[:space:]] ]]; then
-  echo "ERROR: Invalid COOLIFY_SSH_PUBLIC_KEY format." >&2
-  exit 1
-fi
-cfg[COOLIFY_SSH_PUBLIC_KEY]="$coolify_ssh_public_key"
-
-for v in "$ssh_public_key" "$coolify_ssh_public_key" "${cfg[TIMEZONE]}" "${cfg[COOLIFY_PUBLIC_DOMAIN]}" "${cfg[COOLIFY_REALTIME_DOMAIN]}" "${cfg[COOLIFY_ROOT_USERNAME]}" "${cfg[COOLIFY_ROOT_USER_EMAIL]}" "${cfg[COOLIFY_ROOT_USER_PASSWORD]}" "${cfg[BOOTSTRAP_REPO_URL]}" "${cfg[BOOTSTRAP_REPO_REF]}"; do
+for v in "$ssh_public_key" "${cfg[TIMEZONE]}" "${cfg[COOLIFY_PUBLIC_DOMAIN]}" "${cfg[COOLIFY_REALTIME_DOMAIN]}" "${cfg[COOLIFY_ROOT_USERNAME]}" "${cfg[COOLIFY_ROOT_USER_EMAIL]}" "${cfg[COOLIFY_ROOT_USER_PASSWORD]}" "${cfg[BOOTSTRAP_REPO_URL]}" "${cfg[BOOTSTRAP_REPO_REF]}"; do
   if [[ "$v" == *"'"* ]]; then
     echo "ERROR: Values used in template must not contain single quotes (')." >&2
     exit 1
@@ -317,7 +310,7 @@ if [[ "$ssh_key_rotate" != "0" && "$ssh_key_rotate" != "1" ]]; then
   exit 1
 fi
 
-for v in "${cfg[COOLIFY_PUBLIC_DOMAIN]}" "${cfg[COOLIFY_ROOT_USERNAME]}" "${cfg[COOLIFY_ROOT_USER_EMAIL]}" "$coolify_password" "$user_passwords_encryption_password" "${cfg[PRIMARY_SUDO_USER]}" "${cfg[SECONDARY_SUDO_USER]}" "${cfg[COOLIFY_SUDO_NOPASSWD_USER]}" "${cfg[CREATE_USERS]}" "${cfg[SUDO_USERS]}" "${cfg[DOCKER_USERS]}" "${cfg[COOLIFY_GROUP_USERS]}" "${cfg[BOOTSTRAP_REPO_URL]}" "${cfg[BOOTSTRAP_REPO_REF]}" "${cfg[COOLIFY_SSH_PUBLIC_KEY]}"; do
+for v in "${cfg[COOLIFY_PUBLIC_DOMAIN]}" "${cfg[COOLIFY_ROOT_USERNAME]}" "${cfg[COOLIFY_ROOT_USER_EMAIL]}" "$coolify_password" "$user_passwords_encryption_password" "${cfg[PRIMARY_SUDO_USER]}" "${cfg[SECONDARY_SUDO_USER]}" "${cfg[COOLIFY_SUDO_NOPASSWD_USER]}" "${cfg[CREATE_USERS]}" "${cfg[SUDO_USERS]}" "${cfg[DOCKER_USERS]}" "${cfg[COOLIFY_GROUP_USERS]}" "${cfg[BOOTSTRAP_REPO_URL]}" "${cfg[BOOTSTRAP_REPO_REF]}"; do
   if [[ "$v" == *"CHANGE_ME"* ]]; then
     echo "ERROR: Replace CHANGE_ME values in $env_file" >&2
     exit 1
@@ -342,7 +335,6 @@ content="${content//SSH_PORT_HERE/${cfg[SSH_PORT]}}"
 content="${content//PRIMARY_SUDO_USER_HERE/${cfg[PRIMARY_SUDO_USER]}}"
 content="${content//SECONDARY_SUDO_USER_HERE/${cfg[SECONDARY_SUDO_USER]}}"
 content="${content//COOLIFY_SUDO_NOPASSWD_USER_HERE/${cfg[COOLIFY_SUDO_NOPASSWD_USER]}}"
-content="${content//COOLIFY_SSH_PUBLIC_KEY_HERE/${cfg[COOLIFY_SSH_PUBLIC_KEY]}}"
 content="${content//SSH_PUBLIC_KEY_HERE/$ssh_public_key}"
 content="${content//SSH_KEY_ROTATE_HERE/$ssh_key_rotate}"
 content="${content//CREATE_USERS_HERE/${cfg[CREATE_USERS]}}"
@@ -359,7 +351,7 @@ content="${content//USER_PASSWORDS_ENCRYPTION_PASSWORD_HERE/$user_passwords_encr
 content="${content//BOOTSTRAP_REPO_URL_HERE/${cfg[BOOTSTRAP_REPO_URL]}}"
 content="${content//BOOTSTRAP_REPO_REF_HERE/${cfg[BOOTSTRAP_REPO_REF]}}"
 
-for token in TIMEZONE_HERE SSH_PORT_HERE PRIMARY_SUDO_USER_HERE SECONDARY_SUDO_USER_HERE COOLIFY_SUDO_NOPASSWD_USER_HERE SSH_PUBLIC_KEY_HERE COOLIFY_SSH_PUBLIC_KEY_HERE SSH_KEY_ROTATE_HERE CREATE_USERS_HERE SUDO_USERS_HERE DOCKER_USERS_HERE COOLIFY_GROUP_USERS_HERE CLOSE_COOLIFY_REALTIME_PORTS_HERE COOLIFY_REALTIME_DOMAIN_HERE COOLIFY_PUBLIC_DOMAIN_HERE COOLIFY_ROOT_USERNAME_HERE COOLIFY_ROOT_USER_EMAIL_HERE COOLIFY_ROOT_USER_PASSWORD_HERE USER_PASSWORDS_ENCRYPTION_PASSWORD_HERE BOOTSTRAP_REPO_URL_HERE BOOTSTRAP_REPO_REF_HERE; do
+for token in TIMEZONE_HERE SSH_PORT_HERE PRIMARY_SUDO_USER_HERE SECONDARY_SUDO_USER_HERE COOLIFY_SUDO_NOPASSWD_USER_HERE SSH_PUBLIC_KEY_HERE SSH_KEY_ROTATE_HERE CREATE_USERS_HERE SUDO_USERS_HERE DOCKER_USERS_HERE COOLIFY_GROUP_USERS_HERE CLOSE_COOLIFY_REALTIME_PORTS_HERE COOLIFY_REALTIME_DOMAIN_HERE COOLIFY_PUBLIC_DOMAIN_HERE COOLIFY_ROOT_USERNAME_HERE COOLIFY_ROOT_USER_EMAIL_HERE COOLIFY_ROOT_USER_PASSWORD_HERE USER_PASSWORDS_ENCRYPTION_PASSWORD_HERE BOOTSTRAP_REPO_URL_HERE BOOTSTRAP_REPO_REF_HERE; do
   if grep -Fq "$token" <<< "$content"; then
     echo "ERROR: Unreplaced placeholder: $token" >&2
     exit 1

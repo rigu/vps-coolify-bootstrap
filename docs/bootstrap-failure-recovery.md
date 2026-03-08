@@ -55,7 +55,7 @@ Typical root causes:
 # Extract PRIMARY/SECONDARY sudo users from server-side bootstrap env.
 primary_user="$(sudo sed -n 's/^PRIMARY_SUDO_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
 secondary_user="$(sudo sed -n 's/^SECONDARY_SUDO_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
-primary_user="${primary_user:-deploy}"
+primary_user="${primary_user:-devops}"
 secondary_user="${secondary_user:-coolify}"
 id "$primary_user" || true
 id "$secondary_user" || true
@@ -97,7 +97,7 @@ Then verify required keys on server:
 
 ```bash
 sudo awk -F= '
-/^(SSH_PORT|PRIMARY_SUDO_USER|SECONDARY_SUDO_USER|COOLIFY_SUDO_NOPASSWD_USER|SSH_PUBLIC_KEY|COOLIFY_SSH_PUBLIC_KEY|CREATE_USERS|SUDO_USERS|DOCKER_USERS|COOLIFY_GROUP_USERS|COOLIFY_PUBLIC_DOMAIN|CLOSE_COOLIFY_REALTIME_PORTS|COOLIFY_REALTIME_DOMAIN|COOLIFY_ROOT_USERNAME|COOLIFY_ROOT_USER_EMAIL|COOLIFY_ROOT_USER_PASSWORD|USER_PASSWORDS_ENCRYPTION_PASSWORD)=/ {
+/^(SSH_PORT|PRIMARY_SUDO_USER|SECONDARY_SUDO_USER|COOLIFY_SUDO_NOPASSWD_USER|SSH_PUBLIC_KEY|CREATE_USERS|SUDO_USERS|DOCKER_USERS|COOLIFY_GROUP_USERS|COOLIFY_PUBLIC_DOMAIN|CLOSE_COOLIFY_REALTIME_PORTS|COOLIFY_REALTIME_DOMAIN|COOLIFY_ROOT_USERNAME|COOLIFY_ROOT_USER_EMAIL|COOLIFY_ROOT_USER_PASSWORD|USER_PASSWORDS_ENCRYPTION_PASSWORD)=/ {
   print $1"=<set>"
 }
 ' /etc/vps-coolify-bootstrap/bootstrap.env
@@ -124,7 +124,7 @@ sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-
 ```
 
 This script is idempotent and executes the following actions in order:
-- create/repair users and SSH keys (including `COOLIFY_SUDO_NOPASSWD_USER` with `COOLIFY_SSH_PUBLIC_KEY`)
+- create/repair users and SSH keys (including `COOLIFY_SUDO_NOPASSWD_USER`)
 - during this on-host replay, set passwords for `CREATE_USERS` accounts that are currently locked/unset (not a local pre-generation step)
 - store generated credentials encrypted in `/etc/vps-coolify-bootstrap/user-passwords.enc`
 - sync `AllowUsers` from `CREATE_USERS`
@@ -150,7 +150,7 @@ sudo docker ps --format 'table {{.Names}}\t{{.Status}}'
 sudo iptables -S DOCKER-USER | grep -E '6001|6002' || true
 sudo ip6tables -S DOCKER-USER 2>/dev/null | grep -E '6001|6002' || true
 primary_user="$(sudo sed -n 's/^PRIMARY_SUDO_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
-primary_user="${primary_user:-deploy}"
+primary_user="${primary_user:-devops}"
 id "$primary_user" || true
 getent group sudo docker coolify
 sudo bash /opt/vps-coolify-bootstrap/scripts/verify-bootstrap-state.sh /etc/vps-coolify-bootstrap/bootstrap.env

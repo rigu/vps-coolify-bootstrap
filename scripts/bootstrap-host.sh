@@ -82,12 +82,6 @@ if ! is_valid_unix_username "$COOLIFY_SUDO_NOPASSWD_USER"; then
   exit 1
 fi
 
-COOLIFY_SSH_PUBLIC_KEY="${COOLIFY_SSH_PUBLIC_KEY:-$SSH_PUBLIC_KEY}"
-if [[ -n "$COOLIFY_SSH_PUBLIC_KEY" ]] && [[ ! "$COOLIFY_SSH_PUBLIC_KEY" =~ ^ssh-(ed25519|rsa|ecdsa-[^[:space:]]+)[[:space:]] ]]; then
-  echo "ERROR: invalid COOLIFY_SSH_PUBLIC_KEY format" >&2
-  exit 1
-fi
-
 # Ensure the dedicated Coolify SSH/sudo user is always managed.
 CREATE_USERS="$(csv_append_unique "$CREATE_USERS" "$COOLIFY_SUDO_NOPASSWD_USER")"
 SUDO_USERS="$(csv_append_unique "$SUDO_USERS" "$COOLIFY_SUDO_NOPASSWD_USER")"
@@ -123,7 +117,7 @@ SECONDARY_SUDO_USER="${SECONDARY_SUDO_USER:-}"
 if [[ -z "$PRIMARY_SUDO_USER" ]]; then
   PRIMARY_SUDO_USER="$(split_csv_to_lines "$SUDO_USERS" | head -n1 || true)"
 fi
-PRIMARY_SUDO_USER="${PRIMARY_SUDO_USER:-deploy}"
+PRIMARY_SUDO_USER="${PRIMARY_SUDO_USER:-devops}"
 
 if [[ -z "$PRIMARY_SUDO_USER" ]]; then
   echo "ERROR: PRIMARY_SUDO_USER resolved to empty value" >&2
@@ -472,7 +466,7 @@ for user in $(split_csv_to_lines "$CREATE_USERS"); do
   ensure_user_exists "$user"
   ensure_ssh_key "$user" "$SSH_PUBLIC_KEY"
 done
-ensure_ssh_key "$COOLIFY_SUDO_NOPASSWD_USER" "$COOLIFY_SSH_PUBLIC_KEY"
+ensure_ssh_key "$COOLIFY_SUDO_NOPASSWD_USER" "$SSH_PUBLIC_KEY"
 
 bash "$script_dir/ensure-user-passwords.sh" "$ENV_FILE"
 sync_sshd_allowusers

@@ -18,7 +18,7 @@ current task (user policy, replay, hardening, updates, monitoring).
 - `DOCKER_USERS`
 - `COOLIFY_GROUP_USERS`
 
-Default values: `deploy,coolify`
+Default values: `devops,coolify`
 
 Bootstrap also uses:
 
@@ -36,13 +36,13 @@ and usernames must match `^[a-z_][a-z0-9_-]*[$]?$`.
 Example:
 
 ```env
-PRIMARY_SUDO_USER=deploy
+PRIMARY_SUDO_USER=devops
 SECONDARY_SUDO_USER=coolify
 COOLIFY_SUDO_NOPASSWD_USER=coolify
-CREATE_USERS=deploy,coolify,admin,ops,dev
-SUDO_USERS=deploy,coolify,admin,ops,dev
-DOCKER_USERS=deploy,coolify,ops
-COOLIFY_GROUP_USERS=deploy,coolify,ops
+CREATE_USERS=devops,coolify,admin,ops,dev
+SUDO_USERS=devops,coolify,admin,ops,dev
+DOCKER_USERS=devops,coolify,ops
+COOLIFY_GROUP_USERS=devops,coolify,ops
 ```
 
 Re-render the VPS-Coolify init file or replay bootstrap to apply changes.
@@ -139,7 +139,7 @@ variables beyond the quick reference in Getting Started.
 
 - `PRIMARY_SUDO_USER`
   - When: bootstrap/replay runtime, before sudo policy is written
-  - How: if empty, resolved from first `SUDO_USERS` entry; fallback `deploy`
+  - How: if empty, resolved from first `SUDO_USERS` entry; fallback `devops`
   - Must change: NO
 - `COOLIFY_SUDO_NOPASSWD_USER`
   - When: bootstrap/replay runtime
@@ -177,12 +177,8 @@ variables beyond the quick reference in Getting Started.
 
 - `SSH_PUBLIC_KEY` / `SSH_PUBLIC_KEY_PATH`
   - When: local preparation step and host bootstrap key installation
-  - How: **AUTO-DETECTED** if a valid key exists on your machine (`~/.ssh/*.pub`); `generate-secrets.*` fills `SSH_PUBLIC_KEY`, `COOLIFY_SSH_PUBLIC_KEY`, and `SSH_PUBLIC_KEY_PATH` when placeholders are present
+  - How: **AUTO-DETECTED** if a valid key exists on your machine (`~/.ssh/*.pub`); `generate-secrets.*` fills `SSH_PUBLIC_KEY` and `SSH_PUBLIC_KEY_PATH` when placeholders are present
   - Must change: YES (valid key required)
-- `COOLIFY_SSH_PUBLIC_KEY`
-  - When: host bootstrap key installation for `COOLIFY_SUDO_NOPASSWD_USER`
-  - How: defaults to `SSH_PUBLIC_KEY` when empty; can be set to a dedicated key used only by Coolify-managed SSH user
-  - Must change: NO
 - `COOLIFY_REALTIME_DOMAIN`
   - When: runtime when value is set; required when `CLOSE_COOLIFY_REALTIME_PORTS=true`
   - How: written as `PUSHER_HOST`, `PUSHER_PORT=443`, and `PUSHER_SCHEME=https` in `/data/coolify/source/.env`; removed when empty

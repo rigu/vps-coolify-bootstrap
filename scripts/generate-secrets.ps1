@@ -11,8 +11,24 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $envPath = if ([System.IO.Path]::IsPathRooted($EnvFile)) { $EnvFile } else { Join-Path $repoRoot $EnvFile }
+$envExamplePath = Join-Path $repoRoot "env/bootstrap.env.example"
+
+if (-not (Test-Path -LiteralPath $envExamplePath -PathType Leaf)) {
+    throw "Missing template env file: $envExamplePath"
+}
+
+if (Test-Path -LiteralPath $envPath -PathType Container) {
+    throw "--env-file points to a directory, expected a file: $envPath"
+}
+
+$envDir = Split-Path -Parent $envPath
+if (-not [string]::IsNullOrWhiteSpace($envDir) -and -not (Test-Path -LiteralPath $envDir -PathType Container)) {
+    New-Item -ItemType Directory -Path $envDir -Force | Out-Null
+}
+
 if (-not (Test-Path -LiteralPath $envPath -PathType Leaf)) {
-    throw "Env file not found: $envPath`nCreate it first from env/bootstrap.env.example (for example in bootstrap-artifacts/bootstrap.env)"
+    Copy-Item -LiteralPath $envExamplePath -Destination $envPath
+    Write-Host "Created: $envPath (from $envExamplePath)"
 }
 
 function New-RandomSecret {
@@ -88,7 +104,6 @@ $detectedSshKeyPath = if ($hasDetectedSshKey) { [string]$detectedSshEntry.Path }
 $sawCoolifyPassword = $false
 $sawEncryptionPassword = $false
 $sawSshPublicKey = $false
-$sawCoolifySshPublicKey = $false
 $sawSshPublicKeyPath = $false
 $newLines = New-Object System.Collections.Generic.List[string]
 
@@ -111,18 +126,6 @@ foreach ($line in Get-Content -LiteralPath $envPath) {
         $shouldReplace = $ForceSshKey -or [string]::IsNullOrWhiteSpace($current) -or $current -match "CHANGE_ME"
         if ($shouldReplace -and $hasDetectedSshKey) {
             $newLines.Add("SSH_PUBLIC_KEY=$(Format-EnvValue -Value $detectedSshKey)")
-        } else {
-            $newLines.Add($line)
-        }
-        continue
-    }
-
-    if ($line.StartsWith("COOLIFY_SSH_PUBLIC_KEY=")) {
-        $sawCoolifySshPublicKey = $true
-        $current = $line.Substring("COOLIFY_SSH_PUBLIC_KEY=".Length)
-        $shouldReplace = $ForceSshKey -or [string]::IsNullOrWhiteSpace($current) -or $current -match "CHANGE_ME"
-        if ($shouldReplace -and $hasDetectedSshKey) {
-            $newLines.Add("COOLIFY_SSH_PUBLIC_KEY=$(Format-EnvValue -Value $detectedSshKey)")
         } else {
             $newLines.Add($line)
         }
@@ -165,9 +168,6 @@ if (-not $sawEncryptionPassword) {
 if (-not $sawSshPublicKey -and $hasDetectedSshKey) {
     $newLines.Add("SSH_PUBLIC_KEY=$(Format-EnvValue -Value $detectedSshKey)")
 }
-if (-not $sawCoolifySshPublicKey -and $hasDetectedSshKey) {
-    $newLines.Add("COOLIFY_SSH_PUBLIC_KEY=$(Format-EnvValue -Value $detectedSshKey)")
-}
 if (-not $sawSshPublicKeyPath -and $hasDetectedSshKey) {
     $newLines.Add("SSH_PUBLIC_KEY_PATH=$(Format-EnvValue -Value $detectedSshKeyPath)")
 }
@@ -178,7 +178,7 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 Write-Host "Updated: $envPath"
 Write-Host "WARNING: Env file contains secrets. On shared Windows systems, verify ACLs (for example with icacls)."
 if ($hasDetectedSshKey) {
-    Write-Host "SSH_PUBLIC_KEY, COOLIFY_SSH_PUBLIC_KEY, and SSH_PUBLIC_KEY_PATH auto-detected and applied when needed."
+    Write-Host "SSH_PUBLIC_KEY and SSH_PUBLIC_KEY_PATH auto-detected and applied when needed."
 } else {
-    Write-Host "No local SSH public key detected; set SSH_PUBLIC_KEY/COOLIFY_SSH_PUBLIC_KEY or SSH_PUBLIC_KEY_PATH manually."
+    Write-Host "No local SSH public key detected; set SSH_PUBLIC_KEY or SSH_PUBLIC_KEY_PATH manually."
 }

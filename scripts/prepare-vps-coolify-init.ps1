@@ -152,10 +152,6 @@ if ($closeCoolifyRealtimePorts -eq "true" -and [string]::IsNullOrWhiteSpace($coo
 }
 $cfg["COOLIFY_REALTIME_DOMAIN"] = $coolifyRealtimeDomain
 
-$coolifySshPublicKey = if ($cfg.ContainsKey("COOLIFY_SSH_PUBLIC_KEY") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["COOLIFY_SSH_PUBLIC_KEY"])) { [string]$cfg["COOLIFY_SSH_PUBLIC_KEY"] } else { [string]$ssh }
-if ($coolifySshPublicKey -notmatch '^ssh-(ed25519|rsa|ecdsa-[^\s]+)\s') { throw "Invalid COOLIFY_SSH_PUBLIC_KEY format." }
-$cfg["COOLIFY_SSH_PUBLIC_KEY"] = $coolifySshPublicKey
-
 foreach ($v in @(
     [string]$cfg["COOLIFY_ROOT_USERNAME"],
     [string]$cfg["COOLIFY_ROOT_USER_EMAIL"],
@@ -169,7 +165,6 @@ foreach ($v in @(
     [string]$cfg["SUDO_USERS"],
     [string]$cfg["DOCKER_USERS"],
     [string]$cfg["COOLIFY_GROUP_USERS"],
-    [string]$cfg["COOLIFY_SSH_PUBLIC_KEY"],
     [string]$cfg["BOOTSTRAP_REPO_URL"],
     [string]$cfg["BOOTSTRAP_REPO_REF"]
 )) {
@@ -178,7 +173,6 @@ foreach ($v in @(
 
 foreach ($v in @(
     [string]$ssh,
-    [string]$cfg["COOLIFY_SSH_PUBLIC_KEY"],
     [string]$cfg["TIMEZONE"],
     [string]$cfg["COOLIFY_PUBLIC_DOMAIN"],
     [string]$cfg["COOLIFY_REALTIME_DOMAIN"],
@@ -199,7 +193,6 @@ $map = [ordered]@{
     "PRIMARY_SUDO_USER_HERE" = [string]$cfg["PRIMARY_SUDO_USER"]
     "SECONDARY_SUDO_USER_HERE" = [string]$cfg["SECONDARY_SUDO_USER"]
     "COOLIFY_SUDO_NOPASSWD_USER_HERE" = [string]$cfg["COOLIFY_SUDO_NOPASSWD_USER"]
-    "COOLIFY_SSH_PUBLIC_KEY_HERE" = [string]$cfg["COOLIFY_SSH_PUBLIC_KEY"]
     "SSH_PUBLIC_KEY_HERE" = [string]$ssh
     "SSH_KEY_ROTATE_HERE" = [string]$sshKeyRotate
     "CREATE_USERS_HERE" = [string]$cfg["CREATE_USERS"]

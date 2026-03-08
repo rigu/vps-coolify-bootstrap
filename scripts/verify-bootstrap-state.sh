@@ -35,9 +35,9 @@ esac
 
 COOLIFY_SUDO_NOPASSWD_USER="${COOLIFY_SUDO_NOPASSWD_USER:-coolify}"
 PRIMARY_SUDO_USER="${PRIMARY_SUDO_USER:-}"
-if [[ -z "$PRIMARY_SUDO_USER" ]]; then
+  if [[ -z "$PRIMARY_SUDO_USER" ]]; then
   PRIMARY_SUDO_USER="$(split_csv_to_lines "${SUDO_USERS:-}" | head -n1 || true)"
-  PRIMARY_SUDO_USER="${PRIMARY_SUDO_USER:-deploy}"
+  PRIMARY_SUDO_USER="${PRIMARY_SUDO_USER:-devops}"
 fi
 
 failures=0
