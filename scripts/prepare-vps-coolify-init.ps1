@@ -81,7 +81,7 @@ $cfg["COOLIFY_SUDO_NOPASSWD_USER"] = $coolifySudoNopasswdUser
 
 $managedUsers = @($cfg["DEVOPS_USER"], $coolifySudoNopasswdUser)
 if (-not $cfg.ContainsKey("ADDITIONAL_SUDO_USERS")) { $cfg["ADDITIONAL_SUDO_USERS"] = "" }
-$additionalUsers = ([string]$cfg["ADDITIONAL_SUDO_USERS"]).Split(",") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+$additionalUsers = ([string]$cfg["ADDITIONAL_SUDO_USERS"] -split '[,;\s]+') | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 foreach ($user in $additionalUsers) {
     if ($user.Contains(":")) { throw "ADDITIONAL_SUDO_USERS contains invalid username (colon not allowed): $user" }
     if (-not (Test-ValidUnixUsername -User $user)) { throw "ADDITIONAL_SUDO_USERS contains invalid UNIX username: $user" }

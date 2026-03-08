@@ -15,7 +15,7 @@ current task (user policy, replay, hardening, updates, monitoring).
 
 - `DEVOPS_USER` (default `devops`)
 - `COOLIFY_SUDO_NOPASSWD_USER` (default `coolify`)
-- `ADDITIONAL_SUDO_USERS` (optional CSV)
+- `ADDITIONAL_SUDO_USERS` (optional list; separators: space, comma, or semicolon)
 
 Effective managed users are:
 `DEVOPS_USER` + `COOLIFY_SUDO_NOPASSWD_USER` + `ADDITIONAL_SUDO_USERS`.
@@ -32,7 +32,7 @@ Example:
 ```env
 DEVOPS_USER=devops
 COOLIFY_SUDO_NOPASSWD_USER=coolify
-ADDITIONAL_SUDO_USERS=admin,ops,dev
+ADDITIONAL_SUDO_USERS=admin ops;dev
 ```
 
 Re-render the VPS-Coolify init file or replay bootstrap to apply changes.
@@ -142,6 +142,9 @@ variables beyond the quick reference in Getting Started.
   - When: runtime during SSH key synchronization
   - How: default `0` appends key; `1` replaces `authorized_keys`
   - Must change: NO
+  - Example:
+    - `SSH_KEY_ROTATE=0`: keep existing keys and ensure current `SSH_PUBLIC_KEY` is present
+    - `SSH_KEY_ROTATE=1`: replace existing keys with current `SSH_PUBLIC_KEY` during replay/boot
 - `CLOSE_COOLIFY_REALTIME_PORTS`
   - When: runtime during `DOCKER-USER` guard sync
   - How: default `false` keeps ports public; `true` adds guards to block public ingress to `6001/6002`
@@ -182,7 +185,7 @@ variables beyond the quick reference in Getting Started.
   - Must change: NO
 - `ADDITIONAL_SUDO_USERS`
   - When: runtime user/group reconciliation
-  - How: optional CSV; each user is validated and merged into effective managed users
+  - How: optional list separated by space/comma/semicolon; each user is validated and merged into effective managed users
   - Must change: NO unless team model differs
 - `TIMEZONE`
   - When: early VPS init phase

@@ -192,6 +192,43 @@ Validation notes for `prepare-vps-coolify-init.*`:
 - fails if output exists and overwrite is not enabled
 - fails if generated file exceeds provider size limit (Hetzner VPS init: 32768 bytes)
 
+### `SSH_KEY_ROTATE` explained with practical example
+
+`SSH_KEY_ROTATE` controls how bootstrap applies `SSH_PUBLIC_KEY` into
+`authorized_keys` for managed users (except the dedicated localhost-only
+`COOLIFY_SUDO_NOPASSWD_USER` flow).
+
+- `SSH_KEY_ROTATE=0` (default): append mode
+  - keeps existing keys
+  - adds current `SSH_PUBLIC_KEY` only if missing
+- `SSH_KEY_ROTATE=1`: replace mode
+  - rewrites `authorized_keys` with the current `SSH_PUBLIC_KEY`
+  - useful when you intentionally want to remove old/stale keys
+
+Example use case:
+
+You rotated your operator key and want `DEVOPS_USER` and other managed users to
+accept only the new key.
+
+1. Set in `bootstrap-artifacts/bootstrap.env`:
+
+   ```env
+   SSH_PUBLIC_KEY='ssh-ed25519 AAAA...new_key'
+   SSH_KEY_ROTATE=1
+   ```
+
+2. Replay bootstrap on server:
+
+   ```bash
+   sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env
+   ```
+
+3. After successful key cleanup, set back to safe default for normal operations:
+
+   ```env
+   SSH_KEY_ROTATE=0
+   ```
+
 ## Bootstrap env quick reference
 
 For full behavior details and replay implications, see:
@@ -220,7 +257,7 @@ For full behavior details and replay implications, see:
 |---|---|---|
 | `SSH_PUBLIC_KEY` or `SSH_PUBLIC_KEY_PATH` | Required for SSH access; **AUTO-DETECTED** if a valid key exists on your machine, otherwise set manually | YES |
 | `COOLIFY_SUDO_NOPASSWD_USER` | Dedicated user for Coolify localhost SSH operations; auto-managed, forced into user/group lists, granted passwordless sudo, and configured with a dedicated localhost/private-only SSH key (not for direct public SSH access) | NO |
-| `ADDITIONAL_SUDO_USERS` | Optional comma-separated additional admins; effective managed users are `DEVOPS_USER` + `COOLIFY_SUDO_NOPASSWD_USER` + `ADDITIONAL_SUDO_USERS` | NO |
+| `ADDITIONAL_SUDO_USERS` | Optional additional admins separated by space, comma, or semicolon; effective managed users are `DEVOPS_USER` + `COOLIFY_SUDO_NOPASSWD_USER` + `ADDITIONAL_SUDO_USERS` | NO |
 | `COOLIFY_REALTIME_DOMAIN` | Dedicated realtime host. If set, bootstrap writes `PUSHER_HOST`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https` in Coolify `.env`; if empty, bootstrap removes those keys. Required when `CLOSE_COOLIFY_REALTIME_PORTS=true` | NO (YES when closing `6001/6002`) |
 | `SSH_PORT` | Applied in SSH config and service restart flow | NO |
 | `TIMEZONE` | Applied during first-boot VPS init phase | NO |

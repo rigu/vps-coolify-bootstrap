@@ -160,15 +160,15 @@ Notes:
   - `COOLIFY_SUDO_NOPASSWD_USER`
   - users from `ADDITIONAL_SUDO_USERS`
 
-### 6) CSV list configuration types
+### 6) User-list configuration types
 
-CSV key:
+List key:
 
 - `ADDITIONAL_SUDO_USERS`
 
 Accepted format:
 
-- comma-separated usernames
+- usernames separated by space, comma, or semicolon
 - surrounding whitespace is trimmed per item
 - `:` is not allowed in usernames
 

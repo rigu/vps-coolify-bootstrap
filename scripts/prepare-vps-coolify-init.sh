@@ -20,6 +20,15 @@ trim() {
   printf '%s' "$value"
 }
 
+split_user_list_to_lines() {
+  local raw="$1"
+  local item=""
+  while IFS= read -r item || [[ -n "$item" ]]; do
+    item="$(trim "$item")"
+    [[ -n "$item" ]] && printf '%s\n' "$item"
+  done < <(printf '%s' "$raw" | tr ',;[:space:]' '\n')
+}
+
 resolve_path() {
   local path_value="$1"
   local base_dir="$2"
@@ -195,8 +204,7 @@ cfg[COOLIFY_SUDO_NOPASSWD_USER]="$coolify_sudo_nopasswd_user"
 cfg[ADDITIONAL_SUDO_USERS]="${cfg[ADDITIONAL_SUDO_USERS]:-}"
 managed_users_csv="${cfg[DEVOPS_USER]}"
 managed_users_csv="$(csv_append_unique "$managed_users_csv" "${cfg[COOLIFY_SUDO_NOPASSWD_USER]}")"
-for user in $(printf '%s\n' "${cfg[ADDITIONAL_SUDO_USERS]}" | tr ',' '\n'); do
-  user="$(trim "$user")"
+for user in $(split_user_list_to_lines "${cfg[ADDITIONAL_SUDO_USERS]}"); do
   [[ -n "$user" ]] || continue
   if [[ "$user" == *:* ]]; then
     echo "ERROR: ADDITIONAL_SUDO_USERS contains invalid username (colon not allowed): $user" >&2

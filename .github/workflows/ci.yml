@@ -62,8 +62,11 @@ jobs:
           test -f docs/index.md
           test -f docs/getting-started.md
           test -f docs/bootstrap-flow.md
+          test -f docs/coolify-deployment-modes.md
           test -f docs/operations-security.md
           test -f docs/bootstrap-failure-recovery.md
+          test -f docs/github-promotion.md
+          test -f docs/assets/bootstrap-overview.svg
 
       - name: Ensure license exists
         run: test -f LICENSE

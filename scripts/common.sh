@@ -4,12 +4,11 @@ set -euo pipefail
 split_csv_to_lines() {
   local csv="$1"
   local item=""
-  IFS=',' read -r -a items <<< "$csv"
-  for item in "${items[@]}"; do
+  while IFS= read -r item || [[ -n "$item" ]]; do
     item="${item#"${item%%[![:space:]]*}"}"
     item="${item%"${item##*[![:space:]]}"}"
     [[ -n "$item" ]] && printf '%s\n' "$item"
-  done
+  done < <(printf '%s' "$csv" | tr ',;[:space:]' '\n')
 }
 
 is_valid_unix_username() {
@@ -85,12 +84,14 @@ load_env_file_strict() {
       value="${value//\\\"/\"}"
       value="${value//\\\$/\$}"
     else
-      if [[ "$raw_value" =~ [[:space:]] ]]; then
-        echo "ERROR: unquoted whitespace for $key at line $line_no in $env_file" >&2
-        return 1
-      fi
       if [[ "$raw_value" == *\$\(* ]] || [[ "$raw_value" == *\$\{* ]] || [[ "$raw_value" == *\`* ]]; then
         echo "ERROR: potential shell expansion syntax for $key at line $line_no in $env_file; quote the value" >&2
+        return 1
+      fi
+      # Allow unquoted spaces only for ADDITIONAL_SUDO_USERS so operators can
+      # write simple user lists (for example: "ops admin;dev").
+      if [[ "$raw_value" =~ [[:space:]] ]] && [[ "$key" != "ADDITIONAL_SUDO_USERS" ]]; then
+        echo "ERROR: unquoted whitespace for $key at line $line_no in $env_file" >&2
         return 1
       fi
       value="$raw_value"
