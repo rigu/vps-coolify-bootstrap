@@ -29,6 +29,19 @@ sudo cloud-init status --long
 sudo cloud-init query --all | head -n 40
 ```
 
+Where to run these commands:
+- if SSH is not reachable yet, run them in provider web console (serial/VNC console)
+- example (Hetzner Cloud): `Servers -> <server> -> Console`
+- run by SSH only after SSH access is confirmed
+
+Ready for SSH (quick 3-command checklist, run on server):
+
+```bash
+sudo cloud-init status --wait
+sudo ss -lntp | grep -E ':(<SSH_PORT>)\b' || true
+sudo ufw status verbose
+```
+
 If status is `done`, the first-boot init service finished, and you should troubleshoot service-level issues instead.
 If status is `error` or still not complete, continue.
 

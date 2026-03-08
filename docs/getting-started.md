@@ -406,10 +406,28 @@ After first boot, use this checklist:
    sudo tail -n 200 /var/log/vps-bootstrap.log
    ```
 
+   Where to run this command:
+   - if SSH does not work yet, run it in your VPS provider web console (serial/VNC console)
+   - example (Hetzner Cloud): `Servers -> <server> -> Console`, then login and run `sudo cloud-init status --wait`
+   - run it by SSH only after remote SSH is already working
+
    `vps-bootstrap.log` contains timestamped, script-context log entries prefixed with:
    - `[SUCCESS]` for completed bootstrap steps
    - `[WARNING]` for non-fatal issues
    - `[ERROR]` for fatal failures
+
+   Ready for SSH (quick 3-command checklist, run on server):
+
+   ```bash
+   sudo cloud-init status --wait
+   sudo ss -lntp | grep -E ':(<SSH_PORT>)\b' || true
+   sudo ufw status verbose
+   ```
+
+   Expected:
+   - `cloud-init` finished (`status: done`)
+   - `sshd` listening on configured `SSH_PORT`
+   - UFW includes allow/limit rule for the same `SSH_PORT`
 
 2. Connect by SSH from your machine using configured values from `bootstrap-artifacts/bootstrap.env`:
 
