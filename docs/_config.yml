@@ -32,11 +32,17 @@ defaults:
       title: Bootstrap Flow
       description: Detailed first-boot execution order, VPS init behavior, and bootstrap flow for Coolify provisioning.
   - scope:
-      path: "coolify-deployment-modes.md"
+      path: "vps-coolify-deployment-modes.md"
       type: "pages"
     values:
-      title: Coolify Deployment Modes
-      description: Complete reference for all Coolify deployment modes supported by this bootstrap.
+      title: VPS Coolify Deployment Modes
+      description: Complete reference for all VPS deployment modes supported by this bootstrap.
+  - scope:
+      path: "vps-coolify-realtime-modes.md"
+      type: "pages"
+    values:
+      title: VPS Coolify Realtime Modes
+      description: Detailed realtime behavior for CLOSE_COOLIFY_REALTIME_PORTS true/false, risks, and update procedures.
   - scope:
       path: "operations-security.md"
       type: "pages"
@@ -59,7 +65,8 @@ header_pages:
   - index.md
   - getting-started.md
   - bootstrap-flow.md
-  - coolify-deployment-modes.md
+  - vps-coolify-deployment-modes.md
+  - vps-coolify-realtime-modes.md
   - operations-security.md
   - bootstrap-failure-recovery.md
   - github-promotion.md

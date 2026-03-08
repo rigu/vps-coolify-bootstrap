@@ -1,7 +1,7 @@
 ---
 ---
 
-# Coolify Deployment Modes
+# VPS Coolify Deployment Modes
 
 This page describes all deployment modes for Coolify that are supported by this bootstrap repository.
 
@@ -105,6 +105,9 @@ Reference:
 
 These are runtime exposure variants controlled by env:
 
+For deep behavior, risks, graphs, and update commands, see:
+[VPS Coolify Realtime Modes](vps-coolify-realtime-modes.md).
+
 1. Public realtime ports, no dedicated host (default)
    - `CLOSE_COOLIFY_REALTIME_PORTS=false`
    - `COOLIFY_REALTIME_DOMAIN` empty
@@ -122,9 +125,11 @@ These are runtime exposure variants controlled by env:
    - `CLOSE_COOLIFY_REALTIME_PORTS=true`
    - requires `COOLIFY_REALTIME_DOMAIN`
    - bootstrap sets `PUSHER_HOST`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https`
+   - bootstrap hardens Coolify compose ports:
+     - removes `${APP_PORT:-8000}:8080` publish
+     - converts Soketi `ports` publish to internal `expose` for `6001/6002`
    - bootstrap enforces `DOCKER-USER` guards for `6001/6002`
-   - bootstrap does not rewrite Coolify compose to implement this mode
-   - routing to `443` is app-level via `PUSHER_*`; direct public `6001/6002` is blocked by guards
+   - routing to `443` is app-level via `PUSHER_*`; direct public `6001/6002` is blocked by compose hardening + guards
 
 ## Access phase variants
 
@@ -133,6 +138,7 @@ During bootstrap and onboarding you may see:
 1. Temporary bootstrap access:
    - `http://<SERVER_IP>:8000`
    - useful before proxy/domain/TLS path is fully ready
+   - note: if `CLOSE_COOLIFY_REALTIME_PORTS=true`, bootstrap compose hardening can remove this publish path automatically
 
 2. Final domain access:
    - `https://<COOLIFY_PUBLIC_DOMAIN>`

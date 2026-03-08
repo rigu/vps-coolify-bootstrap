@@ -46,7 +46,7 @@ foreach ($line in Get-Content -LiteralPath $envPath) {
 }
 
 foreach ($k in @(
-    "TIMEZONE","SSH_PORT","DEVOPS_USER",
+    "TIMEZONE","SSH_PORT",
     "COOLIFY_PUBLIC_DOMAIN","COOLIFY_ROOT_USERNAME","COOLIFY_ROOT_USER_EMAIL","COOLIFY_ROOT_USER_PASSWORD","USER_PASSWORDS_ENCRYPTION_PASSWORD",
     "BOOTSTRAP_REPO_URL","BOOTSTRAP_REPO_REF"
 )) {
@@ -93,10 +93,26 @@ foreach ($user in $additionalUsers) {
     if (-not ($managedUsers -contains $user)) { $managedUsers += $user }
 }
 
+function Resolve-PathFromEnv {
+    param(
+        [string]$PathValue,
+        [string]$BaseDir
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PathValue)) { return $PathValue }
+    if ($PathValue -eq "~") { return [string]$HOME }
+    if ($PathValue.StartsWith("~/") -or $PathValue.StartsWith("~\\")) {
+        return Join-Path [string]$HOME $PathValue.Substring(2)
+    }
+    if ([System.IO.Path]::IsPathRooted($PathValue)) { return $PathValue }
+    return Join-Path $BaseDir $PathValue
+}
+
+$envBaseDir = Split-Path -Parent $envPath
 $templatePath = if ($cfg.ContainsKey("TEMPLATE_FILE") -and $cfg["TEMPLATE_FILE"]) { $cfg["TEMPLATE_FILE"] } else { "../templates/vps-init.template.yml" }
 $outputPath = if ($cfg.ContainsKey("OUTPUT_FILE") -and $cfg["OUTPUT_FILE"]) { $cfg["OUTPUT_FILE"] } else { "../bootstrap-artifacts/vps-coolify-init.generated.yml" }
-if (-not [System.IO.Path]::IsPathRooted($templatePath)) { $templatePath = Join-Path (Split-Path -Parent $envPath) $templatePath }
-if (-not [System.IO.Path]::IsPathRooted($outputPath)) { $outputPath = Join-Path (Split-Path -Parent $envPath) $outputPath }
+$templatePath = Resolve-PathFromEnv -PathValue $templatePath -BaseDir $envBaseDir
+$outputPath = Resolve-PathFromEnv -PathValue $outputPath -BaseDir $envBaseDir
 if (-not (Test-Path -LiteralPath $templatePath -PathType Leaf)) { throw "Template file not found: $templatePath" }
 
 $ssh = ""
@@ -110,8 +126,7 @@ if ($cfg.ContainsKey("SSH_PUBLIC_KEY_PATH") -and -not [string]::IsNullOrWhiteSpa
 }
 
 if ([string]::IsNullOrWhiteSpace($ssh) -and -not [string]::IsNullOrWhiteSpace($sshPath)) {
-    $k = $sshPath
-    if (-not [System.IO.Path]::IsPathRooted($k)) { $k = Join-Path (Split-Path -Parent $envPath) $k }
+    $k = Resolve-PathFromEnv -PathValue $sshPath -BaseDir $envBaseDir
     if (-not (Test-Path -LiteralPath $k -PathType Leaf)) { throw "SSH public key file not found: $k" }
     $ssh = (Get-Content -LiteralPath $k -Raw).Trim()
 }
@@ -148,6 +163,9 @@ $cfg["CLOSE_COOLIFY_REALTIME_PORTS"] = $closeCoolifyRealtimePorts
 
 $coolifyRealtimeDomain = if ($cfg.ContainsKey("COOLIFY_REALTIME_DOMAIN")) { [string]$cfg["COOLIFY_REALTIME_DOMAIN"] } else { "" }
 if ($coolifyRealtimeDomain -match '[\s/]') { throw "COOLIFY_REALTIME_DOMAIN must be a hostname without spaces or /." }
+if (-not [string]::IsNullOrWhiteSpace($coolifyRealtimeDomain) -and $coolifyRealtimeDomain -match "CHANGE_ME") {
+    throw "COOLIFY_REALTIME_DOMAIN must not contain CHANGE_ME placeholder."
+}
 if ($closeCoolifyRealtimePorts -eq "true" -and [string]::IsNullOrWhiteSpace($coolifyRealtimeDomain)) {
     throw "COOLIFY_REALTIME_DOMAIN is required when CLOSE_COOLIFY_REALTIME_PORTS=true."
 }

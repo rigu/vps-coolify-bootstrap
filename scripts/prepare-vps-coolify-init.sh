@@ -50,9 +50,20 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/.." && pwd)"
 env_example_file="$repo_root/env/bootstrap.env.example"
 
+require_value_arg() {
+  local flag="$1"
+  local maybe_value="${2:-}"
+  if [[ -z "$maybe_value" || "$maybe_value" == -* ]]; then
+    echo "ERROR: $flag requires a value." >&2
+    usage >&2
+    exit 1
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --env-file)
+      require_value_arg "--env-file" "${2:-}"
       env_file="${2:-}"
       shift 2
       ;;
@@ -150,7 +161,7 @@ is_valid_unix_username() {
   [[ "$user" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]
 }
 
-for k in TIMEZONE SSH_PORT DEVOPS_USER COOLIFY_PUBLIC_DOMAIN COOLIFY_ROOT_USERNAME COOLIFY_ROOT_USER_EMAIL COOLIFY_ROOT_USER_PASSWORD USER_PASSWORDS_ENCRYPTION_PASSWORD BOOTSTRAP_REPO_URL BOOTSTRAP_REPO_REF; do
+for k in TIMEZONE SSH_PORT COOLIFY_PUBLIC_DOMAIN COOLIFY_ROOT_USERNAME COOLIFY_ROOT_USER_EMAIL COOLIFY_ROOT_USER_PASSWORD USER_PASSWORDS_ENCRYPTION_PASSWORD BOOTSTRAP_REPO_URL BOOTSTRAP_REPO_REF; do
   require_key "$k"
 done
 
@@ -259,6 +270,10 @@ cfg[CLOSE_COOLIFY_REALTIME_PORTS]="$close_coolify_realtime_ports"
 coolify_realtime_domain="${cfg[COOLIFY_REALTIME_DOMAIN]:-}"
 if [[ -n "$coolify_realtime_domain" ]] && [[ "$coolify_realtime_domain" =~ [[:space:]/] ]]; then
   echo "ERROR: COOLIFY_REALTIME_DOMAIN must be a hostname without spaces or /." >&2
+  exit 1
+fi
+if [[ -n "$coolify_realtime_domain" ]] && [[ "$coolify_realtime_domain" == *"CHANGE_ME"* ]]; then
+  echo "ERROR: COOLIFY_REALTIME_DOMAIN must not contain CHANGE_ME placeholder." >&2
   exit 1
 fi
 if [[ "$close_coolify_realtime_ports" == "true" ]] && [[ -z "$coolify_realtime_domain" ]]; then

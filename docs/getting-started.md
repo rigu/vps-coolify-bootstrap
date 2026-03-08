@@ -43,7 +43,7 @@ What `generate-secrets.*` does:
 - if `bootstrap-artifacts/bootstrap.env` does not exist, creates parent folder and copies `env/bootstrap.env.example`
 - updates only placeholder/empty values by default (non-destructive for already-set values)
 - auto-detects SSH public key from local machine and fills both `SSH_PUBLIC_KEY` and `SSH_PUBLIC_KEY_PATH` when needed
-- sets secure file permissions for generated env file (`chmod 600` in Bash; file write in PowerShell)
+- sets strict permissions for generated env file in Bash (`chmod 600`); in PowerShell it writes the file and prints an ACL warning for manual verification on shared systems
 
 What it does not do:
 
@@ -188,7 +188,7 @@ Validation notes for `prepare-vps-coolify-init.*`:
 
 - rejects unresolved required values (for example `CHANGE_ME`)
 - validates input formats (`SSH_PORT`, usernames, email, hostname, booleans)
-- enforces cross-field rule: `COOLIFY_REALTIME_DOMAIN` is required when `CLOSE_COOLIFY_REALTIME_PORTS=true`
+- enforces cross-field rule: `COOLIFY_REALTIME_DOMAIN` is required when `CLOSE_COOLIFY_REALTIME_PORTS=true`, and if set it must not contain `CHANGE_ME`
 - fails if output exists and overwrite is not enabled
 - fails if generated file exceeds provider size limit (Hetzner VPS init: 32768 bytes)
 
@@ -336,7 +336,7 @@ This matrix explains exactly what bootstrap enforces for realtime traffic.
 |---|---|---|---|---|
 | `false` | empty | removes `PUSHER_HOST`, `PUSHER_PORT`, `PUSHER_SCHEME` | removes `DOCKER-USER` DROP guards for `6001/6002` | browser can use direct published ports `6001/6002` |
 | `false` | set (example `realtime.example.com`) | sets `PUSHER_HOST=<domain>`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https` | keeps `6001/6002` public (no DROP guard) | browser is directed by app config to `https://<domain>:443` |
-| `true` | set (required) | sets `PUSHER_HOST=<domain>`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https` | adds `DOCKER-USER` DROP guards for public ingress to `6001/6002` (allowing local/private ranges) | browser uses dedicated realtime domain over `443`; direct public `6001/6002` blocked |
+| `true` | set (required) | sets `PUSHER_HOST=<domain>`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https` | hardens Coolify compose to remove public `8000/6001/6002` publish + adds `DOCKER-USER` guards for `6001/6002` (allowing local/private ranges) | browser uses dedicated realtime domain over `443`; direct public `6001/6002` blocked |
 | `true` | empty | invalid config | n/a | prepare/bootstrap exits with validation error |
 
 Important technical note:
@@ -350,13 +350,16 @@ What bootstrap does:
 1. Requires `COOLIFY_REALTIME_DOMAIN` to be non-empty.
 2. Writes `PUSHER_HOST=<COOLIFY_REALTIME_DOMAIN>`, `PUSHER_PORT=443`, `PUSHER_SCHEME=https` in `/data/coolify/source/.env`.
 3. Restarts `coolify` and `coolify-realtime` containers when `PUSHER_*` values change.
-4. Adds `DOCKER-USER` DROP guards for public ingress to `6001/6002` (IPv4 and IPv6), with RETURN exceptions for localhost/private ranges.
-5. Keeps UFW baseline open on `80/443` so domain traffic can terminate on reverse proxy path.
+4. Hardens Coolify compose files automatically:
+   - removes `${APP_PORT:-8000}:8080` from `/data/coolify/source/docker-compose.yml`
+   - replaces Soketi public `ports` in `/data/coolify/source/docker-compose.prod.yml` with internal `expose: "6001"/"6002"`
+   - redeploys Coolify with hardened compose files
+5. Adds `DOCKER-USER` DROP guards for public ingress to `6001/6002` (IPv4 and IPv6), with RETURN exceptions for localhost/private ranges.
+6. Keeps UFW baseline open on `80/443` so domain traffic can terminate on reverse proxy path.
 
 What bootstrap does not do:
-1. It does not rewrite Coolify `docker-compose.yml` to remap realtime ports.
-2. It does not create DNS records for `COOLIFY_REALTIME_DOMAIN`.
-3. It does not force a host-level TCP redirect from `6001/6002` to `443`.
+1. It does not create DNS records for `COOLIFY_REALTIME_DOMAIN`.
+2. It does not force a host-level TCP redirect from `6001/6002` to `443`.
 
 Operational prerequisites for successful `443` realtime path:
 1. DNS for `COOLIFY_REALTIME_DOMAIN` points to this VPS (A/AAAA as applicable).
@@ -367,9 +370,10 @@ Quick verification on server:
 
 ```bash
 sudo grep -nE '^PUSHER_(HOST|PORT|SCHEME)=' /data/coolify/source/.env
+sudo grep -nE '\$\{APP_PORT:-8000\}:8080|\$\{SOKETI_PORT:-6001\}:6001|6002:6002' /data/coolify/source/docker-compose.yml /data/coolify/source/docker-compose.prod.yml || true
 sudo iptables -S DOCKER-USER | grep -E '6001|6002' || true
 sudo ip6tables -S DOCKER-USER 2>/dev/null | grep -E '6001|6002' || true
-sudo ss -lntp | grep -E ':(80|443|6001|6002)\b' || true
+sudo ss -lntp | grep -E ':(80|443|8000|6001|6002)\b' || true
 sudo bash /opt/vps-coolify-bootstrap/scripts/verify-bootstrap-state.sh /etc/vps-coolify-bootstrap/bootstrap.env
 ```
 
@@ -420,8 +424,13 @@ After first boot, use this checklist:
 
    ```bash
    sudo cloud-init status --wait
-   sudo tail -n 200 /var/log/cloud-init-output.log
+   sudo tail -n 200 /var/log/vps-bootstrap.log
    ```
+
+   `vps-bootstrap.log` contains timestamped, script-context log entries prefixed with:
+   - `[SUCCESS]` for completed bootstrap steps
+   - `[WARNING]` for non-fatal issues
+   - `[ERROR]` for fatal failures
 
 2. Connect by SSH from your machine using configured values from `bootstrap-artifacts/bootstrap.env`:
 
@@ -527,5 +536,7 @@ After first boot, use this checklist:
 
 - Replay bootstrap policy: [Operations and Security](operations-security.md#replay-bootstrap-policy-idempotent)
 - Failed first boot recovery: [Bootstrap Failure Recovery](bootstrap-failure-recovery.md)
+- VPS deployment lifecycle modes: [VPS Coolify Deployment Modes](vps-coolify-deployment-modes.md)
+- Realtime exposure modes and switch/update procedure: [VPS Coolify Realtime Modes](vps-coolify-realtime-modes.md)
 
 Back to [Docs Home](index.md)

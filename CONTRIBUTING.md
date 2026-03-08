@@ -31,6 +31,9 @@ print("YAML OK")
 PY
 bash scripts/prepare-vps-coolify-init.sh --help
 bash scripts/generate-secrets.sh --help
+bash scripts/recover-ssh-access.sh --help
+bash scripts/update-realtime-mode.sh --help
+bash tests/run-tests.sh
 ```
 
 If you modify `.ps1` scripts, also validate PowerShell syntax locally:

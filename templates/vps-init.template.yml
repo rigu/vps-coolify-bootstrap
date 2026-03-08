@@ -2,6 +2,8 @@
 timezone: TIMEZONE_HERE
 package_update: true
 package_upgrade: true
+output:
+  all: '| tee -a /var/log/vps-bootstrap.log'
 
 users:
   - name: DEVOPS_USER_HERE

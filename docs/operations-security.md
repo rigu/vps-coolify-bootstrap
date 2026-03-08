@@ -239,6 +239,7 @@ What replay enforces:
 - `fail2ban` and `unattended-upgrades`
 - Coolify localhost connection user/port/private-key synchronization (`COOLIFY_SUDO_NOPASSWD_USER`, `SSH_PORT`)
 - realtime host env synchronization (`PUSHER_HOST`, `PUSHER_PORT`, `PUSHER_SCHEME`) from `COOLIFY_REALTIME_DOMAIN`
+- when `CLOSE_COOLIFY_REALTIME_PORTS=true`, automatic Coolify compose hardening to remove public `8000/6001/6002` publish bindings
 - `DOCKER-USER` guards for `6001/6002` when `CLOSE_COOLIFY_REALTIME_PORTS=true`
 
 Operational notes:
@@ -275,7 +276,8 @@ Pay special attention to Coolify internal ports `6001` and `6002`; they should n
 Bootstrap behavior:
 
 - if `CLOSE_COOLIFY_REALTIME_PORTS=true`, bootstrap adds `DOCKER-USER`
-  guard rules to block public ingress to `6001/6002`
+  guard rules to block public ingress to `6001/6002` and hardens Coolify
+  compose files to remove public `8000/6001/6002` publish bindings
 - if `CLOSE_COOLIFY_REALTIME_PORTS=false` (default), bootstrap removes those guards
 - if `COOLIFY_REALTIME_DOMAIN` is set, bootstrap always configures app-level
   realtime routing via `PUSHER_HOST=<domain>`, `PUSHER_PORT=443`,
@@ -286,10 +288,20 @@ Operational interpretation:
 - `CLOSE_COOLIFY_REALTIME_PORTS=false` + `COOLIFY_REALTIME_DOMAIN` set means
   "domain routing enabled, direct `6001/6002` still reachable".
 - `CLOSE_COOLIFY_REALTIME_PORTS=true` + `COOLIFY_REALTIME_DOMAIN` set means
-  "domain routing enabled, direct public `6001/6002` blocked by
-  `DOCKER-USER` guards".
+  "domain routing enabled, direct public `6001/6002` blocked by compose
+  hardening + `DOCKER-USER` guards".
 - Domain routing on `443` is application-level behavior from `PUSHER_*`
   values, not an automatic host-level NAT redirect.
+
+Fast mode-switch helper:
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/update-realtime-mode.sh --mode public --clear-domain
+sudo bash /opt/vps-coolify-bootstrap/scripts/update-realtime-mode.sh --mode closed --domain realtime.example.com
+```
+
+Detailed behavior and mode-by-mode guidance:
+[VPS Coolify Realtime Modes](vps-coolify-realtime-modes.md)
 
 `CLOSE_COOLIFY_REALTIME_PORTS=true` exact enforcement path:
 
@@ -298,18 +310,24 @@ Operational interpretation:
    - `PUSHER_HOST=<COOLIFY_REALTIME_DOMAIN>`
    - `PUSHER_PORT=443`
    - `PUSHER_SCHEME=https`
-3. Bootstrap restarts `coolify` and `coolify-realtime` containers if those values changed.
-4. Bootstrap installs `DOCKER-USER` ingress guards to block public forwarded traffic to `6001/6002`.
-5. Bootstrap keeps UFW `80/443` ALLOW baseline for domain-facing traffic.
+3. Bootstrap hardens Coolify compose files:
+   - removes `${APP_PORT:-8000}:8080` publish from `/data/coolify/source/docker-compose.yml`
+   - replaces Soketi public `ports` mapping with internal `expose` in `/data/coolify/source/docker-compose.prod.yml`
+   - redeploys Coolify compose stack
+4. Bootstrap restarts `coolify` and `coolify-realtime` containers if `PUSHER_*` values changed.
+5. Bootstrap installs `DOCKER-USER` ingress guards to block public forwarded traffic to `6001/6002`.
+6. Bootstrap keeps UFW `80/443` ALLOW baseline for domain-facing traffic.
 
 Compose invariants:
 
-- Bootstrap does not mutate Coolify `docker-compose` files to implement this mode.
-- The control-plane mechanism is env-driven (`PUSHER_*`) plus host firewall guards (`DOCKER-USER`).
+- Bootstrap mutates Coolify compose files in this mode to remove public
+  bootstrap/realtime publish bindings.
+- Control-plane path remains env-driven (`PUSHER_*`) plus host firewall guards (`DOCKER-USER`).
 
 Check effective rules:
 
 ```bash
+sudo grep -nE '\$\{APP_PORT:-8000\}:8080|\$\{SOKETI_PORT:-6001\}:6001|6002:6002' /data/coolify/source/docker-compose.yml /data/coolify/source/docker-compose.prod.yml || true
 sudo iptables -S DOCKER-USER
 sudo ip6tables -S DOCKER-USER 2>/dev/null || true
 ```

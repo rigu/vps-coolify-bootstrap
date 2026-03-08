@@ -5,9 +5,10 @@ ENV_FILE="${1:-/etc/vps-coolify-bootstrap/bootstrap.env}"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$script_dir/common.sh"
+bootstrap_install_error_trap "verify-bootstrap-state.sh"
 
 if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-  echo "ERROR: run as root (for example: sudo bash scripts/verify-bootstrap-state.sh ...)." >&2
+  bootstrap_error "run as root (for example: sudo bash scripts/verify-bootstrap-state.sh ...)."
   exit 1
 fi
 
@@ -46,17 +47,17 @@ failures=0
 warnings=0
 
 pass() {
-  printf 'PASS: %s\n' "$1"
+  printf '[%s] PASS [%s] %s\n' "$(bootstrap_log_ts)" "${BOOTSTRAP_LOG_CONTEXT:-verify-bootstrap-state.sh}" "$1"
 }
 
 warn() {
   warnings=$((warnings + 1))
-  printf 'WARN: %s\n' "$1"
+  printf '[%s] WARN [%s] %s\n' "$(bootstrap_log_ts)" "${BOOTSTRAP_LOG_CONTEXT:-verify-bootstrap-state.sh}" "$1"
 }
 
 fail() {
   failures=$((failures + 1))
-  printf 'FAIL: %s\n' "$1"
+  printf '[%s] FAIL [%s] %s\n' "$(bootstrap_log_ts)" "${BOOTSTRAP_LOG_CONTEXT:-verify-bootstrap-state.sh}" "$1"
 }
 
 if [[ -n "$invalid_close_coolify_realtime_ports" ]]; then
@@ -303,6 +304,27 @@ else
   fi
 fi
 
+base_compose="/data/coolify/source/docker-compose.yml"
+prod_compose="/data/coolify/source/docker-compose.prod.yml"
+if [[ -f "$base_compose" && -f "$prod_compose" ]]; then
+  if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
+    if grep -Eq '^[[:space:]]*-[[:space:]]*"\$\{APP_PORT:-8000\}:8080"' "$base_compose"; then
+      fail "Coolify base compose still publishes APP_PORT:8000 (expected removed when CLOSE_COOLIFY_REALTIME_PORTS=true)"
+    else
+      pass "Coolify base compose does not publish APP_PORT:8000"
+    fi
+    if grep -Eq '^([[:space:]]*)ports:[[:space:]]*$' "$prod_compose" \
+      && grep -Eq '^[[:space:]]*-[[:space:]]*"\$\{SOKETI_PORT:-6001\}:6001"' "$prod_compose" \
+      && grep -Eq '^[[:space:]]*-[[:space:]]*"6002:6002"' "$prod_compose"; then
+      fail "Coolify prod compose still publishes Soketi ports 6001/6002 (expected expose-only when CLOSE_COOLIFY_REALTIME_PORTS=true)"
+    else
+      pass "Coolify prod compose does not publish Soketi ports 6001/6002"
+    fi
+  fi
+else
+  warn "Coolify compose files missing; skipped compose hardening verification"
+fi
+
 if command -v iptables >/dev/null 2>&1 && iptables -nL DOCKER-USER >/dev/null 2>&1; then
   if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
     if iptables -C DOCKER-USER -p tcp -m multiport --dports 6001,6002 -j DROP >/dev/null 2>&1; then
@@ -323,7 +345,7 @@ fi
 
 if ss -lnt | awk '{print $4}' | grep -Eq '[:.]6001$|[:.]6002$'; then
   if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
-    warn "ports 6001/6002 still listen on host; policy relies on DOCKER-USER DROP guards"
+    fail "ports 6001/6002 still listen on host (expected closed after compose hardening)"
   else
     pass "ports 6001/6002 are listening (expected when CLOSE_COOLIFY_REALTIME_PORTS=false)"
   fi

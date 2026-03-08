@@ -16,6 +16,7 @@ Production-ready **VPS bootstrap for Coolify on Ubuntu 24.04 LTS** with VPS-Cool
 - reproducible VPS-Coolify init rendering from env templates
 - Linux/macOS + PowerShell support for operators
 - explicit recovery runbook for failed first boot
+- emergency provider-console SSH recovery helper (`scripts/recover-ssh-access.sh`)
 - public/generic templates with no private data
 
 ## Quick Start
@@ -42,7 +43,8 @@ Canonical instructions were moved to GitHub Pages docs:
 - Local source: [docs/index.md](docs/index.md)
 - Getting started: [docs/getting-started.md](docs/getting-started.md)
 - Bootstrap flow: [docs/bootstrap-flow.md](docs/bootstrap-flow.md)
-- Coolify deployment modes: [docs/coolify-deployment-modes.md](docs/coolify-deployment-modes.md)
+- VPS Coolify deployment modes: [docs/vps-coolify-deployment-modes.md](docs/vps-coolify-deployment-modes.md)
+- VPS Coolify realtime modes: [docs/vps-coolify-realtime-modes.md](docs/vps-coolify-realtime-modes.md)
 - Operations and security: [docs/operations-security.md](docs/operations-security.md)
 - Failure recovery: [docs/bootstrap-failure-recovery.md](docs/bootstrap-failure-recovery.md)
 - GitHub promotion checklist: [docs/github-promotion.md](docs/github-promotion.md)

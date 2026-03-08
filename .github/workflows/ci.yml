@@ -40,6 +40,11 @@ jobs:
         run: |
           bash scripts/generate-secrets.sh --help >/dev/null
           bash scripts/prepare-vps-coolify-init.sh --help >/dev/null
+          bash scripts/recover-ssh-access.sh --help >/dev/null
+          bash scripts/update-realtime-mode.sh --help >/dev/null
+
+      - name: Script behavior tests
+        run: bash tests/run-tests.sh
 
       - name: PowerShell syntax check
         shell: pwsh
@@ -62,7 +67,8 @@ jobs:
           test -f docs/index.md
           test -f docs/getting-started.md
           test -f docs/bootstrap-flow.md
-          test -f docs/coolify-deployment-modes.md
+          test -f docs/vps-coolify-deployment-modes.md
+          test -f docs/vps-coolify-realtime-modes.md
           test -f docs/operations-security.md
           test -f docs/bootstrap-failure-recovery.md
           test -f docs/github-promotion.md

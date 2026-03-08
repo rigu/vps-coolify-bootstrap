@@ -3,79 +3,82 @@ set -euo pipefail
 
 ENV_FILE="${1:-/etc/vps-coolify-bootstrap/bootstrap.env}"
 ENCRYPTED_PASSWORD_FILE="/etc/vps-coolify-bootstrap/user-passwords.enc"
-
-if [[ ! -f "$ENV_FILE" ]]; then
-  echo "ERROR: bootstrap env file not found: $ENV_FILE" >&2
-  exit 1
-fi
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
 # shellcheck disable=SC1091
 source "$script_dir/common.sh"
+bootstrap_install_error_trap "ensure-user-passwords.sh"
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  bootstrap_error "bootstrap env file not found: $ENV_FILE"
+  exit 1
+fi
 
 load_env_file_strict "$ENV_FILE"
+bootstrap_success "Loaded bootstrap env from $ENV_FILE."
 
 require_var() {
   local name="$1"
   if [[ -z "${!name:-}" ]]; then
-    echo "ERROR: missing required variable: $name" >&2
+    bootstrap_error "missing required variable: $name"
     exit 1
   fi
 }
 
-require_var DEVOPS_USER
 require_var USER_PASSWORDS_ENCRYPTION_PASSWORD
 
 if (( ${#USER_PASSWORDS_ENCRYPTION_PASSWORD} < 16 )); then
-  echo "ERROR: USER_PASSWORDS_ENCRYPTION_PASSWORD must be at least 16 chars" >&2
+  bootstrap_error "USER_PASSWORDS_ENCRYPTION_PASSWORD must be at least 16 chars"
   exit 1
 fi
 
 COOLIFY_SUDO_NOPASSWD_USER="${COOLIFY_SUDO_NOPASSWD_USER:-coolify}"
 if ! is_valid_unix_username "$COOLIFY_SUDO_NOPASSWD_USER"; then
-  echo "ERROR: COOLIFY_SUDO_NOPASSWD_USER contains invalid UNIX username: $COOLIFY_SUDO_NOPASSWD_USER" >&2
+  bootstrap_error "COOLIFY_SUDO_NOPASSWD_USER contains invalid UNIX username: $COOLIFY_SUDO_NOPASSWD_USER"
   exit 1
 fi
 if [[ "$COOLIFY_SUDO_NOPASSWD_USER" == "root" ]]; then
-  echo "ERROR: COOLIFY_SUDO_NOPASSWD_USER must not be root." >&2
+  bootstrap_error "COOLIFY_SUDO_NOPASSWD_USER must not be root."
   exit 1
 fi
 DEVOPS_USER="${DEVOPS_USER:-devops}"
 if ! is_valid_unix_username "$DEVOPS_USER"; then
-  echo "ERROR: DEVOPS_USER contains invalid UNIX username: $DEVOPS_USER" >&2
+  bootstrap_error "DEVOPS_USER contains invalid UNIX username: $DEVOPS_USER"
   exit 1
 fi
 if [[ "$DEVOPS_USER" == "root" ]]; then
-  echo "ERROR: DEVOPS_USER must not be root." >&2
+  bootstrap_error "DEVOPS_USER must not be root."
   exit 1
 fi
 if [[ "$DEVOPS_USER" == "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
-  echo "ERROR: DEVOPS_USER and COOLIFY_SUDO_NOPASSWD_USER must be different users." >&2
+  bootstrap_error "DEVOPS_USER and COOLIFY_SUDO_NOPASSWD_USER must be different users."
   exit 1
 fi
 managed_users_csv="$DEVOPS_USER"
 managed_users_csv="$(csv_append_unique "$managed_users_csv" "$COOLIFY_SUDO_NOPASSWD_USER")"
 for user in $(split_csv_to_lines "${ADDITIONAL_SUDO_USERS:-}"); do
   if [[ "$user" == "root" ]]; then
-    echo "ERROR: ADDITIONAL_SUDO_USERS must not contain root." >&2
+    bootstrap_error "ADDITIONAL_SUDO_USERS must not contain root."
     exit 1
   fi
   if [[ "$user" == *:* ]]; then
-    echo "ERROR: ADDITIONAL_SUDO_USERS contains invalid username (colon not allowed): $user" >&2
+    bootstrap_error "ADDITIONAL_SUDO_USERS contains invalid username (colon not allowed): $user"
     exit 1
   fi
   if ! is_valid_unix_username "$user"; then
-    echo "ERROR: ADDITIONAL_SUDO_USERS contains invalid UNIX username: $user" >&2
+    bootstrap_error "ADDITIONAL_SUDO_USERS contains invalid UNIX username: $user"
     exit 1
   fi
   if [[ "$user" == "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
-    echo "ERROR: ADDITIONAL_SUDO_USERS must not contain COOLIFY_SUDO_NOPASSWD_USER ($COOLIFY_SUDO_NOPASSWD_USER)." >&2
+    bootstrap_error "ADDITIONAL_SUDO_USERS must not contain COOLIFY_SUDO_NOPASSWD_USER ($COOLIFY_SUDO_NOPASSWD_USER)."
     exit 1
   fi
   managed_users_csv="$(csv_append_unique "$managed_users_csv" "$user")"
 done
+bootstrap_success "Input validation completed for managed user password workflow."
 
 if ! command -v openssl >/dev/null 2>&1; then
-  echo "ERROR: openssl is required to encrypt generated password file" >&2
+  bootstrap_error "openssl is required to encrypt generated password file"
   exit 1
 fi
 
@@ -109,7 +112,7 @@ if [[ -f "$ENCRYPTED_PASSWORD_FILE" ]]; then
     -in "$ENCRYPTED_PASSWORD_FILE" \
     -out "$existing_plaintext_file" \
     -pass env:USER_PASSWORDS_ENCRYPTION_PASSWORD; then
-    echo "ERROR: could not decrypt existing password file: $ENCRYPTED_PASSWORD_FILE" >&2
+    bootstrap_error "could not decrypt existing password file: $ENCRYPTED_PASSWORD_FILE"
     exit 1
   fi
 
@@ -123,6 +126,7 @@ if [[ -f "$ENCRYPTED_PASSWORD_FILE" ]]; then
       fi
     fi
   done < "$existing_plaintext_file"
+  bootstrap_success "Existing encrypted password vault decrypted successfully."
 fi
 
 {
@@ -134,17 +138,17 @@ fi
 changed_count=0
 for user in $(split_csv_to_lines "$managed_users_csv"); do
   if [[ "$user" == *:* ]]; then
-    echo "ERROR: managed user list contains invalid username (colon not allowed): $user" >&2
+    bootstrap_error "managed user list contains invalid username (colon not allowed): $user"
     exit 1
   fi
 
   if ! is_valid_unix_username "$user"; then
-    echo "ERROR: managed user list contains invalid UNIX username: $user" >&2
+    bootstrap_error "managed user list contains invalid UNIX username: $user"
     exit 1
   fi
 
   if ! id "$user" >/dev/null 2>&1; then
-    echo "ERROR: managed user does not exist: $user" >&2
+    bootstrap_error "managed user does not exist: $user"
     exit 1
   fi
 
@@ -171,5 +175,6 @@ USER_PASSWORDS_ENCRYPTION_PASSWORD="$USER_PASSWORDS_ENCRYPTION_PASSWORD" \
 chmod 600 "$ENCRYPTED_PASSWORD_FILE"
 chown root:root "$ENCRYPTED_PASSWORD_FILE"
 
-echo "ensure-user-passwords.sh: generated/rotated passwords for $changed_count user(s)"
-echo "ensure-user-passwords.sh: encrypted credentials saved to $ENCRYPTED_PASSWORD_FILE"
+bootstrap_success "generated/rotated passwords for $changed_count user(s)"
+bootstrap_success "encrypted credentials saved to $ENCRYPTED_PASSWORD_FILE"
+bootstrap_success "ensure-user-passwords.sh completed successfully."

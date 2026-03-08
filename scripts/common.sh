@@ -1,6 +1,48 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+bootstrap_log_ts() {
+  date -u '+%Y-%m-%dT%H:%M:%SZ'
+}
+
+bootstrap_log() {
+  local level="$1"
+  shift
+  local context="${BOOTSTRAP_LOG_CONTEXT:-$(basename "${0:-script}")}"
+  printf '[%s] [%s] [%s] %s\n' "$level" "$(bootstrap_log_ts)" "$context" "$*" >&2
+}
+
+bootstrap_info() {
+  bootstrap_log "INFO" "$*"
+}
+
+bootstrap_success() {
+  bootstrap_log "SUCCESS" "$*"
+}
+
+bootstrap_warn() {
+  bootstrap_log "WARNING" "$*"
+}
+
+bootstrap_error() {
+  bootstrap_log "ERROR" "$*"
+}
+
+bootstrap_install_error_trap() {
+  local context="${1:-$(basename "${0:-script}")}"
+  BOOTSTRAP_LOG_CONTEXT="$context"
+  set -o errtrace
+  trap 'bootstrap_err_trap "$?" "$LINENO" "$BASH_COMMAND"' ERR
+}
+
+bootstrap_err_trap() {
+  local exit_code="$1"
+  local line_no="$2"
+  local command="$3"
+  bootstrap_error "Unhandled failure (exit=${exit_code}) at line ${line_no}: ${command}"
+  exit "$exit_code"
+}
+
 split_csv_to_lines() {
   local csv="$1"
   local item=""
@@ -54,7 +96,7 @@ load_env_file_strict() {
   local line_no=0
 
   if [[ ! -f "$env_file" ]]; then
-    echo "ERROR: env file not found: $env_file" >&2
+    bootstrap_error "env file not found: $env_file"
     return 1
   fi
 
@@ -70,7 +112,7 @@ load_env_file_strict() {
       key="${BASH_REMATCH[2]}"
       raw_value="$(trim_whitespace "${BASH_REMATCH[3]}")"
     else
-      echo "ERROR: invalid env line $line_no in $env_file: $line" >&2
+      bootstrap_error "invalid env line $line_no in $env_file: $line"
       return 1
     fi
 
@@ -85,13 +127,13 @@ load_env_file_strict() {
       value="${value//\\\$/\$}"
     else
       if [[ "$raw_value" == *\$\(* ]] || [[ "$raw_value" == *\$\{* ]] || [[ "$raw_value" == *\`* ]]; then
-        echo "ERROR: potential shell expansion syntax for $key at line $line_no in $env_file; quote the value" >&2
+        bootstrap_error "potential shell expansion syntax for $key at line $line_no in $env_file; quote the value"
         return 1
       fi
       # Allow unquoted spaces only for ADDITIONAL_SUDO_USERS so operators can
       # write simple user lists (for example: "ops admin;dev").
       if [[ "$raw_value" =~ [[:space:]] ]] && [[ "$key" != "ADDITIONAL_SUDO_USERS" ]]; then
-        echo "ERROR: unquoted whitespace for $key at line $line_no in $env_file" >&2
+        bootstrap_error "unquoted whitespace for $key at line $line_no in $env_file"
         return 1
       fi
       value="$raw_value"

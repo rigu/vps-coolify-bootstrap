@@ -37,7 +37,7 @@ flowchart TD
   H --> H1["Re-validate runtime inputs on VPS"]
   H1 --> I["Ensure users + SSH keys (including COOLIFY_SUDO_NOPASSWD_USER)"]
   I --> J["Run ensure-user-passwords.sh"]
-  J --> K["Set passwords only for locked/unset users"]
+  J --> K["Set passwords for locked/unset users or users missing from vault"]
   K --> L["Write encrypted vault /etc/vps-coolify-bootstrap/user-passwords.enc"]
   L --> M["Sync SSH AllowUsers from effective managed users"]
   M --> N["Disable ssh.socket, validate sshd, restart ssh.service, cleanup stale :22 listeners"]
@@ -46,7 +46,8 @@ flowchart TD
   P --> R["Apply groups + sudo policy"]
   R --> Q["Sync localhost-only Coolify SSH user + restricted key + SSH port"]
   Q --> Q1["Sync realtime host env from COOLIFY_REALTIME_DOMAIN"]
-  Q1 --> S["Sync DOCKER-USER guards for 6001/6002 based on CLOSE_COOLIFY_REALTIME_PORTS"]
+  Q1 --> Q2["When CLOSE_COOLIFY_REALTIME_PORTS=true: harden Coolify compose port publishing (8000,6001,6002)"]
+  Q2 --> S["Sync DOCKER-USER guards for 6001/6002 based on CLOSE_COOLIFY_REALTIME_PORTS"]
   S --> T["SSH login on hardened port"]
   T --> U["Finish Coolify onboarding"]
 ```
@@ -236,6 +237,7 @@ Runtime password vault behavior:
 Dependency rule:
 
 - when `CLOSE_COOLIFY_REALTIME_PORTS=true`, `COOLIFY_REALTIME_DOMAIN` is mandatory
+- when `COOLIFY_REALTIME_DOMAIN` is set, it must not contain `CHANGE_ME`
 
 Runtime sync behavior:
 
@@ -245,8 +247,14 @@ Runtime sync behavior:
   - write `PUSHER_SCHEME=https`
 - if empty:
   - remove those keys from Coolify `.env`
-- bootstrap does not edit Coolify compose files for realtime routing;
-  it uses env-level `PUSHER_*` configuration and optional `DOCKER-USER` guards
+- when `CLOSE_COOLIFY_REALTIME_PORTS=true`, bootstrap also hardens
+  Coolify compose files automatically:
+  - remove `${APP_PORT:-8000}:8080` publish rule from
+    `/data/coolify/source/docker-compose.yml`
+  - replace Soketi public `ports` mapping in
+    `/data/coolify/source/docker-compose.prod.yml` with internal
+    `expose: "6001"/"6002"`
+  - redeploy Coolify with updated compose files
 - this `PUSHER_*` synchronization is independent from `CLOSE_COOLIFY_REALTIME_PORTS`
   and is applied even when `CLOSE_COOLIFY_REALTIME_PORTS=false`
 - meaning of each mode:
@@ -255,7 +263,7 @@ Runtime sync behavior:
     `6001/6002` may still be reachable
   - `CLOSE_COOLIFY_REALTIME_PORTS=true` + domain set:
     app points realtime to `https://<domain>:443`, and public `6001/6002`
-    is blocked via `DOCKER-USER` guards
+    is blocked via compose hardening + `DOCKER-USER` guards
 
 ### 11) Placeholder and final render constraints
 

@@ -22,9 +22,20 @@ force_password=0
 force_encryption_password=0
 force_ssh_key=0
 
+require_value_arg() {
+  local flag="$1"
+  local maybe_value="${2:-}"
+  if [[ -z "$maybe_value" || "$maybe_value" == -* ]]; then
+    echo "ERROR: $flag requires a value." >&2
+    usage >&2
+    exit 1
+  fi
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --env-file)
+      require_value_arg "--env-file" "${2:-}"
       env_file="${2:-}"
       shift 2
       ;;

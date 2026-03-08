@@ -2,46 +2,49 @@
 set -euo pipefail
 
 ENV_FILE="${1:-/etc/vps-coolify-bootstrap/bootstrap.env}"
-
-if [[ ! -f "$ENV_FILE" ]]; then
-  echo "ERROR: bootstrap env file not found: $ENV_FILE" >&2
-  exit 1
-fi
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
 # shellcheck disable=SC1091
 source "$script_dir/common.sh"
+bootstrap_install_error_trap "bootstrap-host.sh"
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  bootstrap_error "bootstrap env file not found: $ENV_FILE"
+  exit 1
+fi
 
 load_env_file_strict "$ENV_FILE"
+bootstrap_success "Loaded bootstrap env from $ENV_FILE."
 
 require_var() {
   local name="$1"
   if [[ -z "${!name:-}" ]]; then
-    echo "ERROR: missing required variable: $name" >&2
+    bootstrap_error "missing required variable: $name"
     exit 1
   fi
 }
 
-for v in SSH_PORT DEVOPS_USER COOLIFY_PUBLIC_DOMAIN COOLIFY_ROOT_USERNAME COOLIFY_ROOT_USER_EMAIL COOLIFY_ROOT_USER_PASSWORD USER_PASSWORDS_ENCRYPTION_PASSWORD; do
+for v in SSH_PORT COOLIFY_PUBLIC_DOMAIN COOLIFY_ROOT_USERNAME COOLIFY_ROOT_USER_EMAIL COOLIFY_ROOT_USER_PASSWORD USER_PASSWORDS_ENCRYPTION_PASSWORD; do
   require_var "$v"
 done
 
 if [[ ! "$SSH_PORT" =~ ^[0-9]+$ ]]; then
-  echo "ERROR: SSH_PORT must be numeric (1-65535)" >&2
+  bootstrap_error "SSH_PORT must be numeric (1-65535)"
   exit 1
 fi
 ssh_port_num=$((10#$SSH_PORT))
 if (( ssh_port_num < 1 || ssh_port_num > 65535 )); then
-  echo "ERROR: SSH_PORT must be between 1 and 65535" >&2
+  bootstrap_error "SSH_PORT must be between 1 and 65535"
   exit 1
 fi
 
 if (( ${#COOLIFY_ROOT_USER_PASSWORD} < 16 )); then
-  echo "ERROR: COOLIFY_ROOT_USER_PASSWORD must be at least 16 chars" >&2
+  bootstrap_error "COOLIFY_ROOT_USER_PASSWORD must be at least 16 chars"
   exit 1
 fi
 
 if (( ${#USER_PASSWORDS_ENCRYPTION_PASSWORD} < 16 )); then
-  echo "ERROR: USER_PASSWORDS_ENCRYPTION_PASSWORD must be at least 16 chars" >&2
+  bootstrap_error "USER_PASSWORDS_ENCRYPTION_PASSWORD must be at least 16 chars"
   exit 1
 fi
 
@@ -50,49 +53,49 @@ if [[ "$SSH_PUBLIC_KEY" == *"CHANGE_ME"* ]]; then
   SSH_PUBLIC_KEY=""
 fi
 if [[ -n "$SSH_PUBLIC_KEY" ]] && [[ ! "$SSH_PUBLIC_KEY" =~ ^ssh-(ed25519|rsa|ecdsa-[^[:space:]]+)[[:space:]] ]]; then
-  echo "ERROR: invalid SSH_PUBLIC_KEY format" >&2
+  bootstrap_error "invalid SSH_PUBLIC_KEY format"
   exit 1
 fi
 if [[ -z "$SSH_PUBLIC_KEY" ]]; then
-  echo "WARNING: SSH_PUBLIC_KEY is empty; bootstrap will not manage operator SSH keys for DEVOPS_USER/ADDITIONAL_SUDO_USERS."
+  bootstrap_warn "SSH_PUBLIC_KEY is empty; bootstrap will not manage operator SSH keys for DEVOPS_USER/ADDITIONAL_SUDO_USERS."
 fi
 
 if [[ "$COOLIFY_PUBLIC_DOMAIN" =~ [[:space:]/] ]]; then
-  echo "ERROR: COOLIFY_PUBLIC_DOMAIN must be a hostname without spaces or /" >&2
+  bootstrap_error "COOLIFY_PUBLIC_DOMAIN must be a hostname without spaces or /"
   exit 1
 fi
 
 if [[ ! "$COOLIFY_ROOT_USER_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; then
-  echo "ERROR: COOLIFY_ROOT_USER_EMAIL must be a valid email format" >&2
+  bootstrap_error "COOLIFY_ROOT_USER_EMAIL must be a valid email format"
   exit 1
 fi
 
 if [[ ! "$COOLIFY_ROOT_USERNAME" =~ ^[A-Za-z0-9._-]+$ ]]; then
-  echo "ERROR: COOLIFY_ROOT_USERNAME must match ^[A-Za-z0-9._-]+$" >&2
+  bootstrap_error "COOLIFY_ROOT_USERNAME must match ^[A-Za-z0-9._-]+$"
   exit 1
 fi
 
 DEVOPS_USER="${DEVOPS_USER:-devops}"
 if ! is_valid_unix_username "$DEVOPS_USER"; then
-  echo "ERROR: DEVOPS_USER is not a valid UNIX username: $DEVOPS_USER" >&2
+  bootstrap_error "DEVOPS_USER is not a valid UNIX username: $DEVOPS_USER"
   exit 1
 fi
 if [[ "$DEVOPS_USER" == "root" ]]; then
-  echo "ERROR: DEVOPS_USER must not be root." >&2
+  bootstrap_error "DEVOPS_USER must not be root."
   exit 1
 fi
 
 COOLIFY_SUDO_NOPASSWD_USER="${COOLIFY_SUDO_NOPASSWD_USER:-coolify}"
 if ! is_valid_unix_username "$COOLIFY_SUDO_NOPASSWD_USER"; then
-  echo "ERROR: COOLIFY_SUDO_NOPASSWD_USER is not a valid UNIX username: $COOLIFY_SUDO_NOPASSWD_USER" >&2
+  bootstrap_error "COOLIFY_SUDO_NOPASSWD_USER is not a valid UNIX username: $COOLIFY_SUDO_NOPASSWD_USER"
   exit 1
 fi
 if [[ "$COOLIFY_SUDO_NOPASSWD_USER" == "root" ]]; then
-  echo "ERROR: COOLIFY_SUDO_NOPASSWD_USER must not be root." >&2
+  bootstrap_error "COOLIFY_SUDO_NOPASSWD_USER must not be root."
   exit 1
 fi
 if [[ "$DEVOPS_USER" == "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
-  echo "ERROR: DEVOPS_USER and COOLIFY_SUDO_NOPASSWD_USER must be different users." >&2
+  bootstrap_error "DEVOPS_USER and COOLIFY_SUDO_NOPASSWD_USER must be different users."
   exit 1
 fi
 
@@ -100,19 +103,19 @@ MANAGED_USERS_CSV="$DEVOPS_USER"
 MANAGED_USERS_CSV="$(csv_append_unique "$MANAGED_USERS_CSV" "$COOLIFY_SUDO_NOPASSWD_USER")"
 for user in $(split_csv_to_lines "${ADDITIONAL_SUDO_USERS:-}"); do
   if [[ "$user" == "root" ]]; then
-    echo "ERROR: ADDITIONAL_SUDO_USERS must not contain root." >&2
+    bootstrap_error "ADDITIONAL_SUDO_USERS must not contain root."
     exit 1
   fi
   if [[ "$user" == *:* ]]; then
-    echo "ERROR: ADDITIONAL_SUDO_USERS contains invalid username (colon not allowed): $user" >&2
+    bootstrap_error "ADDITIONAL_SUDO_USERS contains invalid username (colon not allowed): $user"
     exit 1
   fi
   if ! is_valid_unix_username "$user"; then
-    echo "ERROR: ADDITIONAL_SUDO_USERS contains invalid UNIX username: $user" >&2
+    bootstrap_error "ADDITIONAL_SUDO_USERS contains invalid UNIX username: $user"
     exit 1
   fi
   if [[ "$user" == "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
-    echo "ERROR: ADDITIONAL_SUDO_USERS must not contain COOLIFY_SUDO_NOPASSWD_USER ($COOLIFY_SUDO_NOPASSWD_USER)." >&2
+    bootstrap_error "ADDITIONAL_SUDO_USERS must not contain COOLIFY_SUDO_NOPASSWD_USER ($COOLIFY_SUDO_NOPASSWD_USER)."
     exit 1
   fi
   MANAGED_USERS_CSV="$(csv_append_unique "$MANAGED_USERS_CSV" "$user")"
@@ -121,7 +124,7 @@ done
 SSH_KEY_ROTATE="${SSH_KEY_ROTATE:-0}"
 
 if [[ "$SSH_KEY_ROTATE" != "0" && "$SSH_KEY_ROTATE" != "1" ]]; then
-  echo "ERROR: SSH_KEY_ROTATE must be 0 or 1" >&2
+  bootstrap_error "SSH_KEY_ROTATE must be 0 or 1"
   exit 1
 fi
 
@@ -140,20 +143,25 @@ case "$CLOSE_COOLIFY_REALTIME_PORTS" in
   1) CLOSE_COOLIFY_REALTIME_PORTS="true" ;;
   0) CLOSE_COOLIFY_REALTIME_PORTS="false" ;;
   *)
-    echo "ERROR: CLOSE_COOLIFY_REALTIME_PORTS must be true/false or 1/0" >&2
+    bootstrap_error "CLOSE_COOLIFY_REALTIME_PORTS must be true/false or 1/0"
     exit 1
     ;;
 esac
 
 COOLIFY_REALTIME_DOMAIN="${COOLIFY_REALTIME_DOMAIN:-}"
 if [[ -n "$COOLIFY_REALTIME_DOMAIN" ]] && [[ "$COOLIFY_REALTIME_DOMAIN" =~ [[:space:]/] ]]; then
-  echo "ERROR: COOLIFY_REALTIME_DOMAIN must be a hostname without spaces or /" >&2
+  bootstrap_error "COOLIFY_REALTIME_DOMAIN must be a hostname without spaces or /"
+  exit 1
+fi
+if [[ "$COOLIFY_REALTIME_DOMAIN" == *"CHANGE_ME"* ]]; then
+  bootstrap_error "COOLIFY_REALTIME_DOMAIN must not contain CHANGE_ME placeholder."
   exit 1
 fi
 if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]] && [[ -z "$COOLIFY_REALTIME_DOMAIN" ]]; then
-  echo "ERROR: COOLIFY_REALTIME_DOMAIN is required when CLOSE_COOLIFY_REALTIME_PORTS=true" >&2
+  bootstrap_error "COOLIFY_REALTIME_DOMAIN is required when CLOSE_COOLIFY_REALTIME_PORTS=true"
   exit 1
 fi
+bootstrap_success "Input validation completed (SSH_PORT=${SSH_PORT}, DEVOPS_USER=${DEVOPS_USER}, CLOSE_COOLIFY_REALTIME_PORTS=${CLOSE_COOLIFY_REALTIME_PORTS})."
 
 ensure_user_exists() {
   local user="$1"
@@ -257,7 +265,7 @@ sync_sshd_allowusers() {
   [[ -n "$allow_users" ]] || return 0
 
   if [[ ! -f "$sshd_cfg" ]]; then
-    echo "ERROR: SSH hardening config not found: $sshd_cfg" >&2
+    bootstrap_error "SSH hardening config not found: $sshd_cfg"
     return 1
   fi
 
@@ -305,14 +313,14 @@ cleanup_stale_sshd_port22_listeners() {
       continue
     fi
 
-    echo "WARNING: terminating stale sshd listener on port 22 (pid=$pid)."
+    bootstrap_warn "terminating stale sshd listener on port 22 (pid=$pid)."
     kill "$pid" 2>/dev/null || true
   done
 
   sleep 1
   if ss -lnt '( sport = :22 )' 2>/dev/null | grep -q ':22'; then
-    echo "WARNING: port 22 is still listening after stale-listener cleanup."
-    echo "WARNING: inspect ssh.socket and SSH config fragments for extra listeners."
+    bootstrap_warn "port 22 is still listening after stale-listener cleanup."
+    bootstrap_warn "inspect ssh.socket and SSH config fragments for extra listeners."
   fi
 }
 
@@ -334,12 +342,12 @@ remove_docker_user_rule_if_present() {
 
 sync_coolify_realtime_port_guards() {
   if ! command -v iptables >/dev/null 2>&1; then
-    echo "WARNING: iptables is not available; cannot manage DOCKER-USER guards for 6001/6002."
+    bootstrap_warn "iptables is not available; cannot manage DOCKER-USER guards for 6001/6002."
     return 0
   fi
 
   if ! iptables -nL DOCKER-USER >/dev/null 2>&1; then
-    echo "WARNING: DOCKER-USER chain is unavailable; cannot manage guards for 6001/6002."
+    bootstrap_warn "DOCKER-USER chain is unavailable; cannot manage guards for 6001/6002."
     return 0
   fi
 
@@ -373,6 +381,7 @@ sync_coolify_realtime_port_guards() {
       remove_docker_user_rule_if_present ip6tables -p tcp -m multiport --dports 6001,6002 -j DROP
     fi
   fi
+  bootstrap_success "DOCKER-USER guards synchronized for 6001/6002 (CLOSE_COOLIFY_REALTIME_PORTS=${CLOSE_COOLIFY_REALTIME_PORTS})."
 }
 
 set_env_kv() {
@@ -402,7 +411,7 @@ configure_coolify_realtime_domain() {
   local changed=0
   local current=""
   if [[ ! -f "$coolify_env" ]]; then
-    echo "WARNING: $coolify_env not found; cannot manage realtime host env automatically."
+    bootstrap_warn "$coolify_env not found; cannot manage realtime host env automatically."
     return 0
   fi
 
@@ -425,7 +434,7 @@ configure_coolify_realtime_domain() {
       changed=1
     fi
 
-    echo "INFO: configured Coolify realtime host ${COOLIFY_REALTIME_DOMAIN} (PUSHER_PORT=443, PUSHER_SCHEME=https)."
+    bootstrap_success "Configured Coolify realtime host ${COOLIFY_REALTIME_DOMAIN} (PUSHER_PORT=443, PUSHER_SCHEME=https)."
   else
     if grep -qE '^PUSHER_HOST=' "$coolify_env"; then
       delete_env_kv "$coolify_env" "PUSHER_HOST"
@@ -449,6 +458,87 @@ configure_coolify_realtime_domain() {
       docker restart coolify-realtime >/dev/null 2>&1 || true
     fi
   fi
+  bootstrap_success "Realtime host env synchronization completed."
+}
+
+harden_coolify_compose_ports() {
+  local base_compose="/data/coolify/source/docker-compose.yml"
+  local prod_compose="/data/coolify/source/docker-compose.prod.yml"
+  local hardener_py="${script_dir}/harden-coolify-compose-ports.py"
+  local backup_base=""
+  local backup_prod=""
+  local result=0
+  local backup_suffix=""
+  local -a compose_cmd=()
+
+  if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" != "true" ]]; then
+    bootstrap_success "Compose hardening skipped because CLOSE_COOLIFY_REALTIME_PORTS=${CLOSE_COOLIFY_REALTIME_PORTS}."
+    return 0
+  fi
+
+  if [[ ! -f "$base_compose" || ! -f "$prod_compose" ]]; then
+    bootstrap_error "Coolify compose files not found: $base_compose / $prod_compose"
+    return 1
+  fi
+  if [[ ! -f "$hardener_py" ]]; then
+    bootstrap_error "compose hardener script not found: $hardener_py"
+    return 1
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
+    bootstrap_error "python3 is required for compose hardening with CLOSE_COOLIFY_REALTIME_PORTS=true"
+    return 1
+  fi
+
+  backup_suffix="$(date +%Y%m%d%H%M%S)"
+  backup_base="${base_compose}.bootstrap.bak.${backup_suffix}"
+  backup_prod="${prod_compose}.bootstrap.bak.${backup_suffix}"
+  cp "$base_compose" "$backup_base"
+  cp "$prod_compose" "$backup_prod"
+
+  set +e
+  python3 "$hardener_py" "$base_compose" "$prod_compose"
+  result=$?
+  set -e
+
+  case "$result" in
+    0)
+      rm -f "$backup_base" "$backup_prod"
+      bootstrap_success "Coolify compose already hardened; no changes required."
+      ;;
+    10)
+      if docker compose version >/dev/null 2>&1; then
+        compose_cmd=(docker compose)
+      elif command -v docker-compose >/dev/null 2>&1 && docker-compose version >/dev/null 2>&1; then
+        compose_cmd=(docker-compose)
+      else
+        bootstrap_error "Docker Compose is required to apply hardened Coolify compose files."
+        mv "$backup_base" "$base_compose"
+        mv "$backup_prod" "$prod_compose"
+        return 1
+      fi
+
+      if ! "${compose_cmd[@]}" -f "$base_compose" -f "$prod_compose" up -d; then
+        bootstrap_error "failed to redeploy Coolify after compose hardening; restoring backups."
+        mv "$backup_base" "$base_compose"
+        mv "$backup_prod" "$prod_compose"
+        return 1
+      fi
+      rm -f "$backup_base" "$backup_prod"
+      bootstrap_success "Coolify compose hardened and redeployed successfully."
+      ;;
+    20)
+      bootstrap_error "unsupported Coolify compose format; refusing partial hardening."
+      mv "$backup_base" "$base_compose"
+      mv "$backup_prod" "$prod_compose"
+      return 1
+      ;;
+    *)
+      bootstrap_error "compose hardening failed with code $result; restoring backups."
+      mv "$backup_base" "$base_compose"
+      mv "$backup_prod" "$prod_compose"
+      return 1
+      ;;
+  esac
 }
 
 apply_sudo_policy() {
@@ -493,9 +583,12 @@ done
 # The dedicated Coolify localhost user must not inherit the operator's public
 # SSH key. Keep access for this user restricted to the dedicated localhost key.
 remove_ssh_key_exact_line "$COOLIFY_SUDO_NOPASSWD_USER" "$SSH_PUBLIC_KEY"
+bootstrap_success "Managed users ensured and SSH keys synchronized."
 
 bash "$script_dir/ensure-user-passwords.sh" "$ENV_FILE"
+bootstrap_success "Managed user password/vault synchronization completed."
 sync_sshd_allowusers
+bootstrap_success "sshd AllowUsers synchronized from managed users."
 
 # Make sure sshd runtime dir exists before validation/restart.
 mkdir -p /run/sshd
@@ -505,6 +598,7 @@ cat >/etc/tmpfiles.d/sshd.conf <<'TMP'
 d /run/sshd 0755 root root -
 TMP
 systemd-tmpfiles --create /etc/tmpfiles.d/sshd.conf
+bootstrap_success "sshd runtime directory baseline prepared."
 
 # Ubuntu 24.04 defaults to ssh.socket (systemd socket activation).
 # Socket activation + sshd_config Port directive can conflict, causing sshd
@@ -522,6 +616,7 @@ sshd -t
 systemctl enable --now ssh.service
 systemctl restart ssh.service
 cleanup_stale_sshd_port22_listeners
+bootstrap_success "ssh.socket disabled; ssh.service validated/restarted on configured port."
 
 # Firewall hardening.
 # This intentionally resets UFW to the bootstrap baseline.
@@ -536,9 +631,11 @@ ufw delete allow 22/tcp || true
 ufw delete allow OpenSSH || true
 ufw logging low
 ufw --force enable
+bootstrap_success "UFW baseline rules applied (SSH,80,443)."
 
 systemctl enable --now fail2ban
 systemctl enable --now unattended-upgrades
+bootstrap_success "fail2ban and unattended-upgrades enabled."
 
 is_coolify_running() {
   if ! command -v docker >/dev/null 2>&1; then
@@ -558,11 +655,11 @@ sync_coolify_localhost_ssh_user() {
   local attempt=0
 
   if ! command -v docker >/dev/null 2>&1; then
-    echo "WARNING: docker not found; skipping Coolify localhost SSH user sync."
+    bootstrap_warn "docker not found; skipping Coolify localhost SSH user sync."
     return 0
   fi
   if ! docker ps --format '{{.Names}}' | grep -qx 'coolify'; then
-    echo "WARNING: coolify container is not running; skipping localhost SSH user sync."
+    bootstrap_warn "coolify container is not running; skipping localhost SSH user sync."
     return 0
   fi
 
@@ -664,7 +761,7 @@ PHP
     sleep 2
   done
 
-  echo "WARNING: failed to synchronize Coolify localhost server SSH user automatically after retries."
+  bootstrap_warn "failed to synchronize Coolify localhost server SSH user automatically after retries."
   return 0
 }
 
@@ -677,18 +774,23 @@ if ! is_coolify_running; then
     ROOT_USER_EMAIL="$COOLIFY_ROOT_USER_EMAIL" \
     ROOT_USER_PASSWORD="$COOLIFY_ROOT_USER_PASSWORD" \
     bash -c 'curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash'
+  bootstrap_success "Coolify installed via official installer."
+else
+  bootstrap_success "Coolify already running; install step skipped."
 fi
 
 groupadd -f coolify
 if command -v docker >/dev/null 2>&1; then
   groupadd -f docker
 fi
+bootstrap_success "Required groups ensured (coolify, docker when available)."
 
 for user in $(split_csv_to_lines "$MANAGED_USERS_CSV"); do
   ensure_user_exists "$user"
   usermod -aG sudo "$user"
 done
 apply_sudo_policy
+bootstrap_success "Sudo policy applied for managed users."
 
 for user in $(split_csv_to_lines "$MANAGED_USERS_CSV"); do
   ensure_user_exists "$user"
@@ -701,22 +803,26 @@ if getent group docker >/dev/null 2>&1; then
     usermod -aG docker "$user"
   done
 fi
+bootstrap_success "Managed users synchronized to sudo/docker/coolify groups."
 
 sync_coolify_localhost_ssh_user
+bootstrap_success "Coolify localhost SSH user synchronization completed."
 configure_coolify_realtime_domain
+harden_coolify_compose_ports
 sync_coolify_realtime_port_guards
+bootstrap_success "Realtime security policy synchronization completed."
 
 # Docker published ports bypass UFW because Docker writes iptables rules directly.
 if command -v ss >/dev/null 2>&1 && ss -tuln | awk '{print $4}' | grep -Eq '[:.]6001$|[:.]6002$'; then
-  echo "WARNING: port 6001 and/or 6002 is listening on host."
+  bootstrap_warn "port 6001 and/or 6002 is listening on host."
   if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
-    echo "WARNING: DOCKER-USER guards were applied to block public ingress to 6001/6002."
-    echo "WARNING: verify effective policy with: sudo iptables -S DOCKER-USER"
-    echo "WARNING: realtime domain in use: ${COOLIFY_REALTIME_DOMAIN}"
+    bootstrap_warn "DOCKER-USER guards were applied to block public ingress to 6001/6002."
+    bootstrap_warn "verify effective policy with: sudo iptables -S DOCKER-USER"
+    bootstrap_warn "realtime domain in use: ${COOLIFY_REALTIME_DOMAIN}"
   else
-    echo "WARNING: realtime ports are intentionally public by configuration."
+    bootstrap_warn "realtime ports are intentionally public by configuration."
   fi
 fi
 
-echo "Coolify public URL: https://${COOLIFY_PUBLIC_DOMAIN}"
-echo "bootstrap-host.sh completed successfully"
+bootstrap_success "Coolify public URL: https://${COOLIFY_PUBLIC_DOMAIN}"
+bootstrap_success "bootstrap-host.sh completed successfully."

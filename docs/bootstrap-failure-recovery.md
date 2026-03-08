@@ -35,16 +35,41 @@ If status is `error` or still not complete, continue.
 ## 2) Collect first error evidence
 
 ```bash
-sudo tail -n 250 /var/log/cloud-init-output.log
+sudo tail -n 250 /var/log/vps-bootstrap.log
 sudo journalctl -u cloud-init -u cloud-config -u cloud-final --no-pager -n 250
 sudo grep -Rni "error\\|failed\\|traceback" /var/log/cloud-init* 2>/dev/null | tail -n 80
 ```
+
+`/var/log/vps-bootstrap.log` is the primary consolidated bootstrap log and includes timestamped, script-context lines prefixed with `[SUCCESS]`, `[WARNING]`, `[ERROR]`.
 
 Typical root causes:
 - unresolved `CHANGE_ME` values in generated VPS-Coolify init file
 - invalid `SSH_PUBLIC_KEY` format
 - clone failure for `BOOTSTRAP_REPO_URL` / `BOOTSTRAP_REPO_REF`
 - transient apt/network failures during bootstrap
+
+## 2.1) Emergency SSH recovery from provider console
+
+If SSH is unreachable, run this directly in provider console (root shell):
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/recover-ssh-access.sh
+```
+
+What it does in default mode:
+- creates `/etc/ssh/sshd_config.d/10-port-recovery.conf` with temporary dual-port listen (`22` + configured `SSH_PORT`)
+- disables `ssh.socket`, enables/restarts `ssh.service`, validates `sshd -t`
+- opens UFW rules for `22` and configured `SSH_PORT`
+
+Optional:
+
+```bash
+# if Fail2ban blocked your source IP
+sudo bash /opt/vps-coolify-bootstrap/scripts/recover-ssh-access.sh --unban-ip <your_public_ip>
+
+# after SSH on configured port works, close temporary port 22 again
+sudo bash /opt/vps-coolify-bootstrap/scripts/recover-ssh-access.sh --close-22
+```
 
 ## 3) Validate minimum host baseline
 
@@ -132,6 +157,7 @@ This script is idempotent and executes the following actions in order:
 - install/start Coolify if missing
 - sync Coolify localhost server connection to `COOLIFY_SUDO_NOPASSWD_USER` + `SSH_PORT` and dedicated localhost SSH key
 - sync realtime host env (`PUSHER_HOST`, `PUSHER_PORT`, `PUSHER_SCHEME`) from `COOLIFY_REALTIME_DOMAIN`
+- when `CLOSE_COOLIFY_REALTIME_PORTS=true`, harden Coolify compose files to remove public `8000/6001/6002` publish bindings and redeploy
 - enforce sudo/docker/coolify memberships and sudo policy (passwordless for `DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` by default)
 - sync `DOCKER-USER` guards for `6001/6002` based on `CLOSE_COOLIFY_REALTIME_PORTS`
 
@@ -144,6 +170,7 @@ after recovery with `ss -tulpen` and `docker ps --format 'table {{.Names}}\t{{.P
 sudo systemctl is-active ssh.service fail2ban unattended-upgrades
 sudo ufw status verbose
 sudo docker ps --format 'table {{.Names}}\t{{.Status}}'
+sudo grep -nE '\$\{APP_PORT:-8000\}:8080|\$\{SOKETI_PORT:-6001\}:6001|6002:6002' /data/coolify/source/docker-compose.yml /data/coolify/source/docker-compose.prod.yml || true
 sudo iptables -S DOCKER-USER | grep -E '6001|6002' || true
 sudo ip6tables -S DOCKER-USER 2>/dev/null | grep -E '6001|6002' || true
 devops_user="$(sudo sed -n 's/^DEVOPS_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
@@ -160,6 +187,7 @@ Expected:
 - Coolify container running (name usually `coolify`)
 - Coolify localhost server (id `0`) uses `COOLIFY_SUDO_NOPASSWD_USER` and configured `SSH_PORT`
 - `DOCKER-USER` rules present for `6001/6002` when `CLOSE_COOLIFY_REALTIME_PORTS=true`
+- when `CLOSE_COOLIFY_REALTIME_PORTS=true`, Coolify compose no longer publishes `${APP_PORT:-8000}:8080` and Soketi `6001/6002` public `ports`
 
 ## 8) Validate remote access from your machine
 
