@@ -581,6 +581,7 @@ harden_coolify_compose_ports() {
         return 1
       fi
 
+      normalize_coolify_env_ip_values || true
       compose_err="$(mktemp)"
       if ! "${compose_cmd[@]}" -f "$base_compose" -f "$prod_compose" up -d >"$compose_err" 2>&1; then
         cat "$compose_err" >&2 || true
@@ -651,6 +652,67 @@ PY
   return "$status"
 }
 
+normalize_coolify_env_ip_values() {
+  local coolify_env="/data/coolify/source/.env"
+  local status=0
+  [[ -f "$coolify_env" ]] || return 1
+
+  python3 - "$coolify_env" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+lines = text.splitlines(keepends=True)
+changed = False
+out = []
+
+for line in lines:
+    raw = line.rstrip("\r\n")
+    eol = line[len(raw):]
+    stripped = raw.strip()
+    if not stripped or stripped.startswith("#") or "=" not in raw:
+        out.append(line)
+        continue
+
+    key, value = raw.split("=", 1)
+    k = key.strip()
+    if "IP" not in k or any(tag in k for tag in ("SUBNET", "POOL", "CIDR")):
+        out.append(line)
+        continue
+
+    m = re.match(r"^(['\"]?)([0-9A-Fa-f:.]+)/([0-9]{1,3})(['\"]?)$", value.strip())
+    if not m:
+        out.append(line)
+        continue
+
+    q1, ip_addr, _prefix, q2 = m.groups()
+    if q1 != q2:
+        out.append(line)
+        continue
+
+    new_value = f"{q1}{ip_addr}{q2}"
+    new_line = f"{key}={new_value}{eol}"
+    out.append(new_line)
+    changed = True
+
+if changed:
+    path.write_text("".join(out), encoding="utf-8")
+    raise SystemExit(0)
+raise SystemExit(3)
+PY
+  status=$?
+  if [[ "$status" == "0" ]]; then
+    bootstrap_warn "normalized CIDR suffixes for IP-like keys in $coolify_env before compose redeploy."
+    return 0
+  fi
+  if [[ "$status" == "3" ]]; then
+    return 1
+  fi
+  return "$status"
+}
+
 sanitize_compose_parseaddr_cidr_and_retry() {
   local err_file="$1"
   local base_compose="$2"
@@ -670,6 +732,9 @@ sanitize_compose_parseaddr_cidr_and_retry() {
   )
 
   if [[ "${#bad_values[@]}" -eq 0 ]]; then
+    if normalize_coolify_env_ip_values; then
+      return 0
+    fi
     return 1
   fi
 
