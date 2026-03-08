@@ -722,10 +722,18 @@ sanitize_compose_parseaddr_cidr_and_retry() {
   local sanitized=""
   local target=""
   local changed=0
+  local daemon_changed=0
   local -a bad_values=()
   local -a targets=("$coolify_env" "$base_compose" "$prod_compose")
   local -a discovered_targets=()
   local -A seen_targets=()
+  local -a search_roots=("/data/coolify" "/etc/docker")
+
+  for target in "${targets[@]}"; do
+    if [[ -n "$target" ]]; then
+      seen_targets["$target"]=1
+    fi
+  done
 
   mapfile -t bad_values < <(
     grep -oE 'ParseAddr\("[^"]+/[0-9]{1,3}"\)' "$err_file" 2>/dev/null \
@@ -746,7 +754,7 @@ sanitize_compose_parseaddr_cidr_and_retry() {
       continue
     fi
 
-    mapfile -t discovered_targets < <(grep -RIl --fixed-strings -- "$value" /data/coolify 2>/dev/null || true)
+    mapfile -t discovered_targets < <(grep -RIl --fixed-strings -- "$value" "${search_roots[@]}" 2>/dev/null || true)
     for target in "${discovered_targets[@]}"; do
       if [[ -n "$target" && -z "${seen_targets["$target"]+x}" ]]; then
         targets+=("$target")
@@ -758,10 +766,27 @@ sanitize_compose_parseaddr_cidr_and_retry() {
       [[ -f "$target" ]] || continue
       if replace_literal_in_file "$target" "$value" "$sanitized"; then
         changed=1
+        if [[ "$target" == /etc/docker/* ]]; then
+          daemon_changed=1
+        fi
         bootstrap_warn "sanitized ParseAddr CIDR value in $target: $value -> $sanitized"
       fi
     done
   done
+
+  if (( changed == 0 )); then
+    bootstrap_warn "unable to locate ParseAddr CIDR value in /data/coolify or /etc/docker: ${bad_values[*]}"
+  fi
+
+  if (( daemon_changed == 1 )); then
+    if command -v systemctl >/dev/null 2>&1; then
+      if systemctl restart docker >/dev/null 2>&1; then
+        bootstrap_warn "docker service restarted after ParseAddr CIDR sanitization in /etc/docker."
+      else
+        bootstrap_warn "could not restart docker service after /etc/docker sanitization; continuing."
+      fi
+    fi
+  fi
 
   if (( changed == 1 )); then
     return 0
