@@ -75,6 +75,26 @@ function Invoke-NativeCommand {
     }
 }
 
+function Test-NativeCommandAvailable {
+    param(
+        [string]$Command,
+        [string[]]$ProbeArgs = @("--version")
+    )
+
+    if (-not (Get-Command $Command -ErrorAction SilentlyContinue)) {
+        return $false
+    }
+
+    try {
+        $global:LASTEXITCODE = 0
+        & $Command @ProbeArgs *> $null
+        $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+        return ($exitCode -eq 0)
+    } catch {
+        return $false
+    }
+}
+
 Run-Test "generate-secrets.ps1 creates env + secrets + ssh autodetect" {
     $tmp = New-TempDir
     try {
@@ -214,12 +234,12 @@ OUTPUT_FILE=$outFile
         Assert-True (-not $content.Contains("_HERE")) "Output should not contain unreplaced placeholders"
         Assert-Match $content 'ssh_authorized_keys:' "Output should include ssh_authorized_keys"
 
-        if (Get-Command python3 -ErrorAction SilentlyContinue) {
+        if (Test-NativeCommandAvailable -Command "python3" -ProbeArgs @("--version")) {
             Invoke-NativeCommand -Description "python3 yaml parse" -Command {
                 & python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1], 'r', encoding='utf-8').read())" "$outFile"
             }
         } else {
-            Write-Host "[INFO] python3 not found; skipping YAML parse check on this host."
+            Write-Host "[INFO] python3 not available (or only Windows Store alias); skipping YAML parse check on this host."
         }
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
