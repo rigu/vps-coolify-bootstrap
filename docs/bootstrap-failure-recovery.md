@@ -170,10 +170,8 @@ This script is idempotent and executes the following actions in order:
 - install/start Coolify if missing
 - sync Coolify localhost server connection to `COOLIFY_SUDO_NOPASSWD_USER` + `SSH_PORT` and dedicated localhost SSH key
 - sync realtime host env (`PUSHER_HOST`, `PUSHER_PORT`, `PUSHER_SCHEME`) from effective realtime domain (`COOLIFY_REALTIME_DOMAIN` or `COOLIFY_PUBLIC_DOMAIN` fallback)
-- attempt Coolify compose hardening (remove `8000` publish and, in closed mode, `6001/6002` publish); if redeploy fails, restore compose backups and continue
 - enforce sudo/docker/coolify memberships and sudo policy (passwordless for `DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` by default)
 - sync `DOCKER-USER` guards:
-  - always block public `8000`
   - block public `6001/6002` when `CLOSE_COOLIFY_REALTIME_PORTS=true`
 
 Important: Docker-published ports can bypass UFW rules. Validate exposed ports
@@ -185,9 +183,8 @@ after recovery with `ss -tulpen` and `docker ps --format 'table {{.Names}}\t{{.P
 sudo systemctl is-active ssh.service fail2ban unattended-upgrades
 sudo ufw status verbose
 sudo docker ps --format 'table {{.Names}}\t{{.Status}}'
-sudo grep -nE '(:8080|\\$\\{SOKETI_PORT:-6001\\}:6001|6002:6002)' /data/coolify/source/docker-compose.yml /data/coolify/source/docker-compose.prod.yml || true
-sudo iptables -S DOCKER-USER | grep -E '8000|6001|6002' || true
-sudo ip6tables -S DOCKER-USER 2>/dev/null | grep -E '8000|6001|6002' || true
+sudo iptables -S DOCKER-USER | grep -E '6001|6002' || true
+sudo ip6tables -S DOCKER-USER 2>/dev/null | grep -E '6001|6002' || true
 devops_user="$(sudo sed -n 's/^DEVOPS_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
 devops_user="${devops_user:-devops}"
 id "$devops_user" || true
@@ -201,7 +198,6 @@ Expected:
 - Docker available
 - Coolify container running (name usually `coolify`)
 - Coolify localhost server (id `0`) uses `COOLIFY_SUDO_NOPASSWD_USER` and configured `SSH_PORT`
-- `DOCKER-USER` rules present for `8000` in all modes
 - `DOCKER-USER` rules present for `6001/6002` when `CLOSE_COOLIFY_REALTIME_PORTS=true`
 
 ## 8) Validate remote access from your machine

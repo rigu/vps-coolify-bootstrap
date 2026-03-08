@@ -51,8 +51,8 @@ done
 
 failures=0
 warnings=0
-has_iptables_8000_drop=unknown
-has_ip6tables_8000_drop=unknown
+has_iptables_600x_drop=unknown
+has_ip6tables_600x_drop=unknown
 
 pass() {
   printf '[%s] PASS [%s] %s\n' "$(bootstrap_log_ts)" "${BOOTSTRAP_LOG_CONTEXT:-verify-bootstrap-state.sh}" "$1"
@@ -265,9 +265,9 @@ PHP
       fail "Coolify localhost server user is ${server_user} (expected ${COOLIFY_SUDO_NOPASSWD_USER})"
     fi
     if [[ "$server_ip" == "host.docker.internal" ]]; then
-      pass "Coolify localhost server IP is host.docker.internal"
+      pass "Coolify localhost server host is host.docker.internal"
     else
-      fail "Coolify localhost server IP is ${server_ip} (expected host.docker.internal)"
+      fail "Coolify localhost server host is ${server_ip} (expected host.docker.internal)"
     fi
     if [[ "$server_port" == "$SSH_PORT" ]]; then
       pass "Coolify localhost server port is ${SSH_PORT}"
@@ -277,13 +277,24 @@ PHP
     if [[ -n "$server_proxy_type" && "$server_proxy_type" != "NONE" ]]; then
       pass "Coolify localhost server proxy type is ${server_proxy_type}"
     else
-      fail "Coolify localhost server proxy type is ${server_proxy_type:-<empty>} (expected TRAEFIK/CADDY)"
+      warn "Coolify localhost server proxy type is ${server_proxy_type:-<empty>} (proxy may not be finalized before onboarding)"
     fi
     expected_instance_fqdn="https://${COOLIFY_PUBLIC_DOMAIN}"
     if [[ "$instance_fqdn" == "$expected_instance_fqdn" ]]; then
       pass "Instance fqdn is ${expected_instance_fqdn}"
     else
-      fail "Instance fqdn is ${instance_fqdn:-<empty>} (expected ${expected_instance_fqdn})"
+      warn "Instance fqdn is ${instance_fqdn:-<empty>} (expected ${expected_instance_fqdn} after onboarding)"
+    fi
+
+    if docker exec -e BOOTSTRAP_LOCALHOST_HOST="$server_ip" -e BOOTSTRAP_LOCALHOST_PORT="$server_port" coolify php -r '
+      $h = getenv("BOOTSTRAP_LOCALHOST_HOST");
+      $p = (int) getenv("BOOTSTRAP_LOCALHOST_PORT");
+      $s = @fsockopen($h, $p, $errno, $errstr, 3);
+      exit($s ? 0 : 1);
+    ' >/dev/null 2>&1; then
+      pass "Coolify container can reach localhost server endpoint ${server_ip}:${server_port}"
+    else
+      fail "Coolify container cannot reach localhost server endpoint ${server_ip}:${server_port}"
     fi
   else
     fail "unable to read Coolify localhost server state from container"
@@ -358,7 +369,7 @@ prod_compose="/data/coolify/source/docker-compose.prod.yml"
 if [[ -f "$base_compose" && -f "$prod_compose" ]]; then
   if grep -Eq '^[[:space:]]*-[[:space:]]*"[^"]*:8080"' "$base_compose" \
     || grep -Eq '^[[:space:]]*-[[:space:]]*"[^"]*:8080"' "$prod_compose"; then
-    warn "Coolify compose still publishes 8080 via host mapping; public access must be blocked by DOCKER-USER 8000 guards"
+    warn "Coolify compose publishes 8080 via host mapping (official installer default for onboarding on :8000)"
   else
     pass "Coolify compose does not publish 8080 via host port mapping"
   fi
@@ -366,27 +377,22 @@ if [[ -f "$base_compose" && -f "$prod_compose" ]]; then
     if grep -Eq '^([[:space:]]*)ports:[[:space:]]*$' "$prod_compose" \
       && grep -Eq '^[[:space:]]*-[[:space:]]*"\$\{SOKETI_PORT:-6001\}:6001"' "$prod_compose" \
       && grep -Eq '^[[:space:]]*-[[:space:]]*"6002:6002"' "$prod_compose"; then
-      fail "Coolify prod compose still publishes Soketi ports 6001/6002 (expected expose-only when CLOSE_COOLIFY_REALTIME_PORTS=true)"
+      warn "Coolify prod compose still publishes Soketi ports 6001/6002; DOCKER-USER guards must enforce closed mode"
     else
       pass "Coolify prod compose does not publish Soketi ports 6001/6002"
     fi
   fi
 else
-  warn "Coolify compose files missing; skipped compose hardening verification"
+  warn "Coolify compose files missing; skipped compose inspection"
 fi
 
 if command -v iptables >/dev/null 2>&1 && iptables -nL DOCKER-USER >/dev/null 2>&1; then
-  if iptables -C DOCKER-USER -p tcp --dport 8000 -j DROP >/dev/null 2>&1; then
-    has_iptables_8000_drop=true
-    pass "iptables DOCKER-USER DROP guard exists for 8000"
-  else
-    has_iptables_8000_drop=false
-    fail "iptables DOCKER-USER DROP guard missing for 8000"
-  fi
   if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
     if iptables -C DOCKER-USER -p tcp -m multiport --dports 6001,6002 -j DROP >/dev/null 2>&1; then
+      has_iptables_600x_drop=true
       pass "iptables DOCKER-USER DROP guard exists for 6001/6002"
     else
+      has_iptables_600x_drop=false
       fail "iptables DOCKER-USER DROP guard missing for 6001/6002"
     fi
   else
@@ -397,24 +403,43 @@ if command -v iptables >/dev/null 2>&1 && iptables -nL DOCKER-USER >/dev/null 2>
     fi
   fi
 else
-  warn "iptables/DOCKER-USER not available; skipped 8000 and 6001/6002 guard verification"
+  warn "iptables/DOCKER-USER not available; skipped IPv4 6001/6002 guard verification"
 fi
 
 if command -v ip6tables >/dev/null 2>&1 && ip6tables -nL DOCKER-USER >/dev/null 2>&1; then
-  if ip6tables -C DOCKER-USER -p tcp --dport 8000 -j DROP >/dev/null 2>&1; then
-    has_ip6tables_8000_drop=true
-    pass "ip6tables DOCKER-USER DROP guard exists for 8000"
+  if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
+    if ip6tables -C DOCKER-USER -p tcp -m multiport --dports 6001,6002 -j DROP >/dev/null 2>&1; then
+      has_ip6tables_600x_drop=true
+      pass "ip6tables DOCKER-USER DROP guard exists for 6001/6002"
+    else
+      has_ip6tables_600x_drop=false
+      fail "ip6tables DOCKER-USER DROP guard missing for 6001/6002"
+    fi
   else
-    has_ip6tables_8000_drop=false
-    warn "ip6tables DOCKER-USER DROP guard missing for 8000"
+    if ip6tables -C DOCKER-USER -p tcp -m multiport --dports 6001,6002 -j DROP >/dev/null 2>&1; then
+      warn "ip6tables DOCKER-USER DROP guard exists even though CLOSE_COOLIFY_REALTIME_PORTS=false"
+    else
+      pass "no ip6tables DOCKER-USER DROP guard for 6001/6002 (expected with CLOSE_COOLIFY_REALTIME_PORTS=false)"
+    fi
   fi
 else
-  warn "ip6tables/DOCKER-USER not available; skipped IPv6 8000 guard verification"
+  warn "ip6tables/DOCKER-USER not available; skipped IPv6 6001/6002 guard verification"
 fi
 
 if ss -lnt | awk '{print $4}' | grep -Eq '[:.]6001$|[:.]6002$'; then
   if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
-    fail "ports 6001/6002 still listen on host (expected closed after compose hardening)"
+    if [[ "$has_iptables_600x_drop" == "true" ]]; then
+      pass "ports 6001/6002 listen, but IPv4 public ingress is blocked by DOCKER-USER"
+    elif [[ "$has_iptables_600x_drop" == "false" ]]; then
+      fail "ports 6001/6002 listen and IPv4 DOCKER-USER DROP guard is missing"
+    else
+      warn "ports 6001/6002 listen and IPv4 guard state could not be verified"
+    fi
+    if [[ "$has_ip6tables_600x_drop" == "true" ]]; then
+      pass "ports 6001/6002 IPv6 public ingress is blocked by DOCKER-USER"
+    elif [[ "$has_ip6tables_600x_drop" == "false" ]]; then
+      fail "ports 6001/6002 listen and IPv6 DOCKER-USER DROP guard is missing"
+    fi
   else
     pass "ports 6001/6002 are listening (expected when CLOSE_COOLIFY_REALTIME_PORTS=false)"
   fi
@@ -423,18 +448,16 @@ else
 fi
 
 if ss -lnt | awk '{print $4}' | grep -Eq '[:.]8000$'; then
-  if [[ "$has_iptables_8000_drop" == "true" ]]; then
-    pass "port 8000 is listening, but IPv4 public ingress is blocked by DOCKER-USER"
-  else
-    fail "port 8000 is listening and IPv4 DOCKER-USER DROP guard is missing"
-  fi
-  if [[ "$has_ip6tables_8000_drop" == "true" ]]; then
-    pass "port 8000 IPv6 public ingress is blocked by DOCKER-USER"
-  elif [[ "$has_ip6tables_8000_drop" == "false" ]]; then
-    warn "port 8000 listens and IPv6 DOCKER-USER DROP guard is missing"
-  fi
+  pass "port 8000 is listening on host (official Coolify onboarding access path)"
 else
   pass "port 8000 is not listening on host"
+fi
+
+if ss -lnt | awk '{print $4}' | grep -Eq '(^|[:.])80$' && \
+   ss -lnt | awk '{print $4}' | grep -Eq '(^|[:.])443$'; then
+  pass "ports 80/443 are listening (domain proxy path is active)"
+else
+  warn "ports 80/443 are not both listening yet (complete Coolify onboarding/domain proxy setup)"
 fi
 
 echo "=== Summary ==="

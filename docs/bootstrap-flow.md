@@ -45,10 +45,8 @@ flowchart TD
   O --> P["Install Coolify if missing"]
   P --> R["Apply groups + sudo policy"]
   R --> Q["Sync localhost-only Coolify SSH user + restricted key + SSH port"]
-  Q --> Q0["Configure Coolify instance fqdn=https://COOLIFY_PUBLIC_DOMAIN and ensure proxy listeners on 80/443"]
-  Q0 --> Q1["Sync realtime host env from effective realtime domain (COOLIFY_REALTIME_DOMAIN or COOLIFY_PUBLIC_DOMAIN fallback)"]
-  Q1 --> Q2["Attempt compose hardening: remove 8000->8080, and when CLOSE_COOLIFY_REALTIME_PORTS=true also convert 6001/6002 to expose-only"]
-  Q2 --> S["Sync DOCKER-USER guards: always block public 8000, and enforce 6001/6002 policy from CLOSE_COOLIFY_REALTIME_PORTS"]
+  Q --> Q1["Sync realtime host env from effective realtime domain (COOLIFY_REALTIME_DOMAIN or COOLIFY_PUBLIC_DOMAIN fallback)"]
+  Q1 --> S["Sync DOCKER-USER guards for 6001/6002 from CLOSE_COOLIFY_REALTIME_PORTS"]
   S --> T["SSH login on hardened port"]
   T --> U["Finish Coolify onboarding"]
 ```
@@ -132,7 +130,6 @@ Default paths:
 - `CLOSE_COOLIFY_REALTIME_PORTS`: accepts `true/false` or `1/0`
   - `false`: remove `DOCKER-USER` guards for `6001/6002`
   - `true`: add `DOCKER-USER` guards and require dedicated realtime host
-  - regardless of value, bootstrap keeps a `DOCKER-USER` public-drop guard for `8000` (HTTPS-only public policy)
 
 Legacy compatibility:
 
@@ -251,19 +248,7 @@ Runtime sync behavior:
   - write `PUSHER_SCHEME=https`
 - if both are empty:
   - remove those keys from Coolify `.env`
-- bootstrap enforces HTTPS domain proxy readiness:
-  - ensures Coolify proxy serves domain traffic via `80/443` using
-    `instance_settings.fqdn=https://<COOLIFY_PUBLIC_DOMAIN>`
-- bootstrap attempts compose hardening:
-  - remove canonical `8000->8080` publish rules
-    (`${APP_PORT:-8000}:8080` / `8000:8080`) from both
-    `/data/coolify/source/docker-compose.yml` and
-    `/data/coolify/source/docker-compose.prod.yml`
-  - when `CLOSE_COOLIFY_REALTIME_PORTS=true`, also replace Soketi public `ports` mapping in
-    `/data/coolify/source/docker-compose.prod.yml` with internal
-    `expose: "6001"/"6002"`
-  - if compose redeploy fails, bootstrap restores compose backups and continues with host-level guards
-- bootstrap always applies host-level `DOCKER-USER` guard for public `8000`; this is the hard guarantee for HTTPS-only external access even if compose hardening was skipped/restored
+- bootstrap syncs host-level `DOCKER-USER` guards only for realtime `6001/6002`
 - this `PUSHER_*` synchronization is independent from `CLOSE_COOLIFY_REALTIME_PORTS`
   and is applied even when `CLOSE_COOLIFY_REALTIME_PORTS=false`
 - meaning of each mode:
@@ -273,7 +258,7 @@ Runtime sync behavior:
   - `CLOSE_COOLIFY_REALTIME_PORTS=true`:
     app points realtime to `https://<effective-domain>:443`
     (`COOLIFY_REALTIME_DOMAIN` or `COOLIFY_PUBLIC_DOMAIN` fallback), and public `6001/6002`
-    is blocked via `DOCKER-USER` guards (compose hardening is additional reduction when successful)
+    is blocked via `DOCKER-USER` guards
 
 ### 11) Placeholder and final render constraints
 
@@ -286,7 +271,8 @@ Local render fails if:
 
 ## Runtime outputs
 
-- Coolify URL printed by bootstrap: `https://<COOLIFY_PUBLIC_DOMAIN>`
+- Coolify onboarding URL printed by bootstrap: `http://<your-server-ip>:8000`
+- Final URL after onboarding/domain setup: `https://<COOLIFY_PUBLIC_DOMAIN>`
 - Encrypted credential vault: `/etc/vps-coolify-bootstrap/user-passwords.enc`
 
 To decrypt on the server (must be run as `DEVOPS_USER` or `COOLIFY_SUDO_NOPASSWD_USER`, both passwordless sudo by policy), use the recommended sequence below:

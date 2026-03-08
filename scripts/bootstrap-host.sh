@@ -403,24 +403,14 @@ remove_docker_user_rule_if_present() {
 
 sync_coolify_realtime_port_guards() {
   if ! command -v iptables >/dev/null 2>&1; then
-    bootstrap_error "iptables is required to enforce DOCKER-USER guards for HTTPS-only policy."
-    return 1
+    bootstrap_warn "iptables is not available; cannot manage DOCKER-USER guards for 6001/6002."
+    return 0
   fi
 
   if ! iptables -nL DOCKER-USER >/dev/null 2>&1; then
-    bootstrap_error "DOCKER-USER chain is unavailable; cannot enforce HTTPS-only policy."
-    return 1
+    bootstrap_warn "DOCKER-USER chain is unavailable; cannot manage guards for 6001/6002."
+    return 0
   fi
-
-  # Enforce HTTPS-only public access for Coolify UI:
-  # - 80/443 are served by Coolify proxy
-  # - 8000 remains local/private only (drop public ingress in DOCKER-USER)
-  add_docker_user_rule_if_missing iptables -p tcp --dport 8000 -j DROP
-  add_docker_user_rule_if_missing iptables -p tcp --dport 8000 -s 127.0.0.1/32 -j RETURN
-  add_docker_user_rule_if_missing iptables -p tcp --dport 8000 -s 10.0.0.0/8 -j RETURN
-  add_docker_user_rule_if_missing iptables -p tcp --dport 8000 -s 172.16.0.0/12 -j RETURN
-  add_docker_user_rule_if_missing iptables -p tcp --dport 8000 -s 192.168.0.0/16 -j RETURN
-  add_docker_user_rule_if_missing iptables -p tcp --dport 8000 -s 100.64.0.0/10 -j RETURN
 
   if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
     # Drop public forwarded traffic to Coolify realtime ports by default.
@@ -440,10 +430,6 @@ sync_coolify_realtime_port_guards() {
   fi
 
   if command -v ip6tables >/dev/null 2>&1 && ip6tables -nL DOCKER-USER >/dev/null 2>&1; then
-    add_docker_user_rule_if_missing ip6tables -p tcp --dport 8000 -j DROP
-    add_docker_user_rule_if_missing ip6tables -p tcp --dport 8000 -s ::1/128 -j RETURN
-    add_docker_user_rule_if_missing ip6tables -p tcp --dport 8000 -s fc00::/7 -j RETURN
-    add_docker_user_rule_if_missing ip6tables -p tcp --dport 8000 -s fe80::/10 -j RETURN
     if [[ "$CLOSE_COOLIFY_REALTIME_PORTS" == "true" ]]; then
       add_docker_user_rule_if_missing ip6tables -p tcp -m multiport --dports 6001,6002 -j DROP
       add_docker_user_rule_if_missing ip6tables -p tcp -m multiport --dports 6001,6002 -s ::1/128 -j RETURN
@@ -456,7 +442,7 @@ sync_coolify_realtime_port_guards() {
       remove_docker_user_rule_if_present ip6tables -p tcp -m multiport --dports 6001,6002 -j DROP
     fi
   fi
-  bootstrap_success "DOCKER-USER guards synchronized (8000 public blocked; 6001/6002 policy from CLOSE_COOLIFY_REALTIME_PORTS=${CLOSE_COOLIFY_REALTIME_PORTS})."
+  bootstrap_success "DOCKER-USER guards synchronized for 6001/6002 (CLOSE_COOLIFY_REALTIME_PORTS=${CLOSE_COOLIFY_REALTIME_PORTS})."
 }
 
 set_env_kv() {
@@ -538,277 +524,6 @@ configure_coolify_realtime_domain() {
     fi
   fi
   bootstrap_success "Realtime host env synchronization completed."
-}
-
-harden_coolify_compose_ports() {
-  local base_compose="/data/coolify/source/docker-compose.yml"
-  local prod_compose="/data/coolify/source/docker-compose.prod.yml"
-  local hardener_py="${script_dir}/harden-coolify-compose-ports.py"
-  local backup_base=""
-  local backup_prod=""
-  local result=0
-  local backup_suffix=""
-  local compose_err=""
-  local -a compose_cmd=()
-
-  if [[ ! -f "$base_compose" || ! -f "$prod_compose" ]]; then
-    bootstrap_warn "Coolify compose files not found; skipping compose hardening and relying on DOCKER-USER guards."
-    return 0
-  fi
-  if [[ ! -f "$hardener_py" ]]; then
-    bootstrap_warn "compose hardener script not found; skipping compose hardening and relying on DOCKER-USER guards."
-    return 0
-  fi
-  if ! command -v python3 >/dev/null 2>&1; then
-    bootstrap_warn "python3 not found; skipping compose hardening and relying on DOCKER-USER guards."
-    return 0
-  fi
-
-  backup_suffix="$(date +%Y%m%d%H%M%S)"
-  backup_base="${base_compose}.bootstrap.bak.${backup_suffix}"
-  backup_prod="${prod_compose}.bootstrap.bak.${backup_suffix}"
-  cp "$base_compose" "$backup_base"
-  cp "$prod_compose" "$backup_prod"
-
-  # hardener returns:
-  # - 0: no changes
-  # - 10: changes applied
-  # - 20: unsupported format
-  # Capture non-zero codes without triggering ERR trap.
-  if python3 "$hardener_py" "$base_compose" "$prod_compose" "$CLOSE_COOLIFY_REALTIME_PORTS"; then
-    result=0
-  else
-    result=$?
-  fi
-
-  case "$result" in
-    0)
-      rm -f "$backup_base" "$backup_prod"
-      bootstrap_success "Coolify compose already hardened; no changes required."
-      ;;
-    10)
-      if docker compose version >/dev/null 2>&1; then
-        compose_cmd=(docker compose)
-      elif command -v docker-compose >/dev/null 2>&1 && docker-compose version >/dev/null 2>&1; then
-        compose_cmd=(docker-compose)
-      else
-        bootstrap_error "Docker Compose is required to apply hardened Coolify compose files."
-        mv "$backup_base" "$base_compose"
-        mv "$backup_prod" "$prod_compose"
-        return 1
-      fi
-
-      normalize_coolify_env_ip_values || true
-      compose_err="$(mktemp)"
-      if ! "${compose_cmd[@]}" -f "$base_compose" -f "$prod_compose" up -d >"$compose_err" 2>&1; then
-        cat "$compose_err" >&2 || true
-        if sanitize_compose_parseaddr_cidr_and_retry "$compose_err" "$base_compose" "$prod_compose"; then
-          bootstrap_warn "retrying Coolify redeploy after CIDR ParseAddr sanitization."
-          if ! "${compose_cmd[@]}" -f "$base_compose" -f "$prod_compose" up -d >"$compose_err" 2>&1; then
-            cat "$compose_err" >&2 || true
-            rm -f "$compose_err"
-            bootstrap_warn "failed to redeploy Coolify after compose hardening; restoring backups and continuing with DOCKER-USER guards."
-            mv "$backup_base" "$base_compose"
-            mv "$backup_prod" "$prod_compose"
-            return 0
-          fi
-        else
-          rm -f "$compose_err"
-          bootstrap_warn "failed to redeploy Coolify after compose hardening; restoring backups and continuing with DOCKER-USER guards."
-          mv "$backup_base" "$base_compose"
-          mv "$backup_prod" "$prod_compose"
-          return 0
-        fi
-      fi
-      rm -f "$compose_err"
-      rm -f "$backup_base" "$backup_prod"
-      bootstrap_success "Coolify compose hardened and redeployed successfully."
-      ;;
-    20)
-      bootstrap_warn "unsupported Coolify compose format; restoring backups and continuing with DOCKER-USER guards."
-      mv "$backup_base" "$base_compose"
-      mv "$backup_prod" "$prod_compose"
-      return 0
-      ;;
-    *)
-      bootstrap_warn "compose hardening failed with code $result; restoring backups and continuing with DOCKER-USER guards."
-      mv "$backup_base" "$base_compose"
-      mv "$backup_prod" "$prod_compose"
-      return 0
-      ;;
-  esac
-}
-
-replace_literal_in_file() {
-  local file="$1"
-  local old_value="$2"
-  local new_value="$3"
-  local status=0
-  python3 - "$file" "$old_value" "$new_value" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-old_value = sys.argv[2]
-new_value = sys.argv[3]
-
-text = path.read_text(encoding="utf-8")
-updated = text.replace(old_value, new_value)
-if updated == text:
-    raise SystemExit(3)
-path.write_text(updated, encoding="utf-8")
-raise SystemExit(0)
-PY
-  status=$?
-  if [[ "$status" == "0" ]]; then
-    return 0
-  fi
-  if [[ "$status" == "3" ]]; then
-    return 1
-  fi
-  return "$status"
-}
-
-normalize_coolify_env_ip_values() {
-  local coolify_env="/data/coolify/source/.env"
-  local status=0
-  [[ -f "$coolify_env" ]] || return 1
-
-  python3 - "$coolify_env" <<'PY'
-from pathlib import Path
-import re
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text(encoding="utf-8")
-lines = text.splitlines(keepends=True)
-changed = False
-out = []
-
-for line in lines:
-    raw = line.rstrip("\r\n")
-    eol = line[len(raw):]
-    stripped = raw.strip()
-    if not stripped or stripped.startswith("#") or "=" not in raw:
-        out.append(line)
-        continue
-
-    key, value = raw.split("=", 1)
-    k = key.strip()
-    if "IP" not in k or any(tag in k for tag in ("SUBNET", "POOL", "CIDR")):
-        out.append(line)
-        continue
-
-    m = re.match(r"^(['\"]?)([0-9A-Fa-f:.]+)/([0-9]{1,3})(['\"]?)$", value.strip())
-    if not m:
-        out.append(line)
-        continue
-
-    q1, ip_addr, _prefix, q2 = m.groups()
-    if q1 != q2:
-        out.append(line)
-        continue
-
-    new_value = f"{q1}{ip_addr}{q2}"
-    new_line = f"{key}={new_value}{eol}"
-    out.append(new_line)
-    changed = True
-
-if changed:
-    path.write_text("".join(out), encoding="utf-8")
-    raise SystemExit(0)
-raise SystemExit(3)
-PY
-  status=$?
-  if [[ "$status" == "0" ]]; then
-    bootstrap_warn "normalized CIDR suffixes for IP-like keys in $coolify_env before compose redeploy."
-    return 0
-  fi
-  if [[ "$status" == "3" ]]; then
-    return 1
-  fi
-  return "$status"
-}
-
-sanitize_compose_parseaddr_cidr_and_retry() {
-  local err_file="$1"
-  local base_compose="$2"
-  local prod_compose="$3"
-  local coolify_env="/data/coolify/source/.env"
-  local value=""
-  local sanitized=""
-  local target=""
-  local changed=0
-  local daemon_changed=0
-  local -a bad_values=()
-  local -a targets=("$coolify_env" "$base_compose" "$prod_compose")
-  local -a discovered_targets=()
-  local -A seen_targets=()
-  local -a search_roots=("/data/coolify" "/etc/docker")
-
-  for target in "${targets[@]}"; do
-    if [[ -n "$target" ]]; then
-      seen_targets["$target"]=1
-    fi
-  done
-
-  mapfile -t bad_values < <(
-    grep -oE 'ParseAddr\("[^"]+/[0-9]{1,3}"\)' "$err_file" 2>/dev/null \
-      | sed -E 's/^ParseAddr\("([^"]+)"\)$/\1/' \
-      | sort -u
-  )
-
-  if [[ "${#bad_values[@]}" -eq 0 ]]; then
-    if normalize_coolify_env_ip_values; then
-      return 0
-    fi
-    return 1
-  fi
-
-  for value in "${bad_values[@]}"; do
-    sanitized="${value%%/*}"
-    if [[ -z "$sanitized" || "$sanitized" == "$value" ]]; then
-      continue
-    fi
-
-    mapfile -t discovered_targets < <(grep -RIl --fixed-strings -- "$value" "${search_roots[@]}" 2>/dev/null || true)
-    for target in "${discovered_targets[@]}"; do
-      if [[ -n "$target" && -z "${seen_targets["$target"]+x}" ]]; then
-        targets+=("$target")
-        seen_targets["$target"]=1
-      fi
-    done
-
-    for target in "${targets[@]}"; do
-      [[ -f "$target" ]] || continue
-      if replace_literal_in_file "$target" "$value" "$sanitized"; then
-        changed=1
-        if [[ "$target" == /etc/docker/* ]]; then
-          daemon_changed=1
-        fi
-        bootstrap_warn "sanitized ParseAddr CIDR value in $target: $value -> $sanitized"
-      fi
-    done
-  done
-
-  if (( changed == 0 )); then
-    bootstrap_warn "unable to locate ParseAddr CIDR value in /data/coolify or /etc/docker: ${bad_values[*]}"
-  fi
-
-  if (( daemon_changed == 1 )); then
-    if command -v systemctl >/dev/null 2>&1; then
-      if systemctl restart docker >/dev/null 2>&1; then
-        bootstrap_warn "docker service restarted after ParseAddr CIDR sanitization in /etc/docker."
-      else
-        bootstrap_warn "could not restart docker service after /etc/docker sanitization; continuing."
-      fi
-    fi
-  fi
-
-  if (( changed == 1 )); then
-    return 0
-  fi
-  return 1
 }
 
 apply_sudo_policy() {
@@ -895,6 +610,17 @@ ufw --force reset
 ufw default deny incoming
 ufw default deny routed
 ufw default allow outgoing
+# Allow localhost/private source ranges to reach SSH port without rate-limit
+# side effects. Coolify localhost checks originate from Docker bridge networks.
+ufw allow from 127.0.0.1 to any port "${SSH_PORT}" proto tcp
+ufw allow from 10.0.0.0/8 to any port "${SSH_PORT}" proto tcp
+ufw allow from 172.16.0.0/12 to any port "${SSH_PORT}" proto tcp
+ufw allow from 192.168.0.0/16 to any port "${SSH_PORT}" proto tcp
+ufw allow from 100.64.0.0/10 to any port "${SSH_PORT}" proto tcp
+ufw allow from ::1 to any port "${SSH_PORT}" proto tcp
+ufw allow from fc00::/7 to any port "${SSH_PORT}" proto tcp
+ufw allow from fe80::/10 to any port "${SSH_PORT}" proto tcp
+# Keep internet-facing SSH access protected with rate limiting.
 ufw limit "${SSH_PORT}/tcp"
 ufw allow 80/tcp
 ufw allow 443/tcp
@@ -902,7 +628,7 @@ ufw delete allow 22/tcp || true
 ufw delete allow OpenSSH || true
 ufw logging low
 ufw --force enable
-bootstrap_success "UFW baseline rules applied (SSH,80,443)."
+bootstrap_success "UFW baseline rules applied (private-allow + limited public SSH,80,443)."
 
 systemctl enable --now fail2ban
 systemctl enable --now unattended-upgrades
@@ -1065,91 +791,6 @@ ensure_coolify_proxy_path_access() {
   return 1
 }
 
-ensure_coolify_https_proxy() {
-  local attempt=0
-  local max_attempts=20
-  local listener_wait=0
-
-  if ! command -v docker >/dev/null 2>&1; then
-    bootstrap_error "docker not found; cannot enforce Coolify HTTPS proxy."
-    return 1
-  fi
-  if ! docker ps --format '{{.Names}}' | grep -qx 'coolify'; then
-    bootstrap_error "coolify container is not running; cannot enforce Coolify HTTPS proxy."
-    return 1
-  fi
-
-  while (( attempt < max_attempts )); do
-    if docker exec -i \
-      -e BOOTSTRAP_COOLIFY_PUBLIC_DOMAIN="$COOLIFY_PUBLIC_DOMAIN" \
-      coolify php <<'PHP'
-<?php
-chdir('/var/www/html');
-require '/var/www/html/vendor/autoload.php';
-$app = require '/var/www/html/bootstrap/app.php';
-$kernel = $app->make(\Illuminate\Contracts\Console\Kernel::class);
-$kernel->bootstrap();
-
-$domain = trim((string) getenv('BOOTSTRAP_COOLIFY_PUBLIC_DOMAIN'));
-if ($domain === '' || preg_match('/[\s\/]/', $domain)) {
-    fwrite(STDERR, "invalid bootstrap public domain\n");
-    exit(41);
-}
-
-$targetFqdn = 'https://' . $domain;
-$settings = \App\Models\InstanceSettings::get();
-if ((string) $settings->fqdn !== $targetFqdn) {
-    $settings->fqdn = $targetFqdn;
-    $settings->save();
-    $settings->refresh();
-}
-
-$server = \App\Models\Server::find(0);
-if (! $server) {
-    fwrite(STDERR, "Coolify localhost server (id=0) not found\n");
-    exit(42);
-}
-
-$proxyType = (string) ($server->proxyType() ?? '');
-if ($proxyType === '' || $proxyType === 'NONE') {
-    $server->changeProxy('TRAEFIK', async: false);
-    $server->refresh();
-}
-
-\App\Actions\Proxy\StartProxy::run($server, async: false, force: true);
-$server->setupDynamicProxyConfiguration();
-$server->setupDefaultRedirect();
-\App\Actions\Proxy\StartProxy::run($server, async: false, force: true, restarting: true);
-
-echo "bootstrap-coolify-fqdn={$settings->fqdn}\n";
-echo "bootstrap-coolify-proxy={$server->proxyType()}\n";
-PHP
-    then
-      break
-    fi
-    attempt=$((attempt + 1))
-    sleep 2
-  done
-
-  if (( attempt >= max_attempts )); then
-    bootstrap_error "failed to configure Coolify HTTPS proxy for ${COOLIFY_PUBLIC_DOMAIN} after retries."
-    return 1
-  fi
-
-  while (( listener_wait < 30 )); do
-    if ss -lnt | awk '{print $4}' | grep -Eq '(^|[:.])80$' && \
-       ss -lnt | awk '{print $4}' | grep -Eq '(^|[:.])443$'; then
-      bootstrap_success "Coolify HTTPS proxy listeners detected on 80/443."
-      return 0
-    fi
-    sleep 2
-    listener_wait=$((listener_wait + 1))
-  done
-
-  bootstrap_error "Coolify proxy did not expose both 80 and 443 after configuration."
-  return 1
-}
-
 if ! is_coolify_running; then
   export DEBIAN_FRONTEND=noninteractive
   # Official Coolify installer path. Trade-off: remote script execution via curl|bash.
@@ -1193,18 +834,14 @@ bootstrap_success "Managed users synchronized to sudo/docker/coolify groups."
 sync_coolify_localhost_ssh_user
 bootstrap_success "Coolify localhost SSH user synchronization completed."
 ensure_coolify_proxy_path_access
-ensure_coolify_https_proxy
-bootstrap_success "Coolify public domain proxy synchronized to https://${COOLIFY_PUBLIC_DOMAIN}."
 configure_coolify_realtime_domain
-harden_coolify_compose_ports
 sync_coolify_realtime_port_guards
 bootstrap_success "Realtime security policy synchronization completed."
 
 # Docker published ports bypass UFW because Docker writes iptables rules directly.
 if command -v ss >/dev/null 2>&1 && ss -tuln | awk '{print $4}' | grep -Eq '[:.]8000$'; then
-  bootstrap_warn "port 8000 is listening on host."
-  bootstrap_warn "DOCKER-USER guards were applied to block public ingress to 8000."
-  bootstrap_warn "verify effective policy with: sudo iptables -S DOCKER-USER | grep -- '--dport 8000'"
+  bootstrap_warn "port 8000 is listening on host (expected before Coolify onboarding/proxy domain setup)."
+  bootstrap_warn "initial access path is typically http://<your-server-ip>:8000"
 fi
 
 if command -v ss >/dev/null 2>&1 && ss -tuln | awk '{print $4}' | grep -Eq '[:.]6001$|[:.]6002$'; then
@@ -1218,5 +855,6 @@ if command -v ss >/dev/null 2>&1 && ss -tuln | awk '{print $4}' | grep -Eq '[:.]
   fi
 fi
 
-bootstrap_success "Coolify public URL: https://${COOLIFY_PUBLIC_DOMAIN}"
+bootstrap_success "Coolify onboarding URL: http://<your-server-ip>:8000"
+bootstrap_success "After onboarding domain setup, expected URL is: https://${COOLIFY_PUBLIC_DOMAIN}"
 bootstrap_success "bootstrap-host.sh completed successfully."

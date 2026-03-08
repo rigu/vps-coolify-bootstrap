@@ -129,5 +129,6 @@ runcmd:
 final_message: |
   Bootstrap complete.
   Verify SSH access first: ssh -p SSH_PORT_HERE DEVOPS_USER_HERE@<your-server-ip>
-  Coolify URL: https://COOLIFY_PUBLIC_DOMAIN_HERE
-  Then complete Coolify onboarding in browser.
+  Coolify onboarding URL: http://<your-server-ip>:8000
+  Complete Coolify onboarding in browser and set domain: COOLIFY_PUBLIC_DOMAIN_HERE
+  Final URL after onboarding: https://COOLIFY_PUBLIC_DOMAIN_HERE

@@ -11,7 +11,7 @@ Production-ready public bootstrap for **Coolify on Ubuntu 24.04 LTS**.
 - hardened SSH baseline (`AllowUsers`, no password auth, custom port)
 - dedicated `COOLIFY_SUDO_NOPASSWD_USER` (default `coolify`) for non-root Coolify SSH operations
 - UFW baseline + fail2ban + unattended upgrades
-- HTTPS-first public access policy: Coolify served on domain `80/443`; `DOCKER-USER` always blocks public `8000`, and realtime `6001/6002` policy is controlled by env
+- official Coolify access flow: onboarding on `http://<server-ip>:8000`, then domain/TLS on `80/443`; realtime `6001/6002` policy is controlled by env
 - deterministic env-driven render flow (Bash + PowerShell)
 - post-bootstrap verification script (`scripts/verify-bootstrap-state.sh`)
 - emergency SSH recovery helper for provider console (`scripts/recover-ssh-access.sh`)

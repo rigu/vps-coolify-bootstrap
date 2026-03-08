@@ -96,6 +96,7 @@ sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-
 ```
 
 Bootstrap now syncs Coolify localhost server connection settings automatically:
+- server host -> `host.docker.internal`
 - server user -> `COOLIFY_SUDO_NOPASSWD_USER`
 - server port -> `SSH_PORT`
 - localhost private key -> `/data/coolify/ssh/keys/id.<COOLIFY_SUDO_NOPASSWD_USER>@host.docker.internal`
@@ -243,9 +244,7 @@ What replay enforces:
 - `fail2ban` and `unattended-upgrades`
 - Coolify localhost connection user/port/private-key synchronization (`COOLIFY_SUDO_NOPASSWD_USER`, `SSH_PORT`)
 - realtime host env synchronization (`PUSHER_HOST`, `PUSHER_PORT`, `PUSHER_SCHEME`) from effective realtime domain (`COOLIFY_REALTIME_DOMAIN` or `COOLIFY_PUBLIC_DOMAIN` fallback)
-- always enforces `DOCKER-USER` public-drop guards for `8000` (HTTPS-only external access policy)
 - when `CLOSE_COOLIFY_REALTIME_PORTS=true`, enforces `DOCKER-USER` public-drop guards for `6001/6002`
-- attempts compose hardening for `8000` and (closed mode) `6001/6002`; if redeploy fails, compose backups are restored and host-level guards remain enforced
 
 Operational notes:
 
@@ -260,9 +259,15 @@ Quick verification after replay:
 sudo systemctl is-active ssh.service fail2ban unattended-upgrades
 sudo ufw status verbose
 sudo ss -lntp | grep -E ':(22|6001|6002|8000)\b' || true
-sudo iptables -S DOCKER-USER | grep -E '8000|6001|6002' || true
+sudo iptables -S DOCKER-USER | grep -E '6001|6002' || true
 sudo bash /opt/vps-coolify-bootstrap/scripts/verify-bootstrap-state.sh /etc/vps-coolify-bootstrap/bootstrap.env
 ```
+
+UFW SSH policy detail:
+- public SSH remains `LIMIT IN` on `SSH_PORT`
+- bootstrap also adds explicit `ALLOW IN` rules to `SSH_PORT` for localhost/private ranges
+  (`127.0.0.1`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, `::1`, `fc00::/7`, `fe80::/10`)
+- this prevents Coolify localhost validation traffic (from Docker bridge networks) from being rejected by SSH rate limiting
 
 ## Post-onboarding security (required)
 
@@ -280,17 +285,15 @@ Pay special attention to Coolify internal ports `8000`, `6001`, and `6002`.
 
 Bootstrap behavior:
 
-- bootstrap always adds `DOCKER-USER` guard rules to block public ingress to `8000`
 - if `CLOSE_COOLIFY_REALTIME_PORTS=true`, bootstrap adds `DOCKER-USER`
   guard rules to block public ingress to `6001/6002`
 - if `CLOSE_COOLIFY_REALTIME_PORTS=false` (default), bootstrap removes only `6001/6002` guards
-- bootstrap attempts compose hardening (remove `8000` publish and optionally `6001/6002` publish);
-  if redeploy fails, compose is restored and `DOCKER-USER` guards remain authoritative
 - if `COOLIFY_REALTIME_DOMAIN` is set, bootstrap always configures app-level
   realtime routing via `PUSHER_HOST=<domain>`, `PUSHER_PORT=443`,
   `PUSHER_SCHEME=https` (even when `CLOSE_COOLIFY_REALTIME_PORTS=false`)
 - if `COOLIFY_REALTIME_DOMAIN` is empty and `CLOSE_COOLIFY_REALTIME_PORTS=true`,
   bootstrap configures app-level realtime routing using `COOLIFY_PUBLIC_DOMAIN`
+- bootstrap does not force-close `8000`; official Coolify onboarding remains available on `http://<server-ip>:8000` until domain proxy is configured in UI
 
 Operational interpretation:
 
@@ -300,7 +303,7 @@ Operational interpretation:
   "domain routing enabled on effective realtime domain (`COOLIFY_REALTIME_DOMAIN`
   or `COOLIFY_PUBLIC_DOMAIN` fallback), direct public `6001/6002` blocked by
   `DOCKER-USER` guards".
-- all modes keep direct public `8000` blocked by `DOCKER-USER`.
+- `8000` behavior follows official Coolify onboarding flow (initial access on `:8000`, domain/TLS after UI configuration).
 - Domain routing on `443` is application-level behavior from `PUSHER_*`
   values, not an automatic host-level NAT redirect.
 
@@ -323,27 +326,13 @@ Detailed behavior and mode-by-mode guidance:
    - `PUSHER_HOST=<effective_realtime_domain>`
    - `PUSHER_PORT=443`
    - `PUSHER_SCHEME=https`
-3. Bootstrap attempts Coolify compose hardening:
-   - remove canonical `8000->8080` publish rules (`${APP_PORT:-8000}:8080` / `8000:8080`)
-     from `/data/coolify/source/docker-compose.yml` and `/data/coolify/source/docker-compose.prod.yml`
-   - replace Soketi public `ports` mapping with internal `expose` in `/data/coolify/source/docker-compose.prod.yml`
-   - redeploy Coolify compose stack
-   - if redeploy fails (for example upstream compose/runtime parse errors), restore compose backups and continue
-4. Bootstrap restarts `coolify` and `coolify-realtime` containers if `PUSHER_*` values changed.
-5. Bootstrap installs `DOCKER-USER` ingress guards:
-   - always block public forwarded traffic to `8000`
-   - block public forwarded traffic to `6001/6002` in closed mode
-6. Bootstrap keeps UFW `80/443` ALLOW baseline for domain-facing traffic.
-
-Compose invariants:
-
-- Bootstrap attempts to mutate compose files in this mode to reduce direct publish bindings.
-- Control-plane path remains env-driven (`PUSHER_*`) plus host firewall guards (`DOCKER-USER`) which are the authoritative network block.
+3. Bootstrap restarts `coolify` and `coolify-realtime` containers if `PUSHER_*` values changed.
+4. Bootstrap installs `DOCKER-USER` ingress guards to block public forwarded traffic to `6001/6002`.
+5. Bootstrap keeps UFW `80/443` ALLOW baseline for domain-facing traffic.
 
 Check effective rules:
 
 ```bash
-sudo grep -nE '(:8080|\\$\\{SOKETI_PORT:-6001\\}:6001|6002:6002)' /data/coolify/source/docker-compose.yml /data/coolify/source/docker-compose.prod.yml || true
 sudo iptables -S DOCKER-USER
 sudo ip6tables -S DOCKER-USER 2>/dev/null || true
 ```
