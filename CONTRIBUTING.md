@@ -29,11 +29,15 @@ bash scripts/generate-secrets.sh --help
 If you modify `.ps1` scripts, also validate PowerShell syntax locally:
 
 ```powershell
-$parseErrors = $null
+$parseErrors = @()
 Get-ChildItem scripts/*.ps1 | ForEach-Object {
-  $null = [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$parseErrors)
+  $errors = $null
+  $null = [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors)
+  if ($errors -and $errors.Count -gt 0) {
+    $parseErrors += "$($_.Name): $($errors | ForEach-Object { $_.Message } | Select-Object -First 1)"
+  }
 }
-if ($parseErrors) { $parseErrors | ForEach-Object { Write-Error $_.Message }; exit 1 }
+if ($parseErrors.Count -gt 0) { $parseErrors | ForEach-Object { Write-Error $_ }; exit 1 }
 ```
 
 Run the same block in `pwsh` (PowerShell 7) or `powershell` (Windows PowerShell 5.x).

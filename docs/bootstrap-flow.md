@@ -17,7 +17,7 @@ description: Detailed first-boot execution order, cloud-init behavior, and boots
 On first boot, cloud-init:
 
 1. sets the timezone and runs package update/upgrade
-2. creates initial users (`PRIMARY_SUDO_USER`, `SECONDARY_SUDO_USER`) and the SSH key
+2. creates initial users (`PRIMARY_SUDO_USER`, `SECONDARY_SUDO_USER`) and SSH bootstrap key
    (additional users from `CREATE_USERS` are created later by `bootstrap-host.sh`)
 3. disables root SSH login and SSH password auth
 4. installs baseline packages (`curl`, `git`, `openssl`, `ufw`, `fail2ban`, `unattended-upgrades`, ...)
@@ -38,7 +38,7 @@ flowchart TD
   F --> G[Apply sysctl --system]
   G --> H[Run scripts/bootstrap-host.sh]
   H --> H1[Validate inputs]
-  H1 --> I[Ensure users + SSH keys]
+  H1 --> I[Ensure users + SSH keys (including COOLIFY_SUDO_NOPASSWD_USER)]
   I --> J[Run ensure-user-passwords.sh]
   J --> K[Set/rotate user passwords if needed]
   K --> L[Write encrypted vault /etc/vps-coolify-bootstrap/user-passwords.enc]
@@ -46,10 +46,12 @@ flowchart TD
   M --> N[Switch to ssh.service + validate + cleanup :22]
   N --> O[Apply UFW rules and enable fail2ban + unattended-upgrades]
   O --> P[Install Coolify if missing]
-  P --> Q[Apply groups + sudo policy]
-  Q --> R[Apply DOCKER-USER guards for 6001/6002]
-  R --> S[SSH login on hardened port]
-  S --> T[Finish Coolify onboarding]
+  P --> R[Apply groups + sudo policy]
+  R --> Q[Sync Coolify localhost SSH user + key + port]
+  Q --> Q1[Sync realtime host env from COOLIFY_REALTIME_DOMAIN]
+  R --> S[Sync DOCKER-USER guards for 6001/6002 based on CLOSE_COOLIFY_REALTIME_PORTS]
+  S --> T[SSH login on hardened port]
+  T --> U[Finish Coolify onboarding]
 ```
 
 Important: `ensure-user-passwords.sh` runs on the VPS host during bootstrap/replay.
@@ -60,7 +62,7 @@ User account passwords are not pre-generated locally during env preparation.
 - Coolify URL printed by bootstrap: `https://<COOLIFY_PUBLIC_DOMAIN>`
 - Encrypted credential vault: `/etc/vps-coolify-bootstrap/user-passwords.enc`
 
-To decrypt on the server (must be run as `PRIMARY_SUDO_USER`, who has passwordless sudo), use the recommended sequence below:
+To decrypt on the server (must be run as `PRIMARY_SUDO_USER` or `COOLIFY_SUDO_NOPASSWD_USER`, both passwordless sudo by policy), use the recommended sequence below:
 
 ```bash
 export USER_PASSWORDS_ENCRYPTION_PASSWORD="$(
@@ -74,7 +76,8 @@ sudo env USER_PASSWORDS_ENCRYPTION_PASSWORD="$USER_PASSWORDS_ENCRYPTION_PASSWORD
 ```
 
 Note: other sudo users require their password to run `sudo`, but their
-password is inside this vault. Only `PRIMARY_SUDO_USER` (passwordless sudo)
-or root via provider console can decrypt it.
+password is inside this vault. Only `PRIMARY_SUDO_USER` or
+`COOLIFY_SUDO_NOPASSWD_USER` (passwordless sudo) or root via provider console
+can decrypt it.
 
 Back to [Docs Home](index.md)
