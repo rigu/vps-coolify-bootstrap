@@ -724,6 +724,8 @@ sanitize_compose_parseaddr_cidr_and_retry() {
   local changed=0
   local -a bad_values=()
   local -a targets=("$coolify_env" "$base_compose" "$prod_compose")
+  local -a discovered_targets=()
+  local -A seen_targets=()
 
   mapfile -t bad_values < <(
     grep -oE 'ParseAddr\("[^"]+/[0-9]{1,3}"\)' "$err_file" 2>/dev/null \
@@ -743,6 +745,14 @@ sanitize_compose_parseaddr_cidr_and_retry() {
     if [[ -z "$sanitized" || "$sanitized" == "$value" ]]; then
       continue
     fi
+
+    mapfile -t discovered_targets < <(grep -RIl --fixed-strings -- "$value" /data/coolify 2>/dev/null || true)
+    for target in "${discovered_targets[@]}"; do
+      if [[ -n "$target" && -z "${seen_targets["$target"]+x}" ]]; then
+        targets+=("$target")
+        seen_targets["$target"]=1
+      fi
+    done
 
     for target in "${targets[@]}"; do
       [[ -f "$target" ]] || continue
