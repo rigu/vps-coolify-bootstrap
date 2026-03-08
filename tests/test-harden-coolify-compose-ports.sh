@@ -45,6 +45,8 @@ YAML
   assert_eq "10" "$status" "hardener should return 10 when it applies file changes"
   assert_file_not_contains "$base" '\$\{APP_PORT:-8000\}:8080' "APP_PORT publish should be removed"
   assert_file_not_contains "$prod" '\$\{APP_PORT:-8000\}:8080' "APP_PORT publish should be removed from prod compose too"
+  assert_file_not_contains "$prod" 'ports:[[:space:]]*coolify-realtime' "ports key should not be malformed after 8080 removal"
+  assert_file_not_contains "$prod" '^\s*ports:\s*$' "orphan ports key should be removed when list entries are removed"
   assert_file_contains "$prod" '^\s*expose:\s*$' "Soketi ports block should be converted to expose"
   assert_file_contains "$prod" '"6001"' "expose 6001 must exist"
   assert_file_contains "$prod" '"6002"' "expose 6002 must exist"

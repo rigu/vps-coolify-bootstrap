@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 from datetime import datetime, timezone
 
-APP_PORT_PUBLISH = re.compile(r'(?m)^[ \t]*-\s*"(?:\$\{APP_PORT:-8000\}|8000):8080"\s*\n?')
+APP_PORT_PUBLISH = re.compile(r'(?m)^[ \t]*-[ \t]*"(?:\$\{APP_PORT:-8000\}|8000):8080"[ \t]*(?:\r?\n|$)')
 ANY_8080_PUBLISH = re.compile(r'(?m)^[ \t]*-\s*"[^"\n]*:8080"\s*$')
 
 SOKETI_PUBLIC_PORTS_BLOCK = re.compile(
@@ -43,6 +43,45 @@ def _write_text(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def _remove_empty_ports_keys(text: str) -> tuple[str, int]:
+    """Remove `ports:` keys that no longer have list items beneath them."""
+    lines = text.splitlines(keepends=True)
+    out: list[str] = []
+    i = 0
+    removed = 0
+
+    while i < len(lines):
+        line = lines[i]
+        m = re.match(r'^([ \t]*)ports:[ \t]*(?:#.*)?(?:\r?\n|$)$', line)
+        if not m:
+            out.append(line)
+            i += 1
+            continue
+
+        base_indent = len(m.group(1))
+        j = i + 1
+        has_list_item = False
+        while j < len(lines):
+            candidate = lines[j]
+            stripped = candidate.strip()
+            if stripped == "" or stripped.startswith("#"):
+                j += 1
+                continue
+
+            indent = len(candidate) - len(candidate.lstrip(" \t"))
+            if indent > base_indent and candidate.lstrip(" \t").startswith("-"):
+                has_list_item = True
+            break
+
+        if has_list_item:
+            out.append(line)
+        else:
+            removed += 1
+        i += 1
+
+    return "".join(out), removed
+
+
 def harden_compose(base_path: Path, prod_path: Path) -> int:
     base_text = _read_text(base_path)
     prod_text = _read_text(prod_path)
@@ -56,6 +95,11 @@ def harden_compose(base_path: Path, prod_path: Path) -> int:
     if base_replacements > 0:
         changed = True
     if prod_8080_replacements > 0:
+        changed = True
+
+    new_base_text, removed_empty_base_ports = _remove_empty_ports_keys(new_base_text)
+    new_prod_text, removed_empty_prod_ports = _remove_empty_ports_keys(new_prod_text)
+    if removed_empty_base_ports > 0 or removed_empty_prod_ports > 0:
         changed = True
 
     # If canonical APP_PORT/8000 publish patterns are absent, tolerate
@@ -96,6 +140,10 @@ def harden_compose(base_path: Path, prod_path: Path) -> int:
             _log("SUCCESS", "Removed APP_PORT/8000:8080 binding from docker-compose.yml", sys.stdout)
         if prod_8080_replacements > 0:
             _log("SUCCESS", "Removed APP_PORT/8000:8080 binding from docker-compose.prod.yml", sys.stdout)
+        if removed_empty_base_ports > 0:
+            _log("SUCCESS", "Removed empty ports key(s) from docker-compose.yml", sys.stdout)
+        if removed_empty_prod_ports > 0:
+            _log("SUCCESS", "Removed empty ports key(s) from docker-compose.prod.yml", sys.stdout)
         if prod_replacements > 0:
             _log("SUCCESS", "Converted Soketi ports to expose-only in docker-compose.prod.yml", sys.stdout)
         return 10
