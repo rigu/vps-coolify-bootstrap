@@ -24,7 +24,8 @@ test_generate_docmost_creates_env_and_secret() {
 
 test_generate_docmost_syncs_from_infra_env() {
   local tmpdir env_file infra_file db_url redis_url infra_network \
-    smtp_host mail_from_address drawio_url s3_key s3_secret s3_bucket s3_endpoint
+    smtp_host mail_from_address drawio_url s3_key s3_secret s3_bucket s3_endpoint \
+    disable_telemetry search_driver typesense_url typesense_api_key typesense_locale
   tmpdir="$(mktemp -d)"
   env_file="$tmpdir/docmost.env"
   infra_file="$tmpdir/production-infra.env"
@@ -49,6 +50,11 @@ PLANE_S3_ACCESS_KEY=PLNINFRAKEY123456789
 PLANE_S3_SECRET_KEY=InfraS3SecretValue42
 PLANE_S3_BUCKET=docmost-assets
 SEAWEEDFS_PLANE_CONTAINER_NAME=seaweedfs-infra
+DISABLE_TELEMETRY=false
+SEARCH_DRIVER=typesense
+TYPESENSE_URL=http://typesense-infra:8108
+TYPESENSE_API_KEY=InfraTypesenseApiKey42
+TYPESENSE_LOCALE=ro
 INFRA
 
   bash "$script" --env-file "$env_file" --infra-env-file "$infra_file" >/dev/null
@@ -63,6 +69,11 @@ INFRA
   s3_secret="$(strip_env_quotes "$(env_value "$env_file" AWS_S3_SECRET_ACCESS_KEY)")"
   s3_bucket="$(strip_env_quotes "$(env_value "$env_file" AWS_S3_BUCKET)")"
   s3_endpoint="$(strip_env_quotes "$(env_value "$env_file" AWS_S3_ENDPOINT)")"
+  disable_telemetry="$(strip_env_quotes "$(env_value "$env_file" DISABLE_TELEMETRY)")"
+  search_driver="$(strip_env_quotes "$(env_value "$env_file" SEARCH_DRIVER)")"
+  typesense_url="$(strip_env_quotes "$(env_value "$env_file" TYPESENSE_URL)")"
+  typesense_api_key="$(strip_env_quotes "$(env_value "$env_file" TYPESENSE_API_KEY)")"
+  typesense_locale="$(strip_env_quotes "$(env_value "$env_file" TYPESENSE_LOCALE)")"
 
   assert_eq "postgresql://apps_admin:InfraPgPass-42@postgres-infra:5432/docmost_main?schema=public" "$db_url" "DATABASE_URL should be synchronized from infra" || return 1
   assert_eq "redis://default:InfraRedisPass-42@valkey-infra:6379/1" "$redis_url" "REDIS_URL should be synchronized from infra" || return 1
@@ -74,6 +85,11 @@ INFRA
   assert_eq "InfraS3SecretValue42" "$s3_secret" "AWS_S3_SECRET_ACCESS_KEY should be synchronized from infra" || return 1
   assert_eq "docmost-assets" "$s3_bucket" "AWS_S3_BUCKET should be synchronized from infra" || return 1
   assert_eq "http://seaweedfs-infra:8333" "$s3_endpoint" "AWS_S3_ENDPOINT should be synchronized from infra" || return 1
+  assert_eq "false" "$disable_telemetry" "DISABLE_TELEMETRY should be synchronized from infra" || return 1
+  assert_eq "typesense" "$search_driver" "SEARCH_DRIVER should be synchronized from infra" || return 1
+  assert_eq "http://typesense-infra:8108" "$typesense_url" "TYPESENSE_URL should be synchronized from infra" || return 1
+  assert_eq "InfraTypesenseApiKey42" "$typesense_api_key" "TYPESENSE_API_KEY should be synchronized from infra" || return 1
+  assert_eq "ro" "$typesense_locale" "TYPESENSE_LOCALE should be synchronized from infra" || return 1
 
   rm -rf "$tmpdir"
 }

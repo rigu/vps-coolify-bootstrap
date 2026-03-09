@@ -197,7 +197,7 @@ database_url="${current[DATABASE_URL]:-}"
 redis_url="${current[REDIS_URL]:-}"
 infra_network_name="${current[INFRA_NETWORK_NAME]:-infra}"
 port="${current[PORT]:-3000}"
-storage_driver="${current[STORAGE_DRIVER]:-local}"
+storage_driver="${current[STORAGE_DRIVER]:-s3}"
 mail_driver="${current[MAIL_DRIVER]:-smtp}"
 smtp_host="${current[SMTP_HOST]:-CHANGE_ME_smtp_host}"
 smtp_port="${current[SMTP_PORT]:-587}"
@@ -206,7 +206,6 @@ smtp_password="${current[SMTP_PASSWORD]:-CHANGE_ME_smtp_password}"
 smtp_secure="${current[SMTP_SECURE]:-false}"
 mail_from_address="${current[MAIL_FROM_ADDRESS]:-CHANGE_ME_mail_from_address}"
 mail_from_name="${current[MAIL_FROM_NAME]:-Docmost}"
-postmark_token="${current[POSTMARK_TOKEN]:-CHANGE_ME_postmark_token}"
 drawio_url="${current[DRAWIO_URL]:-https://embed.diagrams.net/?spin=1&proto=json&configure=1}"
 aws_s3_access_key_id="${current[AWS_S3_ACCESS_KEY_ID]:-CHANGE_ME_plane_s3_access_key}"
 aws_s3_secret_access_key="${current[AWS_S3_SECRET_ACCESS_KEY]:-CHANGE_ME_plane_s3_secret_key}"
@@ -214,6 +213,11 @@ aws_s3_region="${current[AWS_S3_REGION]:-eu-central-1}"
 aws_s3_bucket="${current[AWS_S3_BUCKET]:-plane-uploads}"
 aws_s3_endpoint="${current[AWS_S3_ENDPOINT]:-http://seaweedfs-plane:8333}"
 aws_s3_force_path_style="${current[AWS_S3_FORCE_PATH_STYLE]:-true}"
+disable_telemetry="${current[DISABLE_TELEMETRY]:-true}"
+search_driver="${current[SEARCH_DRIVER]:-typesense}"
+typesense_url="${current[TYPESENSE_URL]:-CHANGE_ME_typesense_url}"
+typesense_api_key="${current[TYPESENSE_API_KEY]:-CHANGE_ME_typesense_api_key}"
+typesense_locale="${current[TYPESENSE_LOCALE]:-en}"
 
 if (( force_app_secret == 1 )) || is_empty_or_placeholder "$app_secret"; then
   app_secret="$(gen_hex 32)"
@@ -275,10 +279,6 @@ if (( no_infra_sync == 0 )); then
     mail_from_name="${infra[MAIL_FROM_NAME]}"
     infra_sync_applied=1
   fi
-  if is_usable_infra_value "${infra[POSTMARK_TOKEN]:-}"; then
-    postmark_token="${infra[POSTMARK_TOKEN]}"
-    infra_sync_applied=1
-  fi
   if is_usable_infra_value "${infra[DRAWIO_URL]:-}"; then
     drawio_url="${infra[DRAWIO_URL]}"
     infra_sync_applied=1
@@ -311,6 +311,26 @@ if (( no_infra_sync == 0 )); then
     aws_s3_force_path_style="${infra[AWS_S3_FORCE_PATH_STYLE]}"
     infra_sync_applied=1
   fi
+  if is_usable_infra_value "${infra[DISABLE_TELEMETRY]:-}"; then
+    disable_telemetry="${infra[DISABLE_TELEMETRY]}"
+    infra_sync_applied=1
+  fi
+  if is_usable_infra_value "${infra[SEARCH_DRIVER]:-}"; then
+    search_driver="${infra[SEARCH_DRIVER]}"
+    infra_sync_applied=1
+  fi
+  if is_usable_infra_value "${infra[TYPESENSE_URL]:-}"; then
+    typesense_url="${infra[TYPESENSE_URL]}"
+    infra_sync_applied=1
+  fi
+  if is_usable_infra_value "${infra[TYPESENSE_API_KEY]:-}"; then
+    typesense_api_key="${infra[TYPESENSE_API_KEY]}"
+    infra_sync_applied=1
+  fi
+  if is_usable_infra_value "${infra[TYPESENSE_LOCALE]:-}"; then
+    typesense_locale="${infra[TYPESENSE_LOCALE]}"
+    infra_sync_applied=1
+  fi
 fi
 
 tmp="$(mktemp)"
@@ -332,7 +352,6 @@ saw_smtp_password=0
 saw_smtp_secure=0
 saw_mail_from_address=0
 saw_mail_from_name=0
-saw_postmark_token=0
 saw_drawio_url=0
 saw_aws_s3_access_key_id=0
 saw_aws_s3_secret_access_key=0
@@ -340,6 +359,11 @@ saw_aws_s3_region=0
 saw_aws_s3_bucket=0
 saw_aws_s3_endpoint=0
 saw_aws_s3_force_path_style=0
+saw_disable_telemetry=0
+saw_search_driver=0
+saw_typesense_url=0
+saw_typesense_api_key=0
+saw_typesense_locale=0
 
 while IFS= read -r line || [[ -n "$line" ]]; do
   line="${line%$'\r'}"
@@ -360,7 +384,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     SMTP_SECURE=*) saw_smtp_secure=1; sync_kv "SMTP_SECURE" "$smtp_secure" >> "$tmp" ;;
     MAIL_FROM_ADDRESS=*) saw_mail_from_address=1; sync_kv "MAIL_FROM_ADDRESS" "$mail_from_address" >> "$tmp" ;;
     MAIL_FROM_NAME=*) saw_mail_from_name=1; sync_kv "MAIL_FROM_NAME" "$mail_from_name" >> "$tmp" ;;
-    POSTMARK_TOKEN=*) saw_postmark_token=1; sync_kv "POSTMARK_TOKEN" "$postmark_token" >> "$tmp" ;;
+    POSTMARK_TOKEN=*) ;;
     DRAWIO_URL=*) saw_drawio_url=1; sync_kv "DRAWIO_URL" "$drawio_url" >> "$tmp" ;;
     AWS_S3_ACCESS_KEY_ID=*) saw_aws_s3_access_key_id=1; sync_kv "AWS_S3_ACCESS_KEY_ID" "$aws_s3_access_key_id" >> "$tmp" ;;
     AWS_S3_SECRET_ACCESS_KEY=*) saw_aws_s3_secret_access_key=1; sync_kv "AWS_S3_SECRET_ACCESS_KEY" "$aws_s3_secret_access_key" >> "$tmp" ;;
@@ -368,6 +392,11 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     AWS_S3_BUCKET=*) saw_aws_s3_bucket=1; sync_kv "AWS_S3_BUCKET" "$aws_s3_bucket" >> "$tmp" ;;
     AWS_S3_ENDPOINT=*) saw_aws_s3_endpoint=1; sync_kv "AWS_S3_ENDPOINT" "$aws_s3_endpoint" >> "$tmp" ;;
     AWS_S3_FORCE_PATH_STYLE=*) saw_aws_s3_force_path_style=1; sync_kv "AWS_S3_FORCE_PATH_STYLE" "$aws_s3_force_path_style" >> "$tmp" ;;
+    DISABLE_TELEMETRY=*) saw_disable_telemetry=1; sync_kv "DISABLE_TELEMETRY" "$disable_telemetry" >> "$tmp" ;;
+    SEARCH_DRIVER=*) saw_search_driver=1; sync_kv "SEARCH_DRIVER" "$search_driver" >> "$tmp" ;;
+    TYPESENSE_URL=*) saw_typesense_url=1; sync_kv "TYPESENSE_URL" "$typesense_url" >> "$tmp" ;;
+    TYPESENSE_API_KEY=*) saw_typesense_api_key=1; sync_kv "TYPESENSE_API_KEY" "$typesense_api_key" >> "$tmp" ;;
+    TYPESENSE_LOCALE=*) saw_typesense_locale=1; sync_kv "TYPESENSE_LOCALE" "$typesense_locale" >> "$tmp" ;;
     *) printf '%s\n' "$line" >> "$tmp" ;;
   esac
 done < "$env_file"
@@ -388,7 +417,6 @@ done < "$env_file"
 (( saw_smtp_secure == 1 )) || sync_kv "SMTP_SECURE" "$smtp_secure" >> "$tmp"
 (( saw_mail_from_address == 1 )) || sync_kv "MAIL_FROM_ADDRESS" "$mail_from_address" >> "$tmp"
 (( saw_mail_from_name == 1 )) || sync_kv "MAIL_FROM_NAME" "$mail_from_name" >> "$tmp"
-(( saw_postmark_token == 1 )) || sync_kv "POSTMARK_TOKEN" "$postmark_token" >> "$tmp"
 (( saw_drawio_url == 1 )) || sync_kv "DRAWIO_URL" "$drawio_url" >> "$tmp"
 (( saw_aws_s3_access_key_id == 1 )) || sync_kv "AWS_S3_ACCESS_KEY_ID" "$aws_s3_access_key_id" >> "$tmp"
 (( saw_aws_s3_secret_access_key == 1 )) || sync_kv "AWS_S3_SECRET_ACCESS_KEY" "$aws_s3_secret_access_key" >> "$tmp"
@@ -396,6 +424,11 @@ done < "$env_file"
 (( saw_aws_s3_bucket == 1 )) || sync_kv "AWS_S3_BUCKET" "$aws_s3_bucket" >> "$tmp"
 (( saw_aws_s3_endpoint == 1 )) || sync_kv "AWS_S3_ENDPOINT" "$aws_s3_endpoint" >> "$tmp"
 (( saw_aws_s3_force_path_style == 1 )) || sync_kv "AWS_S3_FORCE_PATH_STYLE" "$aws_s3_force_path_style" >> "$tmp"
+(( saw_disable_telemetry == 1 )) || sync_kv "DISABLE_TELEMETRY" "$disable_telemetry" >> "$tmp"
+(( saw_search_driver == 1 )) || sync_kv "SEARCH_DRIVER" "$search_driver" >> "$tmp"
+(( saw_typesense_url == 1 )) || sync_kv "TYPESENSE_URL" "$typesense_url" >> "$tmp"
+(( saw_typesense_api_key == 1 )) || sync_kv "TYPESENSE_API_KEY" "$typesense_api_key" >> "$tmp"
+(( saw_typesense_locale == 1 )) || sync_kv "TYPESENSE_LOCALE" "$typesense_locale" >> "$tmp"
 
 mv "$tmp" "$env_file"
 chmod 600 "$env_file"

@@ -117,7 +117,7 @@ try {
     $redisUrl = if ($cfg.ContainsKey("REDIS_URL")) { [string]$cfg["REDIS_URL"] } else { "" }
     $infraNetworkName = if ($cfg.ContainsKey("INFRA_NETWORK_NAME") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["INFRA_NETWORK_NAME"])) { [string]$cfg["INFRA_NETWORK_NAME"] } else { "infra" }
     $port = if ($cfg.ContainsKey("PORT") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["PORT"])) { [string]$cfg["PORT"] } else { "3000" }
-    $storageDriver = if ($cfg.ContainsKey("STORAGE_DRIVER") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["STORAGE_DRIVER"])) { [string]$cfg["STORAGE_DRIVER"] } else { "local" }
+    $storageDriver = if ($cfg.ContainsKey("STORAGE_DRIVER") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["STORAGE_DRIVER"])) { [string]$cfg["STORAGE_DRIVER"] } else { "s3" }
     $mailDriver = if ($cfg.ContainsKey("MAIL_DRIVER") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["MAIL_DRIVER"])) { [string]$cfg["MAIL_DRIVER"] } else { "smtp" }
     $smtpHost = if ($cfg.ContainsKey("SMTP_HOST") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SMTP_HOST"])) { [string]$cfg["SMTP_HOST"] } else { "CHANGE_ME_smtp_host" }
     $smtpPort = if ($cfg.ContainsKey("SMTP_PORT") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SMTP_PORT"])) { [string]$cfg["SMTP_PORT"] } else { "587" }
@@ -126,7 +126,6 @@ try {
     $smtpSecure = if ($cfg.ContainsKey("SMTP_SECURE") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SMTP_SECURE"])) { [string]$cfg["SMTP_SECURE"] } else { "false" }
     $mailFromAddress = if ($cfg.ContainsKey("MAIL_FROM_ADDRESS") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["MAIL_FROM_ADDRESS"])) { [string]$cfg["MAIL_FROM_ADDRESS"] } else { "CHANGE_ME_mail_from_address" }
     $mailFromName = if ($cfg.ContainsKey("MAIL_FROM_NAME") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["MAIL_FROM_NAME"])) { [string]$cfg["MAIL_FROM_NAME"] } else { "Docmost" }
-    $postmarkToken = if ($cfg.ContainsKey("POSTMARK_TOKEN") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["POSTMARK_TOKEN"])) { [string]$cfg["POSTMARK_TOKEN"] } else { "CHANGE_ME_postmark_token" }
     $drawioUrl = if ($cfg.ContainsKey("DRAWIO_URL") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["DRAWIO_URL"])) { [string]$cfg["DRAWIO_URL"] } else { "https://embed.diagrams.net/?spin=1&proto=json&configure=1" }
     $awsS3AccessKeyId = if ($cfg.ContainsKey("AWS_S3_ACCESS_KEY_ID") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["AWS_S3_ACCESS_KEY_ID"])) { [string]$cfg["AWS_S3_ACCESS_KEY_ID"] } else { "CHANGE_ME_plane_s3_access_key" }
     $awsS3SecretAccessKey = if ($cfg.ContainsKey("AWS_S3_SECRET_ACCESS_KEY") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["AWS_S3_SECRET_ACCESS_KEY"])) { [string]$cfg["AWS_S3_SECRET_ACCESS_KEY"] } else { "CHANGE_ME_plane_s3_secret_key" }
@@ -134,6 +133,11 @@ try {
     $awsS3Bucket = if ($cfg.ContainsKey("AWS_S3_BUCKET") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["AWS_S3_BUCKET"])) { [string]$cfg["AWS_S3_BUCKET"] } else { "plane-uploads" }
     $awsS3Endpoint = if ($cfg.ContainsKey("AWS_S3_ENDPOINT") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["AWS_S3_ENDPOINT"])) { [string]$cfg["AWS_S3_ENDPOINT"] } else { "http://seaweedfs-plane:8333" }
     $awsS3ForcePathStyle = if ($cfg.ContainsKey("AWS_S3_FORCE_PATH_STYLE") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["AWS_S3_FORCE_PATH_STYLE"])) { [string]$cfg["AWS_S3_FORCE_PATH_STYLE"] } else { "true" }
+    $disableTelemetry = if ($cfg.ContainsKey("DISABLE_TELEMETRY") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["DISABLE_TELEMETRY"])) { [string]$cfg["DISABLE_TELEMETRY"] } else { "true" }
+    $searchDriver = if ($cfg.ContainsKey("SEARCH_DRIVER") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SEARCH_DRIVER"])) { [string]$cfg["SEARCH_DRIVER"] } else { "typesense" }
+    $typesenseUrl = if ($cfg.ContainsKey("TYPESENSE_URL") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["TYPESENSE_URL"])) { [string]$cfg["TYPESENSE_URL"] } else { "CHANGE_ME_typesense_url" }
+    $typesenseApiKey = if ($cfg.ContainsKey("TYPESENSE_API_KEY") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["TYPESENSE_API_KEY"])) { [string]$cfg["TYPESENSE_API_KEY"] } else { "CHANGE_ME_typesense_api_key" }
+    $typesenseLocale = if ($cfg.ContainsKey("TYPESENSE_LOCALE") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["TYPESENSE_LOCALE"])) { [string]$cfg["TYPESENSE_LOCALE"] } else { "en" }
 
     if ($ForceAll -or $ForceAppSecret -or (Test-EmptyOrPlaceholder -Value $appSecret)) {
         $appSecret = New-HexSecret -Bytes 32
@@ -172,7 +176,6 @@ try {
         if (Test-UsableInfraValue -Value ([string]$infra["SMTP_SECURE"])) { $smtpSecure = [string]$infra["SMTP_SECURE"]; $infraSyncApplied = $true }
         if (Test-UsableInfraValue -Value ([string]$infra["MAIL_FROM_ADDRESS"])) { $mailFromAddress = [string]$infra["MAIL_FROM_ADDRESS"]; $infraSyncApplied = $true }
         if (Test-UsableInfraValue -Value ([string]$infra["MAIL_FROM_NAME"])) { $mailFromName = [string]$infra["MAIL_FROM_NAME"]; $infraSyncApplied = $true }
-        if (Test-UsableInfraValue -Value ([string]$infra["POSTMARK_TOKEN"])) { $postmarkToken = [string]$infra["POSTMARK_TOKEN"]; $infraSyncApplied = $true }
         if (Test-UsableInfraValue -Value ([string]$infra["DRAWIO_URL"])) { $drawioUrl = [string]$infra["DRAWIO_URL"]; $infraSyncApplied = $true }
 
         if (Test-UsableInfraValue -Value ([string]$infra["PLANE_S3_ACCESS_KEY"])) { $awsS3AccessKeyId = [string]$infra["PLANE_S3_ACCESS_KEY"]; $infraSyncApplied = $true }
@@ -187,13 +190,19 @@ try {
             $infraSyncApplied = $true
         }
         if (Test-UsableInfraValue -Value ([string]$infra["AWS_S3_FORCE_PATH_STYLE"])) { $awsS3ForcePathStyle = [string]$infra["AWS_S3_FORCE_PATH_STYLE"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["DISABLE_TELEMETRY"])) { $disableTelemetry = [string]$infra["DISABLE_TELEMETRY"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["SEARCH_DRIVER"])) { $searchDriver = [string]$infra["SEARCH_DRIVER"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["TYPESENSE_URL"])) { $typesenseUrl = [string]$infra["TYPESENSE_URL"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["TYPESENSE_API_KEY"])) { $typesenseApiKey = [string]$infra["TYPESENSE_API_KEY"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["TYPESENSE_LOCALE"])) { $typesenseLocale = [string]$infra["TYPESENSE_LOCALE"]; $infraSyncApplied = $true }
     }
 
     $managed = @(
         "DOCMOST_IMAGE", "APP_URL", "APP_SECRET", "DATABASE_URL", "REDIS_URL", "INFRA_NETWORK_NAME", "PORT", "STORAGE_DRIVER",
-        "MAIL_DRIVER", "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_SECURE", "MAIL_FROM_ADDRESS", "MAIL_FROM_NAME", "POSTMARK_TOKEN",
+        "MAIL_DRIVER", "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_SECURE", "MAIL_FROM_ADDRESS", "MAIL_FROM_NAME",
         "DRAWIO_URL",
-        "AWS_S3_ACCESS_KEY_ID", "AWS_S3_SECRET_ACCESS_KEY", "AWS_S3_REGION", "AWS_S3_BUCKET", "AWS_S3_ENDPOINT", "AWS_S3_FORCE_PATH_STYLE"
+        "AWS_S3_ACCESS_KEY_ID", "AWS_S3_SECRET_ACCESS_KEY", "AWS_S3_REGION", "AWS_S3_BUCKET", "AWS_S3_ENDPOINT", "AWS_S3_FORCE_PATH_STYLE",
+        "DISABLE_TELEMETRY", "SEARCH_DRIVER", "TYPESENSE_URL", "TYPESENSE_API_KEY", "TYPESENSE_LOCALE"
     )
     $values = @{
         "DOCMOST_IMAGE" = $docmostImage
@@ -212,7 +221,6 @@ try {
         "SMTP_SECURE" = $smtpSecure
         "MAIL_FROM_ADDRESS" = $mailFromAddress
         "MAIL_FROM_NAME" = $mailFromName
-        "POSTMARK_TOKEN" = $postmarkToken
         "DRAWIO_URL" = $drawioUrl
         "AWS_S3_ACCESS_KEY_ID" = $awsS3AccessKeyId
         "AWS_S3_SECRET_ACCESS_KEY" = $awsS3SecretAccessKey
@@ -220,6 +228,11 @@ try {
         "AWS_S3_BUCKET" = $awsS3Bucket
         "AWS_S3_ENDPOINT" = $awsS3Endpoint
         "AWS_S3_FORCE_PATH_STYLE" = $awsS3ForcePathStyle
+        "DISABLE_TELEMETRY" = $disableTelemetry
+        "SEARCH_DRIVER" = $searchDriver
+        "TYPESENSE_URL" = $typesenseUrl
+        "TYPESENSE_API_KEY" = $typesenseApiKey
+        "TYPESENSE_LOCALE" = $typesenseLocale
     }
 
     $seen = @{}
@@ -234,6 +247,9 @@ try {
         }
 
         $key = $m.Groups[1].Value
+        if ($key -eq "POSTMARK_TOKEN") {
+            continue
+        }
         if ($managed -contains $key) {
             $seen[$key] = $true
             $outLines.Add("$key=$(Format-EnvValue -Value ([string]$values[$key]))")

@@ -464,6 +464,11 @@ PLANE_S3_ACCESS_KEY=PLNINFRAKEY123456789
 PLANE_S3_SECRET_KEY=InfraS3SecretValue42
 PLANE_S3_BUCKET=docmost-assets
 SEAWEEDFS_PLANE_CONTAINER_NAME=seaweedfs-infra
+DISABLE_TELEMETRY=false
+SEARCH_DRIVER=typesense
+TYPESENSE_URL=http://typesense-infra:8108
+TYPESENSE_API_KEY=InfraTypesenseApiKey42
+TYPESENSE_LOCALE=ro
 "@ | Set-Content -Path $infraFile -NoNewline
 
         Invoke-NativeCommand -Description "generate-docmost-secrets (infra sync)" -Command {
@@ -480,6 +485,11 @@ SEAWEEDFS_PLANE_CONTAINER_NAME=seaweedfs-infra
         $s3Secret = Strip-Quotes (Env-Value -File $envFile -Key "AWS_S3_SECRET_ACCESS_KEY")
         $s3Bucket = Strip-Quotes (Env-Value -File $envFile -Key "AWS_S3_BUCKET")
         $s3Endpoint = Strip-Quotes (Env-Value -File $envFile -Key "AWS_S3_ENDPOINT")
+        $disableTelemetry = Strip-Quotes (Env-Value -File $envFile -Key "DISABLE_TELEMETRY")
+        $searchDriver = Strip-Quotes (Env-Value -File $envFile -Key "SEARCH_DRIVER")
+        $typesenseUrl = Strip-Quotes (Env-Value -File $envFile -Key "TYPESENSE_URL")
+        $typesenseApiKey = Strip-Quotes (Env-Value -File $envFile -Key "TYPESENSE_API_KEY")
+        $typesenseLocale = Strip-Quotes (Env-Value -File $envFile -Key "TYPESENSE_LOCALE")
 
         Assert-True ($dbUrl -eq "postgresql://apps_admin:InfraPgPass-42@postgres-infra:5432/docmost_main?schema=public") "DATABASE_URL should be synchronized from infra values"
         Assert-True ($redisUrl -eq "redis://default:InfraRedisPass-42@valkey-infra:6379/1") "REDIS_URL should be synchronized from infra values"
@@ -491,6 +501,11 @@ SEAWEEDFS_PLANE_CONTAINER_NAME=seaweedfs-infra
         Assert-True ($s3Secret -eq "InfraS3SecretValue42") "AWS_S3_SECRET_ACCESS_KEY should be synchronized from infra values"
         Assert-True ($s3Bucket -eq "docmost-assets") "AWS_S3_BUCKET should be synchronized from infra values"
         Assert-True ($s3Endpoint -eq "http://seaweedfs-infra:8333") "AWS_S3_ENDPOINT should be synchronized from infra values"
+        Assert-True ($disableTelemetry -eq "false") "DISABLE_TELEMETRY should be synchronized from infra values"
+        Assert-True ($searchDriver -eq "typesense") "SEARCH_DRIVER should be synchronized from infra values"
+        Assert-True ($typesenseUrl -eq "http://typesense-infra:8108") "TYPESENSE_URL should be synchronized from infra values"
+        Assert-True ($typesenseApiKey -eq "InfraTypesenseApiKey42") "TYPESENSE_API_KEY should be synchronized from infra values"
+        Assert-True ($typesenseLocale -eq "ro") "TYPESENSE_LOCALE should be synchronized from infra values"
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
