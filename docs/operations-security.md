@@ -509,7 +509,8 @@ Configure Docker log retention (`max-size`, `max-file`) and verify host logrotat
 
 ## Input validation rules
 
-See [Getting Started](getting-started.md#1-generate-local-env-secrets) for the
-authoritative validation rules and required input format.
+See:
+- [Bootstrap Env Reference](bootstrap-env-reference.md#input-validation-rules)
+- [Bootstrap Flow](bootstrap-flow.md#accepted-configuration-types)
 
 Back to [Docs Home](index.md)

@@ -64,7 +64,8 @@ Important:
   - `rabbitmq-plane`
   - `seaweedfs-plane`
   - if you changed infra container-name overrides, use your custom names instead
-- external Docker network `infra` exists, and both shared services + Plane services are attached to it
+- external Docker network `infra` exists, and shared services are attached to it
+  (Plane services are attached during Step 5)
 
 Before proceeding, if `infra` is missing, create it using:
 - [Create Infra Network](create-infra-network.md)

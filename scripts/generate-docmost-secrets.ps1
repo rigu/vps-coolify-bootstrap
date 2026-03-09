@@ -65,14 +65,17 @@ function Test-UsableInfraValue {
 
 function New-HexSecret {
     param([int]$Bytes)
-    if (-not (Get-Command openssl -ErrorAction SilentlyContinue)) {
-        throw "openssl is required for secret generation."
+    if ($Bytes -lt 1) {
+        throw "Bytes must be >= 1"
     }
-    $output = & openssl rand -hex $Bytes
-    if ($LASTEXITCODE -ne 0) {
-        throw "openssl rand failed"
+    $buffer = New-Object byte[] $Bytes
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $rng.GetBytes($buffer)
+    } finally {
+        $rng.Dispose()
     }
-    return ([string]$output).Trim()
+    return ([System.BitConverter]::ToString($buffer).Replace("-", "").ToLowerInvariant())
 }
 
 try {

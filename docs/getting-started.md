@@ -99,6 +99,9 @@ sudo ss -lntp | grep -E ':(<SSH_PORT>)\b' || true
 sudo ufw status verbose
 ```
 
+Replace `<SSH_PORT>` with your configured value from
+`/etc/vps-coolify-bootstrap/bootstrap.env` (default `2222`).
+
 Connect by SSH:
 
 ```bash

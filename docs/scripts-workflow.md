@@ -13,6 +13,7 @@ This page documents the detailed local workflow for:
 - `scripts/generate-docmost-secrets.sh` / `scripts/generate-docmost-secrets.ps1`
 - `scripts/prepare-docmost-compose.sh` / `scripts/prepare-docmost-compose.ps1`
 - `scripts/generate-plane-secrets.sh` / `scripts/generate-plane-secrets.ps1`
+- `scripts/prepare-plane-compose.sh` / `scripts/prepare-plane-compose.ps1`
 
 ## PowerShell note (Windows)
 
@@ -383,8 +384,8 @@ Copy env to VPS, then run server-side setup:
 Linux/macOS:
 
 ```bash
-scp -P <SSH_PORT> bootstrap-artifacts/production-infra.env devops@<server-ip>:/tmp/production-infra.env
-ssh -p <SSH_PORT> devops@<server-ip>
+scp -P <SSH_PORT> bootstrap-artifacts/production-infra.env <DEVOPS_USER>@<server-ip>:/tmp/production-infra.env
+ssh -p <SSH_PORT> <DEVOPS_USER>@<server-ip>
 sudo bash /opt/vps-coolify-bootstrap/scripts/setup-infra.sh --env-file /tmp/production-infra.env
 sudo bash /opt/vps-coolify-bootstrap/scripts/verify-infra-state.sh --env-file /srv/infra/production-infra.env
 ```
@@ -392,11 +393,13 @@ sudo bash /opt/vps-coolify-bootstrap/scripts/verify-infra-state.sh --env-file /s
 Windows (PowerShell):
 
 ```powershell
-scp -P <SSH_PORT> .\bootstrap-artifacts\production-infra.env devops@<server-ip>:/tmp/production-infra.env
-ssh -p <SSH_PORT> devops@<server-ip>
+scp -P <SSH_PORT> .\bootstrap-artifacts\production-infra.env <DEVOPS_USER>@<server-ip>:/tmp/production-infra.env
+ssh -p <SSH_PORT> <DEVOPS_USER>@<server-ip>
 sudo bash /opt/vps-coolify-bootstrap/scripts/setup-infra.sh --env-file /tmp/production-infra.env
 sudo bash /opt/vps-coolify-bootstrap/scripts/verify-infra-state.sh --env-file /srv/infra/production-infra.env
 ```
+
+Use your actual server admin account for `<DEVOPS_USER>` (default: `devops`).
 
 After first successful apply, use runtime env directly on reruns:
 
