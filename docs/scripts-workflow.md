@@ -207,11 +207,7 @@ Infra -> Docmost sync mapping:
 - `SEAWEEDFS_PLANE_CONTAINER_NAME` -> `AWS_S3_ENDPOINT` (`http://<container>:8333`)
 - `AWS_S3_REGION`, `AWS_S3_ENDPOINT`, `AWS_S3_FORCE_PATH_STYLE` -> same keys in Docmost env (when present)
 - `DISABLE_TELEMETRY` -> `DISABLE_TELEMETRY`
-- `SEARCH_DRIVER`, `TYPESENSE_URL`, `TYPESENSE_API_KEY`, `TYPESENSE_LOCALE` -> same keys in Docmost env (when present)
-
-Compose behavior for search:
-- `templates/docmost-coolify-compose.community.template.yml` includes a bundled `typesense` container
-- default internal endpoint is `TYPESENSE_URL=http://typesense:8108`
+- `FILE_UPLOAD_SIZE_LIMIT`, `FILE_IMPORT_SIZE_LIMIT` -> same keys in Docmost env (when present)
 
 Default generation:
 
@@ -234,7 +230,7 @@ Default infra source:
 If `production-infra.env` is missing:
 - Docmost generator does not fail; it prints a warning and skips infra sync
 - script still generates local `APP_SECRET` and writes/keeps env values
-- rerun after infra env exists to sync infra-derived Docmost values (`DATABASE_URL`, `REDIS_URL`, SMTP/MAIL, DRAWIO, AWS_S3_*, DISABLE_TELEMETRY, SEARCH_DRIVER, TYPESENSE_*)
+- rerun after infra env exists to sync infra-derived Docmost values (`DATABASE_URL`, `REDIS_URL`, SMTP/MAIL, DRAWIO, AWS_S3_*, DISABLE_TELEMETRY, FILE_*_SIZE_LIMIT)
 
 Optional flags:
 - custom env path:

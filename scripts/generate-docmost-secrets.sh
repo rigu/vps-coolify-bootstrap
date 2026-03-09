@@ -214,10 +214,8 @@ aws_s3_bucket="${current[AWS_S3_BUCKET]:-plane-uploads}"
 aws_s3_endpoint="${current[AWS_S3_ENDPOINT]:-http://seaweedfs-plane:8333}"
 aws_s3_force_path_style="${current[AWS_S3_FORCE_PATH_STYLE]:-true}"
 disable_telemetry="${current[DISABLE_TELEMETRY]:-true}"
-search_driver="${current[SEARCH_DRIVER]:-typesense}"
-typesense_url="${current[TYPESENSE_URL]:-http://typesense:8108}"
-typesense_api_key="${current[TYPESENSE_API_KEY]:-CHANGE_ME_typesense_api_key}"
-typesense_locale="${current[TYPESENSE_LOCALE]:-en}"
+file_upload_size_limit="${current[FILE_UPLOAD_SIZE_LIMIT]:-50mb}"
+file_import_size_limit="${current[FILE_IMPORT_SIZE_LIMIT]:-200mb}"
 
 if (( force_app_secret == 1 )) || is_empty_or_placeholder "$app_secret"; then
   app_secret="$(gen_hex 32)"
@@ -315,20 +313,12 @@ if (( no_infra_sync == 0 )); then
     disable_telemetry="${infra[DISABLE_TELEMETRY]}"
     infra_sync_applied=1
   fi
-  if is_usable_infra_value "${infra[SEARCH_DRIVER]:-}"; then
-    search_driver="${infra[SEARCH_DRIVER]}"
+  if is_usable_infra_value "${infra[FILE_UPLOAD_SIZE_LIMIT]:-}"; then
+    file_upload_size_limit="${infra[FILE_UPLOAD_SIZE_LIMIT]}"
     infra_sync_applied=1
   fi
-  if is_usable_infra_value "${infra[TYPESENSE_URL]:-}"; then
-    typesense_url="${infra[TYPESENSE_URL]}"
-    infra_sync_applied=1
-  fi
-  if is_usable_infra_value "${infra[TYPESENSE_API_KEY]:-}"; then
-    typesense_api_key="${infra[TYPESENSE_API_KEY]}"
-    infra_sync_applied=1
-  fi
-  if is_usable_infra_value "${infra[TYPESENSE_LOCALE]:-}"; then
-    typesense_locale="${infra[TYPESENSE_LOCALE]}"
+  if is_usable_infra_value "${infra[FILE_IMPORT_SIZE_LIMIT]:-}"; then
+    file_import_size_limit="${infra[FILE_IMPORT_SIZE_LIMIT]}"
     infra_sync_applied=1
   fi
 fi
@@ -360,10 +350,8 @@ saw_aws_s3_bucket=0
 saw_aws_s3_endpoint=0
 saw_aws_s3_force_path_style=0
 saw_disable_telemetry=0
-saw_search_driver=0
-saw_typesense_url=0
-saw_typesense_api_key=0
-saw_typesense_locale=0
+saw_file_upload_size_limit=0
+saw_file_import_size_limit=0
 
 while IFS= read -r line || [[ -n "$line" ]]; do
   line="${line%$'\r'}"
@@ -393,10 +381,9 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     AWS_S3_ENDPOINT=*) saw_aws_s3_endpoint=1; sync_kv "AWS_S3_ENDPOINT" "$aws_s3_endpoint" >> "$tmp" ;;
     AWS_S3_FORCE_PATH_STYLE=*) saw_aws_s3_force_path_style=1; sync_kv "AWS_S3_FORCE_PATH_STYLE" "$aws_s3_force_path_style" >> "$tmp" ;;
     DISABLE_TELEMETRY=*) saw_disable_telemetry=1; sync_kv "DISABLE_TELEMETRY" "$disable_telemetry" >> "$tmp" ;;
-    SEARCH_DRIVER=*) saw_search_driver=1; sync_kv "SEARCH_DRIVER" "$search_driver" >> "$tmp" ;;
-    TYPESENSE_URL=*) saw_typesense_url=1; sync_kv "TYPESENSE_URL" "$typesense_url" >> "$tmp" ;;
-    TYPESENSE_API_KEY=*) saw_typesense_api_key=1; sync_kv "TYPESENSE_API_KEY" "$typesense_api_key" >> "$tmp" ;;
-    TYPESENSE_LOCALE=*) saw_typesense_locale=1; sync_kv "TYPESENSE_LOCALE" "$typesense_locale" >> "$tmp" ;;
+    SEARCH_DRIVER=*|TYPESENSE_URL=*|TYPESENSE_API_KEY=*|TYPESENSE_LOCALE=*) ;;
+    FILE_UPLOAD_SIZE_LIMIT=*) saw_file_upload_size_limit=1; sync_kv "FILE_UPLOAD_SIZE_LIMIT" "$file_upload_size_limit" >> "$tmp" ;;
+    FILE_IMPORT_SIZE_LIMIT=*) saw_file_import_size_limit=1; sync_kv "FILE_IMPORT_SIZE_LIMIT" "$file_import_size_limit" >> "$tmp" ;;
     *) printf '%s\n' "$line" >> "$tmp" ;;
   esac
 done < "$env_file"
@@ -425,10 +412,8 @@ done < "$env_file"
 (( saw_aws_s3_endpoint == 1 )) || sync_kv "AWS_S3_ENDPOINT" "$aws_s3_endpoint" >> "$tmp"
 (( saw_aws_s3_force_path_style == 1 )) || sync_kv "AWS_S3_FORCE_PATH_STYLE" "$aws_s3_force_path_style" >> "$tmp"
 (( saw_disable_telemetry == 1 )) || sync_kv "DISABLE_TELEMETRY" "$disable_telemetry" >> "$tmp"
-(( saw_search_driver == 1 )) || sync_kv "SEARCH_DRIVER" "$search_driver" >> "$tmp"
-(( saw_typesense_url == 1 )) || sync_kv "TYPESENSE_URL" "$typesense_url" >> "$tmp"
-(( saw_typesense_api_key == 1 )) || sync_kv "TYPESENSE_API_KEY" "$typesense_api_key" >> "$tmp"
-(( saw_typesense_locale == 1 )) || sync_kv "TYPESENSE_LOCALE" "$typesense_locale" >> "$tmp"
+(( saw_file_upload_size_limit == 1 )) || sync_kv "FILE_UPLOAD_SIZE_LIMIT" "$file_upload_size_limit" >> "$tmp"
+(( saw_file_import_size_limit == 1 )) || sync_kv "FILE_IMPORT_SIZE_LIMIT" "$file_import_size_limit" >> "$tmp"
 
 mv "$tmp" "$env_file"
 chmod 600 "$env_file"

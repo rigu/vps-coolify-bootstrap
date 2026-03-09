@@ -134,10 +134,8 @@ try {
     $awsS3Endpoint = if ($cfg.ContainsKey("AWS_S3_ENDPOINT") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["AWS_S3_ENDPOINT"])) { [string]$cfg["AWS_S3_ENDPOINT"] } else { "http://seaweedfs-plane:8333" }
     $awsS3ForcePathStyle = if ($cfg.ContainsKey("AWS_S3_FORCE_PATH_STYLE") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["AWS_S3_FORCE_PATH_STYLE"])) { [string]$cfg["AWS_S3_FORCE_PATH_STYLE"] } else { "true" }
     $disableTelemetry = if ($cfg.ContainsKey("DISABLE_TELEMETRY") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["DISABLE_TELEMETRY"])) { [string]$cfg["DISABLE_TELEMETRY"] } else { "true" }
-    $searchDriver = if ($cfg.ContainsKey("SEARCH_DRIVER") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SEARCH_DRIVER"])) { [string]$cfg["SEARCH_DRIVER"] } else { "typesense" }
-    $typesenseUrl = if ($cfg.ContainsKey("TYPESENSE_URL") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["TYPESENSE_URL"])) { [string]$cfg["TYPESENSE_URL"] } else { "http://typesense:8108" }
-    $typesenseApiKey = if ($cfg.ContainsKey("TYPESENSE_API_KEY") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["TYPESENSE_API_KEY"])) { [string]$cfg["TYPESENSE_API_KEY"] } else { "CHANGE_ME_typesense_api_key" }
-    $typesenseLocale = if ($cfg.ContainsKey("TYPESENSE_LOCALE") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["TYPESENSE_LOCALE"])) { [string]$cfg["TYPESENSE_LOCALE"] } else { "en" }
+    $fileUploadSizeLimit = if ($cfg.ContainsKey("FILE_UPLOAD_SIZE_LIMIT") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["FILE_UPLOAD_SIZE_LIMIT"])) { [string]$cfg["FILE_UPLOAD_SIZE_LIMIT"] } else { "50mb" }
+    $fileImportSizeLimit = if ($cfg.ContainsKey("FILE_IMPORT_SIZE_LIMIT") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["FILE_IMPORT_SIZE_LIMIT"])) { [string]$cfg["FILE_IMPORT_SIZE_LIMIT"] } else { "200mb" }
 
     if ($ForceAll -or $ForceAppSecret -or (Test-EmptyOrPlaceholder -Value $appSecret)) {
         $appSecret = New-HexSecret -Bytes 32
@@ -191,10 +189,8 @@ try {
         }
         if (Test-UsableInfraValue -Value ([string]$infra["AWS_S3_FORCE_PATH_STYLE"])) { $awsS3ForcePathStyle = [string]$infra["AWS_S3_FORCE_PATH_STYLE"]; $infraSyncApplied = $true }
         if (Test-UsableInfraValue -Value ([string]$infra["DISABLE_TELEMETRY"])) { $disableTelemetry = [string]$infra["DISABLE_TELEMETRY"]; $infraSyncApplied = $true }
-        if (Test-UsableInfraValue -Value ([string]$infra["SEARCH_DRIVER"])) { $searchDriver = [string]$infra["SEARCH_DRIVER"]; $infraSyncApplied = $true }
-        if (Test-UsableInfraValue -Value ([string]$infra["TYPESENSE_URL"])) { $typesenseUrl = [string]$infra["TYPESENSE_URL"]; $infraSyncApplied = $true }
-        if (Test-UsableInfraValue -Value ([string]$infra["TYPESENSE_API_KEY"])) { $typesenseApiKey = [string]$infra["TYPESENSE_API_KEY"]; $infraSyncApplied = $true }
-        if (Test-UsableInfraValue -Value ([string]$infra["TYPESENSE_LOCALE"])) { $typesenseLocale = [string]$infra["TYPESENSE_LOCALE"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["FILE_UPLOAD_SIZE_LIMIT"])) { $fileUploadSizeLimit = [string]$infra["FILE_UPLOAD_SIZE_LIMIT"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["FILE_IMPORT_SIZE_LIMIT"])) { $fileImportSizeLimit = [string]$infra["FILE_IMPORT_SIZE_LIMIT"]; $infraSyncApplied = $true }
     }
 
     $managed = @(
@@ -202,7 +198,8 @@ try {
         "MAIL_DRIVER", "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_SECURE", "MAIL_FROM_ADDRESS", "MAIL_FROM_NAME",
         "DRAWIO_URL",
         "AWS_S3_ACCESS_KEY_ID", "AWS_S3_SECRET_ACCESS_KEY", "AWS_S3_REGION", "AWS_S3_BUCKET", "AWS_S3_ENDPOINT", "AWS_S3_FORCE_PATH_STYLE",
-        "DISABLE_TELEMETRY", "SEARCH_DRIVER", "TYPESENSE_URL", "TYPESENSE_API_KEY", "TYPESENSE_LOCALE"
+        "DISABLE_TELEMETRY",
+        "FILE_UPLOAD_SIZE_LIMIT", "FILE_IMPORT_SIZE_LIMIT"
     )
     $values = @{
         "DOCMOST_IMAGE" = $docmostImage
@@ -229,10 +226,8 @@ try {
         "AWS_S3_ENDPOINT" = $awsS3Endpoint
         "AWS_S3_FORCE_PATH_STYLE" = $awsS3ForcePathStyle
         "DISABLE_TELEMETRY" = $disableTelemetry
-        "SEARCH_DRIVER" = $searchDriver
-        "TYPESENSE_URL" = $typesenseUrl
-        "TYPESENSE_API_KEY" = $typesenseApiKey
-        "TYPESENSE_LOCALE" = $typesenseLocale
+        "FILE_UPLOAD_SIZE_LIMIT" = $fileUploadSizeLimit
+        "FILE_IMPORT_SIZE_LIMIT" = $fileImportSizeLimit
     }
 
     $seen = @{}
@@ -247,7 +242,7 @@ try {
         }
 
         $key = $m.Groups[1].Value
-        if ($key -eq "POSTMARK_TOKEN") {
+        if ($key -eq "POSTMARK_TOKEN" -or $key -eq "SEARCH_DRIVER" -or $key -eq "TYPESENSE_URL" -or $key -eq "TYPESENSE_API_KEY" -or $key -eq "TYPESENSE_LOCALE") {
             continue
         }
         if ($managed -contains $key) {

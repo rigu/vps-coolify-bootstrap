@@ -8,7 +8,7 @@ source "$repo_root/tests/testlib.sh"
 script="$repo_root/scripts/generate-docmost-secrets.sh"
 
 test_generate_docmost_creates_env_and_secret() {
-  local tmpdir env_file app_secret
+  local tmpdir env_file app_secret file_upload_size_limit file_import_size_limit
   tmpdir="$(mktemp -d)"
   env_file="$tmpdir/docmost.env"
 
@@ -18,6 +18,10 @@ test_generate_docmost_creates_env_and_secret() {
 
   app_secret="$(strip_env_quotes "$(env_value "$env_file" APP_SECRET)")"
   [[ "$app_secret" =~ ^[0-9a-f]{64}$ ]] || { echo "APP_SECRET should be 64 hex chars" >&2; return 1; }
+  file_upload_size_limit="$(strip_env_quotes "$(env_value "$env_file" FILE_UPLOAD_SIZE_LIMIT)")"
+  file_import_size_limit="$(strip_env_quotes "$(env_value "$env_file" FILE_IMPORT_SIZE_LIMIT)")"
+  assert_eq "50mb" "$file_upload_size_limit" "FILE_UPLOAD_SIZE_LIMIT should default to 50mb" || return 1
+  assert_eq "200mb" "$file_import_size_limit" "FILE_IMPORT_SIZE_LIMIT should default to 200mb" || return 1
 
   rm -rf "$tmpdir"
 }
@@ -25,7 +29,8 @@ test_generate_docmost_creates_env_and_secret() {
 test_generate_docmost_syncs_from_infra_env() {
   local tmpdir env_file infra_file db_url redis_url infra_network \
     smtp_host mail_from_address drawio_url s3_key s3_secret s3_bucket s3_endpoint \
-    disable_telemetry search_driver typesense_url typesense_api_key typesense_locale
+    disable_telemetry \
+    file_upload_size_limit file_import_size_limit
   tmpdir="$(mktemp -d)"
   env_file="$tmpdir/docmost.env"
   infra_file="$tmpdir/production-infra.env"
@@ -51,10 +56,8 @@ PLANE_S3_SECRET_KEY=InfraS3SecretValue42
 PLANE_S3_BUCKET=docmost-assets
 SEAWEEDFS_PLANE_CONTAINER_NAME=seaweedfs-infra
 DISABLE_TELEMETRY=false
-SEARCH_DRIVER=typesense
-TYPESENSE_URL=http://typesense-infra:8108
-TYPESENSE_API_KEY=InfraTypesenseApiKey42
-TYPESENSE_LOCALE=ro
+FILE_UPLOAD_SIZE_LIMIT=75mb
+FILE_IMPORT_SIZE_LIMIT=250mb
 INFRA
 
   bash "$script" --env-file "$env_file" --infra-env-file "$infra_file" >/dev/null
@@ -70,10 +73,8 @@ INFRA
   s3_bucket="$(strip_env_quotes "$(env_value "$env_file" AWS_S3_BUCKET)")"
   s3_endpoint="$(strip_env_quotes "$(env_value "$env_file" AWS_S3_ENDPOINT)")"
   disable_telemetry="$(strip_env_quotes "$(env_value "$env_file" DISABLE_TELEMETRY)")"
-  search_driver="$(strip_env_quotes "$(env_value "$env_file" SEARCH_DRIVER)")"
-  typesense_url="$(strip_env_quotes "$(env_value "$env_file" TYPESENSE_URL)")"
-  typesense_api_key="$(strip_env_quotes "$(env_value "$env_file" TYPESENSE_API_KEY)")"
-  typesense_locale="$(strip_env_quotes "$(env_value "$env_file" TYPESENSE_LOCALE)")"
+  file_upload_size_limit="$(strip_env_quotes "$(env_value "$env_file" FILE_UPLOAD_SIZE_LIMIT)")"
+  file_import_size_limit="$(strip_env_quotes "$(env_value "$env_file" FILE_IMPORT_SIZE_LIMIT)")"
 
   assert_eq "postgresql://apps_admin:InfraPgPass-42@postgres-infra:5432/docmost_main?schema=public" "$db_url" "DATABASE_URL should be synchronized from infra" || return 1
   assert_eq "redis://default:InfraRedisPass-42@valkey-infra:6379/1" "$redis_url" "REDIS_URL should be synchronized from infra" || return 1
@@ -86,10 +87,8 @@ INFRA
   assert_eq "docmost-assets" "$s3_bucket" "AWS_S3_BUCKET should be synchronized from infra" || return 1
   assert_eq "http://seaweedfs-infra:8333" "$s3_endpoint" "AWS_S3_ENDPOINT should be synchronized from infra" || return 1
   assert_eq "false" "$disable_telemetry" "DISABLE_TELEMETRY should be synchronized from infra" || return 1
-  assert_eq "typesense" "$search_driver" "SEARCH_DRIVER should be synchronized from infra" || return 1
-  assert_eq "http://typesense-infra:8108" "$typesense_url" "TYPESENSE_URL should be synchronized from infra" || return 1
-  assert_eq "InfraTypesenseApiKey42" "$typesense_api_key" "TYPESENSE_API_KEY should be synchronized from infra" || return 1
-  assert_eq "ro" "$typesense_locale" "TYPESENSE_LOCALE should be synchronized from infra" || return 1
+  assert_eq "75mb" "$file_upload_size_limit" "FILE_UPLOAD_SIZE_LIMIT should be synchronized from infra" || return 1
+  assert_eq "250mb" "$file_import_size_limit" "FILE_IMPORT_SIZE_LIMIT should be synchronized from infra" || return 1
 
   rm -rf "$tmpdir"
 }

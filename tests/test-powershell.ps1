@@ -432,7 +432,11 @@ Run-Test "generate-docmost-secrets.ps1 creates env + app secret" {
 
         Assert-True (Test-Path -LiteralPath $envFile -PathType Leaf) "Docmost env file should be created"
         $appSecret = Strip-Quotes (Env-Value -File $envFile -Key "APP_SECRET")
+        $fileUploadLimit = Strip-Quotes (Env-Value -File $envFile -Key "FILE_UPLOAD_SIZE_LIMIT")
+        $fileImportLimit = Strip-Quotes (Env-Value -File $envFile -Key "FILE_IMPORT_SIZE_LIMIT")
         Assert-Match $appSecret '^[0-9a-f]{64}$' "APP_SECRET should be generated as 64 hex chars"
+        Assert-True ($fileUploadLimit -eq "50mb") "FILE_UPLOAD_SIZE_LIMIT should default to 50mb"
+        Assert-True ($fileImportLimit -eq "200mb") "FILE_IMPORT_SIZE_LIMIT should default to 200mb"
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
@@ -465,10 +469,8 @@ PLANE_S3_SECRET_KEY=InfraS3SecretValue42
 PLANE_S3_BUCKET=docmost-assets
 SEAWEEDFS_PLANE_CONTAINER_NAME=seaweedfs-infra
 DISABLE_TELEMETRY=false
-SEARCH_DRIVER=typesense
-TYPESENSE_URL=http://typesense-infra:8108
-TYPESENSE_API_KEY=InfraTypesenseApiKey42
-TYPESENSE_LOCALE=ro
+FILE_UPLOAD_SIZE_LIMIT=75mb
+FILE_IMPORT_SIZE_LIMIT=250mb
 "@ | Set-Content -Path $infraFile -NoNewline
 
         Invoke-NativeCommand -Description "generate-docmost-secrets (infra sync)" -Command {
@@ -486,10 +488,8 @@ TYPESENSE_LOCALE=ro
         $s3Bucket = Strip-Quotes (Env-Value -File $envFile -Key "AWS_S3_BUCKET")
         $s3Endpoint = Strip-Quotes (Env-Value -File $envFile -Key "AWS_S3_ENDPOINT")
         $disableTelemetry = Strip-Quotes (Env-Value -File $envFile -Key "DISABLE_TELEMETRY")
-        $searchDriver = Strip-Quotes (Env-Value -File $envFile -Key "SEARCH_DRIVER")
-        $typesenseUrl = Strip-Quotes (Env-Value -File $envFile -Key "TYPESENSE_URL")
-        $typesenseApiKey = Strip-Quotes (Env-Value -File $envFile -Key "TYPESENSE_API_KEY")
-        $typesenseLocale = Strip-Quotes (Env-Value -File $envFile -Key "TYPESENSE_LOCALE")
+        $fileUploadLimit = Strip-Quotes (Env-Value -File $envFile -Key "FILE_UPLOAD_SIZE_LIMIT")
+        $fileImportLimit = Strip-Quotes (Env-Value -File $envFile -Key "FILE_IMPORT_SIZE_LIMIT")
 
         Assert-True ($dbUrl -eq "postgresql://apps_admin:InfraPgPass-42@postgres-infra:5432/docmost_main?schema=public") "DATABASE_URL should be synchronized from infra values"
         Assert-True ($redisUrl -eq "redis://default:InfraRedisPass-42@valkey-infra:6379/1") "REDIS_URL should be synchronized from infra values"
@@ -502,10 +502,8 @@ TYPESENSE_LOCALE=ro
         Assert-True ($s3Bucket -eq "docmost-assets") "AWS_S3_BUCKET should be synchronized from infra values"
         Assert-True ($s3Endpoint -eq "http://seaweedfs-infra:8333") "AWS_S3_ENDPOINT should be synchronized from infra values"
         Assert-True ($disableTelemetry -eq "false") "DISABLE_TELEMETRY should be synchronized from infra values"
-        Assert-True ($searchDriver -eq "typesense") "SEARCH_DRIVER should be synchronized from infra values"
-        Assert-True ($typesenseUrl -eq "http://typesense-infra:8108") "TYPESENSE_URL should be synchronized from infra values"
-        Assert-True ($typesenseApiKey -eq "InfraTypesenseApiKey42") "TYPESENSE_API_KEY should be synchronized from infra values"
-        Assert-True ($typesenseLocale -eq "ro") "TYPESENSE_LOCALE should be synchronized from infra values"
+        Assert-True ($fileUploadLimit -eq "75mb") "FILE_UPLOAD_SIZE_LIMIT should be synchronized from infra values"
+        Assert-True ($fileImportLimit -eq "250mb") "FILE_IMPORT_SIZE_LIMIT should be synchronized from infra values"
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }

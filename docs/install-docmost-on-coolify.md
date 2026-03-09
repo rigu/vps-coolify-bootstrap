@@ -66,7 +66,7 @@ Infra -> Docmost synced keys (automatic in `generate-docmost-secrets.*`):
 - `SEAWEEDFS_PLANE_CONTAINER_NAME` -> `AWS_S3_ENDPOINT` (`http://<container>:8333`)
 - `AWS_S3_REGION`, `AWS_S3_ENDPOINT`, `AWS_S3_FORCE_PATH_STYLE` -> same keys in Docmost env (when present in infra env)
 - `DISABLE_TELEMETRY` -> `DISABLE_TELEMETRY`
-- `SEARCH_DRIVER`, `TYPESENSE_URL`, `TYPESENSE_API_KEY`, `TYPESENSE_LOCALE` -> same keys in Docmost env (when present in infra env)
+- `FILE_UPLOAD_SIZE_LIMIT`, `FILE_IMPORT_SIZE_LIMIT` -> same keys in Docmost env (when present in infra env)
 
 ## 1) Generate Docmost env locally
 
@@ -91,7 +91,7 @@ Default infra source:
 If infra env does not exist yet:
 - `generate-docmost-secrets.*` still succeeds and creates `bootstrap-artifacts/docmost.env`
 - script warns that infra sync is skipped
-- after infra env is created, rerun the Docmost generator so infra-derived values are synchronized (`DATABASE_URL`, `REDIS_URL`, SMTP/MAIL, DRAWIO, AWS_S3_*, DISABLE_TELEMETRY, SEARCH_DRIVER, TYPESENSE_*)
+- after infra env is created, rerun the Docmost generator so infra-derived values are synchronized (`DATABASE_URL`, `REDIS_URL`, SMTP/MAIL, DRAWIO, AWS_S3_*, DISABLE_TELEMETRY, FILE_*_SIZE_LIMIT`)
 
 Rerun after infra env is ready:
 
@@ -151,7 +151,6 @@ Rendered behavior:
    - rendered file: `bootstrap-artifacts/docmost-coolify-compose.community.yml` (recommended)
    - raw template: `templates/docmost-coolify-compose.community.template.yml`
 5. Save compose.
-6. Confirm both services are present in the stack: `docmost` and `typesense`.
 
 ## 4) Configure Docmost env values in Coolify
 
@@ -165,10 +164,8 @@ Mandatory before first deploy:
 - `APP_SECRET`
 - `DATABASE_URL`
 - `REDIS_URL`
-
-Typesense for search in this template:
-- compose includes a `typesense` service in the same stack as Docmost
-- keep `TYPESENSE_URL=http://typesense:8108` unless you intentionally use an external Typesense endpoint
+- `FILE_UPLOAD_SIZE_LIMIT` (recommended default: `50mb`)
+- `FILE_IMPORT_SIZE_LIMIT` (recommended default: `200mb`)
 
 ## 5) Configure public domain routing
 
