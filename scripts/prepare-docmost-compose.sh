@@ -121,7 +121,8 @@ fi
 mkdir -p "$(dirname "$output_file")"
 
 bootstrap_info "Loading Docmost env from: $env_file"
-load_env_file_strict "$env_file"
+# Strictly validate env syntax/values without leaking exports into this shell.
+( load_env_file_strict "$env_file" )
 bootstrap_success "Docmost env loaded."
 
 if ! command -v python3 >/dev/null 2>&1; then

@@ -228,6 +228,7 @@ if (( no_infra_sync == 0 )); then
 fi
 
 tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
 
 saw_docmost_image=0
 saw_app_url=0
@@ -249,7 +250,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     INFRA_NETWORK_NAME=*) saw_infra_network_name=1; sync_kv "INFRA_NETWORK_NAME" "$infra_network_name" >> "$tmp" ;;
     PORT=*) saw_port=1; sync_kv "PORT" "$port" >> "$tmp" ;;
     STORAGE_DRIVER=*) saw_storage_driver=1; sync_kv "STORAGE_DRIVER" "$storage_driver" >> "$tmp" ;;
-    *) echo "$line" >> "$tmp" ;;
+    *) printf '%s\n' "$line" >> "$tmp" ;;
   esac
 done < "$env_file"
 
