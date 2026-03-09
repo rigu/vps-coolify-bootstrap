@@ -16,7 +16,7 @@ Scope:
 - this guide covers Plane deployment inside Coolify
 - this guide uses a **Community-only baseline** (`v1.2.3 full-with-proxy`)
 
-Version baseline is used here:
+Version baseline used here:
 - **Plane Community v1.2.3** (repository baseline)
 - verify upstream before changing versions:
   - <https://github.com/makeplane/plane/releases/latest>
