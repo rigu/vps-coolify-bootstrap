@@ -112,6 +112,16 @@ sudo bash /opt/vps-coolify-bootstrap/scripts/verify-infra-state.sh \
   --env-file /srv/infra/production-infra.env
 ```
 
+Rerun pattern after first successful apply (no re-copy needed):
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/setup-infra.sh \
+  --env-file /srv/infra/production-infra.env
+```
+
+`setup-infra.sh` now supports using the runtime env path directly and will not fail
+when source and target env file are the same file.
+
 What this command does on VPS:
 - reads the copied infra env (`production-infra.env`)
 - generates/refreshes missing infra secrets only when placeholders are still present

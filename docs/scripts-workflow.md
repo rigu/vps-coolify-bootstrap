@@ -298,6 +298,12 @@ sudo bash /opt/vps-coolify-bootstrap/scripts/setup-infra.sh --env-file /tmp/prod
 sudo bash /opt/vps-coolify-bootstrap/scripts/verify-infra-state.sh --env-file /srv/infra/production-infra.env
 ```
 
+After first successful apply, use runtime env directly on reruns:
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/setup-infra.sh --env-file /srv/infra/production-infra.env
+```
+
 What happens server-side:
 - optional fill of unresolved placeholders in copied env
 - compose/config render on VPS
