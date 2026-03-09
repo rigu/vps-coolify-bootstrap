@@ -784,32 +784,48 @@ PHP
 }
 
 ensure_coolify_proxy_path_access() {
-  local proxy_root="/data/coolify/proxy"
+  local root_root="/data/coolify"
   local user="$COOLIFY_SUDO_NOPASSWD_USER"
+  local managed_roots=("/data/coolify/proxy" "/data/coolify/services")
+  local path=""
 
-  if [[ ! -d "$proxy_root" ]]; then
-    bootstrap_warn "$proxy_root not found; skipping proxy path permission synchronization."
-    return 0
+  # Coolify executes remote operations for proxy/services using the configured
+  # localhost SSH user. That user must traverse and write these runtime paths.
+  if [[ -d "$root_root" ]]; then
+    chgrp coolify "$root_root" 2>/dev/null || true
+    chmod g+rx "$root_root" 2>/dev/null || true
   fi
 
-  # Coolify executes remote proxy operations using the configured localhost SSH
-  # user. That user must be able to traverse and write under /data/coolify/proxy.
-  chgrp coolify /data/coolify 2>/dev/null || true
-  chmod g+rx /data/coolify 2>/dev/null || true
-  chgrp -R coolify "$proxy_root" 2>/dev/null || true
-  chmod g+rwx "$proxy_root" 2>/dev/null || true
-  chmod g+s "$proxy_root" 2>/dev/null || true
-  chmod -R g+rwX "$proxy_root" 2>/dev/null || true
-
-  if id "$user" >/dev/null 2>&1; then
-    if sudo -u "$user" test -x "$proxy_root" && sudo -u "$user" test -w "$proxy_root"; then
-      bootstrap_success "Coolify proxy path access synchronized for ${user} (${proxy_root})."
-      return 0
+  for path in "${managed_roots[@]}"; do
+    if [[ ! -d "$path" ]]; then
+      bootstrap_warn "$path not found; skipping permission synchronization."
+      continue
     fi
+    chgrp -R coolify "$path" 2>/dev/null || true
+    chmod g+rwx "$path" 2>/dev/null || true
+    chmod g+s "$path" 2>/dev/null || true
+    chmod -R g+rwX "$path" 2>/dev/null || true
+  done
+
+  if ! id "$user" >/dev/null 2>&1; then
+    bootstrap_error "coolify localhost user ${user} does not exist for runtime path access sync."
+    return 1
   fi
 
-  bootstrap_error "coolify localhost user ${user} cannot access ${proxy_root} after permission sync."
-  return 1
+  for path in "${managed_roots[@]}"; do
+    [[ -d "$path" ]] || continue
+    if ! sudo -u "$user" test -x "$path"; then
+      bootstrap_error "coolify localhost user ${user} cannot traverse ${path} after permission sync."
+      return 1
+    fi
+    if ! sudo -u "$user" test -w "$path"; then
+      bootstrap_error "coolify localhost user ${user} cannot write ${path} after permission sync."
+      return 1
+    fi
+  done
+
+  bootstrap_success "Coolify runtime path access synchronized for ${user} (/data/coolify/{proxy,services})."
+  return 0
 }
 
 wait_for_container_running() {
@@ -1084,7 +1100,7 @@ bootstrap_success "Managed users synchronized to sudo/docker/coolify groups."
 bootstrap_info "Synchronizing Coolify localhost SSH configuration."
 sync_coolify_localhost_ssh_user
 bootstrap_success "Coolify localhost SSH user synchronization completed."
-bootstrap_info "Synchronizing Coolify proxy path access and realtime policy."
+bootstrap_info "Synchronizing Coolify runtime path access and realtime policy."
 ensure_coolify_proxy_path_access
 configure_coolify_realtime_domain
 sync_coolify_realtime_port_guards

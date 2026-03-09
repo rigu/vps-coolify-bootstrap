@@ -79,4 +79,31 @@ If warning persists, remove the offending line from local `known_hosts` and reco
 Use full recovery runbook:
 - [Bootstrap Failure Recovery](bootstrap-failure-recovery.md)
 
+## 7) `Permission denied` under `/data/coolify/services/...`
+
+Example error:
+- `bash: line 2: cd: /data/coolify/services/<service-id>: Permission denied`
+
+This means the localhost SSH user configured in Coolify (for this repo, usually
+`COOLIFY_SUDO_NOPASSWD_USER`, default `coolify`) cannot traverse/write
+Coolify runtime paths.
+
+Apply fix by replaying bootstrap:
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env
+```
+
+Quick temporary fix (before replay) if needed:
+
+```bash
+sudo chgrp coolify /data/coolify
+sudo chmod g+rx /data/coolify
+sudo chgrp -R coolify /data/coolify/services /data/coolify/proxy 2>/dev/null || true
+sudo chmod -R g+rwX /data/coolify/services /data/coolify/proxy 2>/dev/null || true
+sudo find /data/coolify/services /data/coolify/proxy -type d -exec chmod g+s {} + 2>/dev/null || true
+```
+
+Then retry the action in Coolify UI.
+
 Back to [Getting Started](getting-started.md)
