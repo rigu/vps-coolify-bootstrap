@@ -204,6 +204,22 @@ Default output:
 Default infra source:
 - `bootstrap-artifacts/production-infra.env`
 
+If `production-infra.env` is missing:
+- Plane generator does not fail; it prints a warning and skips infra sync
+- script still generates local Plane secrets/passwords in `bootstrap-artifacts/plane.env`
+- `DATABASE_URL`, `REDIS_URL`, and `AMQP_URL` are generated from current Plane env values
+- after generating infra env, rerun Plane generator to sync infra-derived values
+
+Rerun after infra env creation:
+
+```bash
+bash scripts/generate-plane-secrets.sh
+```
+
+```powershell
+pwsh -File scripts/generate-plane-secrets.ps1
+```
+
 Override infra source:
 - Bash: `--infra-env-file <path>`
 - PowerShell: `-InfraEnvFile <path>`

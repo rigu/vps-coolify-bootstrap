@@ -109,6 +109,22 @@ Default output:
 Default infra source:
 - `bootstrap-artifacts/production-infra.env`
 
+If infra env does not exist yet:
+- `generate-plane-secrets.*` still succeeds and creates/updates `bootstrap-artifacts/plane.env`
+- script warns that infra sync is skipped (missing infra env file)
+- local Plane secrets/passwords are generated, and dependent URLs are built from current Plane values
+- after infra env is created, rerun `generate-plane-secrets.*` so infra-derived values are synchronized
+
+Rerun commands after infra env is ready:
+
+```bash
+bash scripts/generate-plane-secrets.sh
+```
+
+```powershell
+pwsh -File scripts/generate-plane-secrets.ps1
+```
+
 Optional explicit infra source path:
 - Bash: `--infra-env-file path/to/production-infra.env`
 - PowerShell: `-InfraEnvFile path/to/production-infra.env`
