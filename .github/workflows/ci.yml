@@ -45,6 +45,7 @@ jobs:
           bash scripts/generate-docmost-secrets.sh --help >/dev/null
           bash scripts/prepare-docmost-compose.sh --help >/dev/null
           bash scripts/generate-plane-secrets.sh --help >/dev/null
+          bash scripts/prepare-plane-compose.sh --help >/dev/null
           bash scripts/prepare-vps-coolify-init.sh --help >/dev/null
           bash scripts/recover-ssh-access.sh --help >/dev/null
           bash scripts/update-realtime-mode.sh --help >/dev/null

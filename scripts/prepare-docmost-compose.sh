@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 usage() {
   cat <<'USAGE'
@@ -281,7 +282,7 @@ except ValueError as exc:
     sys.exit(1)
 PY
 
-chmod 644 "$output_file"
+chmod 600 "$output_file"
 
 bootstrap_success "Rendered Docmost compose written to: $output_file"
 bootstrap_info "Source template: $template_file"

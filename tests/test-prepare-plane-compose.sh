@@ -19,6 +19,9 @@ test_prepare_plane_compose_renders_from_plane_env() {
   bash "$prep_script" --env-file "$env_file" --template-file "$template_file" --output-file "$out_file" >/dev/null
 
   [[ -f "$out_file" ]] || { echo "missing rendered compose output" >&2; return 1; }
+  if stat --version >/dev/null 2>&1; then
+    assert_eq "600" "$(stat -c '%a' "$out_file")" "rendered compose should be mode 600" || return 1
+  fi
   assert_file_contains "$out_file" "SECRET_KEY: \\\${SECRET_KEY:-" "compose should preserve env variable syntax with defaults" || return 1
   assert_file_contains "$out_file" "image: \"\\\${PLANE_PROXY_IMAGE:-makeplane/plane-proxy:v1\\.2\\.3}\"" "proxy image should keep variable with resolved default" || return 1
   if awk '!/^[[:space:]]*#/' "$out_file" | grep -Eq '\$\{[A-Za-z_][A-Za-z0-9_]*:\?'; then

@@ -20,6 +20,7 @@ function Write-Log {
 
 function Write-Info([string]$Message) { Write-Log -Level "INFO" -Message $Message }
 function Write-Success([string]$Message) { Write-Log -Level "SUCCESS" -Message $Message }
+function Write-Warn([string]$Message) { Write-Log -Level "WARNING" -Message $Message }
 function Write-ErrorLog([string]$Message) { Write-Log -Level "ERROR" -Message $Message }
 
 function Strip-EnvQuotes {
@@ -33,15 +34,15 @@ function Load-EnvMap {
     param([string]$Path)
     $map = @{}
     foreach ($rawLine in Get-Content -LiteralPath $Path) {
-        $line = $rawLine.Trim()
-        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith("#")) { continue }
-        $idx = $line.IndexOf("=")
-        if ($idx -lt 1) { throw "Invalid env line: $rawLine" }
-        $key = $line.Substring(0, $idx).Trim()
-        if ($key -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
-            throw "Invalid env key: $key"
-        }
-        $value = $line.Substring($idx + 1).Trim()
+        $line = [string]$rawLine
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        if ($line.TrimStart().StartsWith("#")) { continue }
+
+        $m = [regex]::Match($line, '^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$')
+        if (-not $m.Success) { throw "Invalid env line: $rawLine" }
+
+        $key = $m.Groups[1].Value
+        $value = $m.Groups[2].Value.Trim()
         $map[$key] = Strip-EnvQuotes -Value $value
     }
     return $map
@@ -260,6 +261,14 @@ try {
 
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText($outputPath, $final, $utf8NoBom)
+    if ($IsLinux -or $IsMacOS) {
+        if (Get-Command chmod -ErrorAction SilentlyContinue) {
+            & chmod 600 -- $outputPath *> $null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warn "Could not apply chmod 600 to rendered output: $outputPath"
+            }
+        }
+    }
 
     Write-Success "Rendered Docmost compose written to: $outputPath"
     Write-Info "Source template: $templatePath"
