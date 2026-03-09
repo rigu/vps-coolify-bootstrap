@@ -4,6 +4,17 @@
 # - run Docmost app on Coolify
 # - consume shared infra services from external Docker network `infra`
 # - keep env variables visible/editable in Coolify UI
+#
+# Recommended production use:
+# - pin DOCMOST_IMAGE to a versioned tag/digest in env values
+# - keep this stack attached to `infra` for Postgres + Valkey access
+# - keep restart policy + healthcheck enabled so startup races self-recover
+#
+# Notes:
+# - `depends_on` is intentionally not used for postgres-apps/valkey-apps
+#   because they are external services from another compose project.
+# - required `${VAR:?...}` checks are used on critical values so deploy fails
+#   fast when env setup is incomplete.
 
 services:
   docmost:
@@ -41,6 +52,23 @@ services:
     networks:
       - default
       - infra
+    healthcheck:
+      # Prefer a Node-based probe, with wget/curl fallbacks for image changes.
+      test:
+        - CMD-SHELL
+        - >
+          if command -v node >/dev/null 2>&1; then
+            node -e "const http=require('http');const req=http.get('http://127.0.0.1:3000/api/health',res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));req.setTimeout(5000,()=>{req.destroy();process.exit(1);});";
+          elif command -v wget >/dev/null 2>&1; then
+            wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1;
+          elif command -v curl >/dev/null 2>&1; then
+            curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1;
+          else
+            exit 1;
+          fi
+      interval: 15s
+      timeout: 10s
+      retries: 10
 
 networks:
   infra:

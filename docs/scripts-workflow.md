@@ -266,6 +266,7 @@ Default inputs/outputs:
 - env source: `bootstrap-artifacts/docmost.env`
 - template source: `templates/docmost-coolify-compose.community.template.yml`
 - rendered output: `bootstrap-artifacts/docmost-coolify-compose.community.yml`
+- template includes a production-ready `docmost` healthcheck (`/api/health`)
 
 Useful options:
 - `--env-file <path>`

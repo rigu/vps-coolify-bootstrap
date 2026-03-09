@@ -151,6 +151,7 @@ Rendered behavior:
    - rendered file: `bootstrap-artifacts/docmost-coolify-compose.community.yml` (recommended)
    - raw template: `templates/docmost-coolify-compose.community.template.yml`
 5. Save compose.
+6. Keep the built-in healthcheck enabled (`/api/health`) for reliable restarts in production.
 
 ## 4) Configure Docmost env values in Coolify
 
@@ -188,6 +189,7 @@ Container-level checks on VPS:
 ```bash
 docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -i docmost
 docker logs --tail 120 <docmost-container-name>
+docker inspect --format '{{json .State.Health}}' <docmost-container-name>
 ```
 
 ## 7) Upgrade and rollback
