@@ -154,6 +154,10 @@ variables beyond the quick reference in Getting Started.
   - When: runtime during `DOCKER-USER` guard sync
   - How: default `false` keeps ports public; `true` adds guards to block public ingress to `6001/6002`
   - Required: NO
+- `DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX`
+  - When: runtime after Coolify install check (during bootstrap/replay)
+  - How: default `true`; when vulnerable Docker behavior is detected (`ParseAddr(".../64")` risk), bootstrap writes Docker daemon `"ipv6": false`, restarts Docker, and waits for `coolify` container recovery
+  - Required: NO
 
 ### B) Coolify admin variables
 
@@ -172,7 +176,7 @@ variables beyond the quick reference in Getting Started.
 - `COOLIFY_ROOT_USER_PASSWORD`
   - When: local generation before provisioning if placeholder/empty
   - How: **AUTO-GENERATED** by `generate-secrets.*` only when value is empty/`CHANGE_ME` (24 chars with lowercase, uppercase, digit, and symbol)
-  - Required: NO
+  - Required: YES (effective value required for bootstrap; auto-generation satisfies requirement when placeholder/empty)
 
 ### C) Server user variables
 
@@ -202,7 +206,7 @@ variables beyond the quick reference in Getting Started.
 - `USER_PASSWORDS_ENCRYPTION_PASSWORD`
   - When: local generation before provisioning if placeholder/empty
   - How: **AUTO-GENERATED** by `generate-secrets.*` only when value is empty/`CHANGE_ME` (`openssl rand -hex 16` in Bash)
-  - Required: NO after secure generation
+  - Required: YES (effective value required for bootstrap; auto-generation satisfies requirement when placeholder/empty)
 - account passwords for managed users (`DEVOPS_USER`, `COOLIFY_SUDO_NOPASSWD_USER`, `ADDITIONAL_SUDO_USERS`)
   - When: during bootstrap/replay runtime on the VPS host in `ensure-user-passwords.sh`
   - How: not pre-generated locally; password is generated only when account is locked/unset (`/etc/shadow` empty hash or prefixed `!`/`*`) or when vault has no entry for that user; unlocked accounts already present in vault are not rotated; then vault is encrypted to `/etc/vps-coolify-bootstrap/user-passwords.enc`
@@ -242,9 +246,11 @@ What replay enforces:
 - on-host password generation for locked/unset managed users (during bootstrap/replay) and encrypted vault update
 - UFW baseline (`SSH_PORT`, `80`, `443`)
 - `fail2ban` and `unattended-upgrades`
+- Coolify root account seeding/verification (`RootUserSeeder` + DB check)
 - Coolify localhost connection user/port/private-key synchronization (`COOLIFY_SUDO_NOPASSWD_USER`, `SSH_PORT`)
 - realtime host env synchronization (`PUSHER_HOST`, `PUSHER_PORT`, `PUSHER_SCHEME`) from effective realtime domain (`COOLIFY_REALTIME_DOMAIN` or `COOLIFY_PUBLIC_DOMAIN` fallback)
 - when `CLOSE_COOLIFY_REALTIME_PORTS=true`, enforces `DOCKER-USER` public-drop guards for `6001/6002`
+- when `DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX=true`, applies Docker daemon workaround for known `Start Proxy` `ParseAddr(".../64")` failures when risk is detected
 
 Operational notes:
 
@@ -268,6 +274,48 @@ UFW SSH policy detail:
 - bootstrap also adds explicit `ALLOW IN` rules to `SSH_PORT` for localhost/private ranges
   (`127.0.0.1`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, `::1`, `fc00::/7`, `fe80::/10`)
 - this prevents Coolify localhost validation traffic (from Docker bridge networks) from being rejected by SSH rate limiting
+
+## Docker ParseAddr workaround
+
+Symptom in Coolify UI (`Start Proxy`):
+- `ParseAddr(".../64"): unexpected character, want colon`
+
+Cause:
+- known Docker Engine IPv6 gateway formatting behavior in vulnerable versions can return
+  gateway values with CIDR suffix (`/64`) that break proxy startup path parsing.
+
+Bootstrap behavior:
+- default `DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX=true`
+- if vulnerable behavior is detected, bootstrap updates `/etc/docker/daemon.json` with:
+  - `"ipv6": false`
+- then restarts Docker and waits for Coolify container recovery
+
+Manual verification:
+
+```bash
+docker version
+sudo docker info --format '{{.IPv6}}'
+sudo docker network ls -q | xargs -r -n1 sudo docker network inspect --format '{{range .IPAM.Config}}{{if .Gateway}}{{println .Gateway}}{{end}}{{end}}' | grep -E ':[0-9a-fA-F:]+/[0-9]+' || true
+```
+
+If workaround is disabled (`DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX=false`), fix manually:
+
+```bash
+sudo python3 - <<'PY'
+import json, os
+p="/etc/docker/daemon.json"
+d={}
+if os.path.exists(p) and os.path.getsize(p)>0:
+    with open(p, "r", encoding="utf-8") as f:
+        d=json.load(f)
+d["ipv6"]=False
+with open(p, "w", encoding="utf-8") as f:
+    json.dump(d, f, indent=2)
+    f.write("\n")
+print("updated", p)
+PY
+sudo systemctl restart docker
+```
 
 ## Post-onboarding security (required)
 

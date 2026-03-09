@@ -130,7 +130,10 @@ Default paths:
   - `1`: replace `authorized_keys` with current key
 - `CLOSE_COOLIFY_REALTIME_PORTS`: accepts `true/false` or `1/0`
   - `false`: remove `DOCKER-USER` guards for `6001/6002`
-  - `true`: add `DOCKER-USER` guards and require dedicated realtime host
+  - `true`: add `DOCKER-USER` guards and require an effective realtime domain (`COOLIFY_REALTIME_DOMAIN` or `COOLIFY_PUBLIC_DOMAIN` fallback)
+- `DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX`: accepts `true/false` or `1/0`
+  - `true` (default): auto-apply Docker daemon workaround (`"ipv6": false`) when `Start Proxy` `ParseAddr(".../64")` risk is detected
+  - `false`: disable automatic workaround
 
 Legacy compatibility:
 

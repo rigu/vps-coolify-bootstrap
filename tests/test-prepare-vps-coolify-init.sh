@@ -73,6 +73,7 @@ test_generates_valid_output_with_key_and_user_list_delimiters() {
 
   assert_file_contains "$out_file" '^\s+ssh_authorized_keys:' "generated YML should include ssh_authorized_keys when key is provided"
   assert_file_contains "$out_file" 'CLOSE_COOLIFY_REALTIME_PORTS=false' "generated env should keep close=false"
+  assert_file_contains "$out_file" 'DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX=true' "generated env should default ParseAddr workaround toggle to true"
   assert_file_not_contains "$out_file" '_HERE' "no unreplaced placeholders should remain"
 
   rm -rf "$tmpdir"
@@ -187,6 +188,20 @@ test_rejects_invalid_additional_user() {
   rm -rf "$tmpdir"
 }
 
+test_rejects_invalid_parseaddr_fix_toggle() {
+  local tmpdir env_file out_file key_file
+  tmpdir="$(mktemp -d)"
+  env_file="$tmpdir/bootstrap.env"
+  out_file="$tmpdir/out.yml"
+  key_file="$tmpdir/keys/id_ed25519.pub"
+  make_key_file "$key_file"
+  write_valid_env "$env_file" "$out_file" "$key_file" "false" "" "ops"
+
+  echo "DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX=yes" >> "$env_file"
+  assert_failure "prepare script should reject invalid DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX values" bash "$script" --env-file "$env_file"
+  rm -rf "$tmpdir"
+}
+
 test_rejects_oversized_generated_file() {
   local tmpdir env_file out_file key_file huge
   tmpdir="$(mktemp -d)"
@@ -273,6 +288,7 @@ run_test "prepare-vps-coolify-init maps legacy ALLOW_PUBLIC_COOLIFY_REALTIME_POR
 run_test "prepare-vps-coolify-init enforces --overwrite" test_requires_overwrite_when_output_exists
 run_test "prepare-vps-coolify-init supports --env-file + --overwrite together" test_env_file_plus_overwrite_combination_explicit
 run_test "prepare-vps-coolify-init rejects invalid additional users" test_rejects_invalid_additional_user
+run_test "prepare-vps-coolify-init rejects invalid ParseAddr workaround toggle" test_rejects_invalid_parseaddr_fix_toggle
 run_test "prepare-vps-coolify-init enforces output size limit" test_rejects_oversized_generated_file
 run_test "prepare-vps-coolify-init fails when any required env key is missing" test_missing_each_required_key_fails
 run_test "prepare-vps-coolify-init fails when required env value is empty" test_empty_required_value_fails

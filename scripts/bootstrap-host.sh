@@ -158,6 +158,17 @@ case "$CLOSE_COOLIFY_REALTIME_PORTS" in
     ;;
 esac
 
+DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX="${DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX:-true}"
+case "$DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX" in
+  true|false) ;;
+  1) DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX="true" ;;
+  0) DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX="false" ;;
+  *)
+    bootstrap_error "DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX must be true/false or 1/0"
+    exit 1
+    ;;
+esac
+
 COOLIFY_REALTIME_DOMAIN="${COOLIFY_REALTIME_DOMAIN:-}"
 if [[ -n "$COOLIFY_REALTIME_DOMAIN" ]] && [[ "$COOLIFY_REALTIME_DOMAIN" =~ [[:space:]/] ]]; then
   bootstrap_error "COOLIFY_REALTIME_DOMAIN must be a hostname without spaces or /"
@@ -801,6 +812,184 @@ ensure_coolify_proxy_path_access() {
   return 1
 }
 
+wait_for_container_running() {
+  local container_name="$1"
+  local timeout_seconds="${2:-120}"
+  local attempt=0
+  local max_attempts=$((timeout_seconds / 2))
+
+  while (( attempt < max_attempts )); do
+    if docker ps --format '{{.Names}}' | grep -qx "$container_name"; then
+      return 0
+    fi
+    sleep 2
+    attempt=$((attempt + 1))
+  done
+  return 1
+}
+
+docker_ipv6_gateway_has_cidr() {
+  local network_id=""
+  local gateways=""
+
+  while IFS= read -r network_id; do
+    [[ -n "$network_id" ]] || continue
+    gateways="$(docker network inspect "$network_id" --format '{{range .IPAM.Config}}{{if .Gateway}}{{println .Gateway}}{{end}}{{end}}' 2>/dev/null || true)"
+    if grep -Eq ':[0-9A-Fa-f:]+/[0-9]+' <<< "$gateways"; then
+      return 0
+    fi
+  done < <(docker network ls -q 2>/dev/null || true)
+
+  return 1
+}
+
+set_docker_daemon_ipv6_false() {
+  local daemon_json="/etc/docker/daemon.json"
+  local result=""
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    bootstrap_warn "python3 not found; cannot apply Docker daemon ipv6 workaround automatically."
+    echo "skip:no-python3"
+    return 0
+  fi
+
+  install -d -m 755 /etc/docker
+  if ! result="$(python3 - "$daemon_json" <<'PY'
+import json
+import shutil
+import sys
+import time
+from pathlib import Path
+
+path = Path(sys.argv[1])
+data = {}
+
+if path.exists() and path.stat().st_size > 0:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"skip:invalid-json:{exc}")
+        sys.exit(0)
+
+if data.get("ipv6") is False:
+    print("unchanged")
+    sys.exit(0)
+
+backup_path = None
+if path.exists():
+    backup_path = Path(f"{path}.bootstrap.bak-{int(time.time())}")
+    shutil.copy2(path, backup_path)
+
+data["ipv6"] = False
+path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+if backup_path is not None:
+    print(f"changed:{backup_path}")
+else:
+    print("changed")
+PY
+)"; then
+    bootstrap_warn "failed to update ${daemon_json} for Docker ipv6 workaround."
+    echo "skip:update-failed"
+    return 0
+  fi
+
+  echo "$result"
+}
+
+apply_docker_parseaddr_ipv6_fix() {
+  local docker_version=""
+  local docker_major=""
+  local needs_workaround=0
+  local reason=""
+  local had_coolify_running=0
+  local update_state=""
+
+  if [[ "$DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX" != "true" ]]; then
+    bootstrap_success "Docker ParseAddr workaround disabled by DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX=false."
+    return 0
+  fi
+
+  if ! command -v docker >/dev/null 2>&1; then
+    bootstrap_warn "docker command not found; skipping Docker ParseAddr workaround."
+    return 0
+  fi
+
+  docker_version="$(docker version --format '{{.Server.Version}}' 2>/dev/null || true)"
+  docker_major="${docker_version%%.*}"
+
+  if [[ "$docker_major" =~ ^[0-9]+$ ]] && (( 10#$docker_major < 28 )); then
+    needs_workaround=1
+    reason="Docker Engine ${docker_version}"
+  fi
+
+  if docker_ipv6_gateway_has_cidr; then
+    needs_workaround=1
+    if [[ -n "$reason" ]]; then
+      reason="${reason} and IPv6 gateway CIDR detected in docker network inspect output"
+    else
+      reason="IPv6 gateway CIDR detected in docker network inspect output"
+    fi
+  fi
+
+  if (( needs_workaround == 0 )); then
+    bootstrap_success "Docker ParseAddr workaround not required (Docker Engine ${docker_version:-unknown})."
+    return 0
+  fi
+
+  if is_coolify_running; then
+    had_coolify_running=1
+  fi
+
+  update_state="$(set_docker_daemon_ipv6_false)"
+  case "$update_state" in
+    unchanged)
+      bootstrap_success "Docker daemon already has ipv6=false (ParseAddr workaround active)."
+      return 0
+      ;;
+    changed:*)
+      bootstrap_warn "Docker ParseAddr workaround applied for ${reason}; daemon backup created at ${update_state#changed:}."
+      ;;
+    changed)
+      bootstrap_warn "Docker ParseAddr workaround applied for ${reason}."
+      ;;
+    skip:invalid-json:*)
+      bootstrap_warn "cannot auto-fix Docker ParseAddr workaround because /etc/docker/daemon.json is invalid JSON (${update_state#skip:invalid-json:})."
+      bootstrap_warn "fix /etc/docker/daemon.json manually, then replay bootstrap."
+      return 0
+      ;;
+    skip:*)
+      return 0
+      ;;
+    *)
+      bootstrap_warn "unexpected Docker ParseAddr workaround state: $update_state"
+      return 0
+      ;;
+  esac
+
+  systemctl restart docker
+  local attempt=0
+  while (( attempt < 30 )); do
+    if docker info >/dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+    attempt=$((attempt + 1))
+  done
+  if (( attempt >= 30 )); then
+    bootstrap_error "docker did not become ready after restart while applying ParseAddr workaround."
+    return 1
+  fi
+
+  if (( had_coolify_running == 1 )) && ! wait_for_container_running "coolify" 180; then
+    bootstrap_error "coolify container did not return after Docker restart (ParseAddr workaround)."
+    return 1
+  fi
+
+  bootstrap_success "Docker restart completed after ParseAddr workaround."
+  return 0
+}
+
 coolify_root_user_exists() {
   local root_email="$COOLIFY_ROOT_USER_EMAIL"
   docker exec -e BOOTSTRAP_ROOT_EMAIL="$root_email" coolify php <<'PHP' >/dev/null 2>&1
@@ -857,6 +1046,8 @@ if ! is_coolify_running; then
 else
   bootstrap_success "Coolify already running; install step skipped."
 fi
+apply_docker_parseaddr_ipv6_fix
+bootstrap_success "Docker ParseAddr workaround synchronization completed."
 ensure_coolify_root_user_seeded
 bootstrap_success "Coolify root user seeding/verification completed."
 

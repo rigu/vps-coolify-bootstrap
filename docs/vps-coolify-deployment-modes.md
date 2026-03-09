@@ -24,12 +24,14 @@ What bootstrap does:
 - installs system baseline (SSH hardening, UFW, fail2ban, unattended upgrades)
 - installs Coolify if not running
 - configures Coolify bootstrap admin credentials
+- ensures Coolify root account exists (`RootUserSeeder` + DB verification)
 - syncs local Coolify server connection (id `0`) to:
   - host `host.docker.internal`
   - user `COOLIFY_SUDO_NOPASSWD_USER`
   - port `SSH_PORT`
   - managed localhost private key
 - applies realtime policy from env (`CLOSE_COOLIFY_REALTIME_PORTS` + effective realtime domain from `COOLIFY_REALTIME_DOMAIN` or `COOLIFY_PUBLIC_DOMAIN`)
+- applies Docker ParseAddr workaround policy from env (`DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX`) to prevent known `Start Proxy` failures with `ParseAddr(".../64")`
 
 ## Mode 2) Manual deployment on existing VPS (no user-data field)
 
@@ -67,6 +69,8 @@ What replay does:
 - re-applies host baseline and security policy
 - repairs users/groups/sudo policy
 - regenerates passwords only for locked/unset accounts
+- reapplies Docker ParseAddr mitigation policy from `DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX`
+- verifies/reseeds Coolify root account when missing
 - resyncs local Coolify server user/key/port
 - resyncs realtime env and `DOCKER-USER` guards
 

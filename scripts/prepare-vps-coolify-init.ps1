@@ -174,6 +174,16 @@ switch ($closeCoolifyRealtimePorts.ToLowerInvariant()) {
 }
 $cfg["CLOSE_COOLIFY_REALTIME_PORTS"] = $closeCoolifyRealtimePorts
 
+$dockerDisableIpv6ForParseaddrFix = if ($cfg.ContainsKey("DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX"])) { [string]$cfg["DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX"] } else { "true" }
+switch ($dockerDisableIpv6ForParseaddrFix.ToLowerInvariant()) {
+    "true" { $dockerDisableIpv6ForParseaddrFix = "true" }
+    "false" { $dockerDisableIpv6ForParseaddrFix = "false" }
+    "1" { $dockerDisableIpv6ForParseaddrFix = "true" }
+    "0" { $dockerDisableIpv6ForParseaddrFix = "false" }
+    default { throw "DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX must be true/false or 1/0." }
+}
+$cfg["DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX"] = $dockerDisableIpv6ForParseaddrFix
+
 $coolifyRealtimeDomain = if ($cfg.ContainsKey("COOLIFY_REALTIME_DOMAIN")) { [string]$cfg["COOLIFY_REALTIME_DOMAIN"] } else { "" }
 if ($coolifyRealtimeDomain -match '[\s/]') { throw "COOLIFY_REALTIME_DOMAIN must be a hostname without spaces or /." }
 if (-not [string]::IsNullOrWhiteSpace($coolifyRealtimeDomain) -and $coolifyRealtimeDomain -match "CHANGE_ME") {
@@ -232,6 +242,7 @@ $map = [ordered]@{
     "SSH_KEY_ROTATE_HERE" = [string]$sshKeyRotate
     "ADDITIONAL_SUDO_USERS_HERE" = [string]$cfg["ADDITIONAL_SUDO_USERS"]
     "CLOSE_COOLIFY_REALTIME_PORTS_HERE" = [string]$cfg["CLOSE_COOLIFY_REALTIME_PORTS"]
+    "DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX_HERE" = [string]$cfg["DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX"]
     "COOLIFY_REALTIME_DOMAIN_HERE" = [string]$cfg["COOLIFY_REALTIME_DOMAIN"]
     "COOLIFY_PUBLIC_DOMAIN_HERE" = [string]$cfg["COOLIFY_PUBLIC_DOMAIN"]
     "COOLIFY_ROOT_USERNAME_HERE" = [string]$cfg["COOLIFY_ROOT_USERNAME"]

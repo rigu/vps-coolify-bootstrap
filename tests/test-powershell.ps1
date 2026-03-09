@@ -237,6 +237,7 @@ OUTPUT_FILE=$outFile
         $content = Get-Content -LiteralPath $outFile -Raw
         Assert-True (-not $content.Contains("_HERE")) "Output should not contain unreplaced placeholders"
         Assert-Match $content 'ssh_authorized_keys:' "Output should include ssh_authorized_keys"
+        Assert-Match $content 'DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX=true' "Output should default ParseAddr workaround toggle to true"
 
         if (Test-NativeCommandAvailable -Command "python3" -ProbeArgs @("--version")) {
             Invoke-NativeCommand -Description "python3 yaml parse" -Command {
@@ -500,6 +501,45 @@ OUTPUT_FILE=$outFile
 "@ | Set-Content -Path $envFile -NoNewline
 
         Invoke-NativeCommand -Description "prepare-vps-coolify-init (empty required value)" -ExpectFailure -Command {
+            & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile
+        }
+    } finally {
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Run-Test "prepare-vps-coolify-init.ps1 fails on invalid ParseAddr workaround toggle value" {
+    $tmp = New-TempDir
+    try {
+        $envFile = Join-Path $tmp "bootstrap.env"
+        $outFile = Join-Path $tmp "out.yml"
+        $keyFile = Join-Path $tmp "id_ed25519.pub"
+        Set-Content -Path $keyFile -Value "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPsPrepareKey test@ps" -NoNewline
+
+        @"
+TIMEZONE=UTC
+SSH_PORT=2278
+DEVOPS_USER=devops
+COOLIFY_SUDO_NOPASSWD_USER=coolify
+ADDITIONAL_SUDO_USERS=ops
+SSH_PUBLIC_KEY=CHANGE_ME_ssh_public_key
+SSH_PUBLIC_KEY_PATH=$keyFile
+SSH_KEY_ROTATE=0
+CLOSE_COOLIFY_REALTIME_PORTS=false
+DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX=yes
+COOLIFY_REALTIME_DOMAIN=
+COOLIFY_PUBLIC_DOMAIN=hub.example.com
+COOLIFY_ROOT_USERNAME=admin_main
+COOLIFY_ROOT_USER_EMAIL=admin@example.com
+COOLIFY_ROOT_USER_PASSWORD=Str0ng!Passw0rdAbC1
+USER_PASSWORDS_ENCRYPTION_PASSWORD=0123456789abcdef0123456789abcdef
+BOOTSTRAP_REPO_URL=https://github.com/rigu/vps-coolify-bootstrap.git
+BOOTSTRAP_REPO_REF=main
+TEMPLATE_FILE=$TemplatePath
+OUTPUT_FILE=$outFile
+"@ | Set-Content -Path $envFile -NoNewline
+
+        Invoke-NativeCommand -Description "prepare-vps-coolify-init (invalid DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX)" -ExpectFailure -Command {
             & pwsh -NoLogo -NoProfile -File $PrepareScript -EnvFile $envFile
         }
     } finally {

@@ -34,6 +34,18 @@ case "$CLOSE_COOLIFY_REALTIME_PORTS" in
     ;;
 esac
 
+DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX="${DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX:-true}"
+invalid_docker_disable_ipv6_for_parseaddr_fix=""
+case "$DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX" in
+  true|false) ;;
+  1) DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX="true" ;;
+  0) DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX="false" ;;
+  *)
+    invalid_docker_disable_ipv6_for_parseaddr_fix="$DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX"
+    DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX="true"
+    ;;
+esac
+
 COOLIFY_SUDO_NOPASSWD_USER="${COOLIFY_SUDO_NOPASSWD_USER:-coolify}"
 DEVOPS_USER="${DEVOPS_USER:-devops}"
 COOLIFY_REALTIME_DOMAIN="${COOLIFY_REALTIME_DOMAIN:-}"
@@ -70,6 +82,9 @@ fail() {
 
 if [[ -n "$invalid_close_coolify_realtime_ports" ]]; then
   warn "invalid CLOSE_COOLIFY_REALTIME_PORTS value '${invalid_close_coolify_realtime_ports}' in env; treating as false"
+fi
+if [[ -n "$invalid_docker_disable_ipv6_for_parseaddr_fix" ]]; then
+  warn "invalid DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX value '${invalid_docker_disable_ipv6_for_parseaddr_fix}' in env; treating as true"
 fi
 
 check_service_state() {
@@ -175,6 +190,43 @@ echo "=== Coolify runtime ==="
 if ! command -v docker >/dev/null 2>&1; then
   fail "docker command not found"
 else
+  docker_version="$(docker version --format '{{.Server.Version}}' 2>/dev/null || true)"
+  docker_major="${docker_version%%.*}"
+  docker_ipv6_enabled="$(docker info --format '{{.IPv6}}' 2>/dev/null || true)"
+
+  if [[ "$DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX" == "true" ]]; then
+    if [[ "$docker_major" =~ ^[0-9]+$ ]] && (( 10#$docker_major < 28 )); then
+      if [[ "$docker_ipv6_enabled" == "false" ]]; then
+        pass "Docker ParseAddr workaround active for Docker ${docker_version} (daemon IPv6 disabled)"
+      else
+        fail "Docker ${docker_version} with daemon IPv6 enabled; expected ipv6=false to avoid ParseAddr(\".../64\") proxy failure"
+      fi
+    else
+      pass "Docker ParseAddr workaround policy enabled (Docker ${docker_version:-unknown})"
+    fi
+  else
+    warn "Docker ParseAddr workaround disabled by env (DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX=false)"
+  fi
+
+  cidr_gateway_detected=0
+  while IFS= read -r net_id; do
+    [[ -n "$net_id" ]] || continue
+    gateways="$(docker network inspect "$net_id" --format '{{range .IPAM.Config}}{{if .Gateway}}{{println .Gateway}}{{end}}{{end}}' 2>/dev/null || true)"
+    if grep -Eq ':[0-9A-Fa-f:]+/[0-9]+' <<<"$gateways"; then
+      cidr_gateway_detected=1
+      break
+    fi
+  done < <(docker network ls -q 2>/dev/null || true)
+  if (( cidr_gateway_detected == 1 )); then
+    if [[ "$DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX" == "true" ]]; then
+      fail "Docker network inspect still reports IPv6 gateway CIDR (/64); Start Proxy may fail with ParseAddr"
+    else
+      warn "Docker network inspect reports IPv6 gateway CIDR (/64) and workaround is disabled"
+    fi
+  else
+    pass "Docker network inspect does not report IPv6 gateway CIDR for IPv6 gateways"
+  fi
+
   if docker ps --format '{{.Names}}' | grep -qx 'coolify'; then
     pass "coolify container is running"
   else
@@ -183,19 +235,19 @@ else
   if docker ps --format '{{.Names}}' | grep -Eq '^coolify-proxy($|_)'; then
     pass "coolify proxy container is running"
   else
-    fail "coolify proxy container is not running"
+    warn "coolify proxy container is not running yet (expected before onboarding/domain proxy setup)"
   fi
 fi
 
 if ss -lnt | awk '{print $4}' | grep -Eq '(^|[:.])80$'; then
   pass "port 80 listener exists for Coolify proxy"
 else
-  fail "port 80 listener missing for Coolify proxy"
+  warn "port 80 listener missing (expected before onboarding/domain proxy setup)"
 fi
 if ss -lnt | awk '{print $4}' | grep -Eq '(^|[:.])443$'; then
   pass "port 443 listener exists for Coolify proxy"
 else
-  fail "port 443 listener missing for Coolify proxy"
+  warn "port 443 listener missing (expected before onboarding/domain proxy setup)"
 fi
 
 coolify_local_key="/data/coolify/ssh/keys/id.${COOLIFY_SUDO_NOPASSWD_USER}@host.docker.internal"
@@ -233,7 +285,7 @@ else
 fi
 
 if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -qx 'coolify'; then
-  if db_state="$(docker exec -i coolify php <<'PHP'
+  if db_state="$(docker exec -e BOOTSTRAP_ROOT_EMAIL="${COOLIFY_ROOT_USER_EMAIL:-}" -i coolify php <<'PHP'
 <?php
 chdir('/var/www/html');
 require '/var/www/html/vendor/autoload.php';
@@ -252,6 +304,12 @@ echo 'server_private_key_id=' . $server->private_key_id . PHP_EOL;
 echo 'server_proxy_type=' . ($server->proxyType() ?? '') . PHP_EOL;
 $settings = \App\Models\InstanceSettings::get();
 echo 'instance_fqdn=' . ($settings->fqdn ?? '') . PHP_EOL;
+$rootEmail = strtolower((string) getenv('BOOTSTRAP_ROOT_EMAIL'));
+$rootQuery = \App\Models\User::query()->where('id', 0);
+if ($rootEmail !== '') {
+    $rootQuery->orWhere('email', $rootEmail);
+}
+echo 'root_user_exists=' . ($rootQuery->exists() ? '1' : '0') . PHP_EOL;
 PHP
 )"; then
     server_user="$(sed -n 's/^server_user=//p' <<<"$db_state" | tail -n1)"
@@ -259,6 +317,7 @@ PHP
     server_port="$(sed -n 's/^server_port=//p' <<<"$db_state" | tail -n1)"
     server_proxy_type="$(sed -n 's/^server_proxy_type=//p' <<<"$db_state" | tail -n1)"
     instance_fqdn="$(sed -n 's/^instance_fqdn=//p' <<<"$db_state" | tail -n1)"
+    root_user_exists="$(sed -n 's/^root_user_exists=//p' <<<"$db_state" | tail -n1)"
     if [[ "$server_user" == "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
       pass "Coolify localhost server user is ${COOLIFY_SUDO_NOPASSWD_USER}"
     else
@@ -284,6 +343,11 @@ PHP
       pass "Instance fqdn is ${expected_instance_fqdn}"
     else
       warn "Instance fqdn is ${instance_fqdn:-<empty>} (expected ${expected_instance_fqdn} after onboarding)"
+    fi
+    if [[ "$root_user_exists" == "1" ]]; then
+      pass "Coolify root user exists (id=0 or configured root email)"
+    else
+      fail "Coolify root user missing (expected id=0 or configured root email)"
     fi
 
     if docker exec -e BOOTSTRAP_LOCALHOST_HOST="$server_ip" -e BOOTSTRAP_LOCALHOST_PORT="$server_port" coolify php -r '

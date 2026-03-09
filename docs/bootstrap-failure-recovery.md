@@ -29,6 +29,9 @@ sudo cloud-init status --long
 sudo cloud-init query --all | head -n 40
 ```
 
+Note: `cloud-init` is the native Ubuntu first-boot service provided by the base image.
+This repository does not create that service; bootstrap scripts run inside its first-boot execution.
+
 Where to run these commands:
 - if SSH is not reachable yet, run them in provider web console (serial/VNC console)
 - example (Hetzner Cloud): `Servers -> <server> -> Console`
@@ -132,7 +135,7 @@ Then verify required keys on server:
 
 ```bash
 sudo awk -F= '
-/^(SSH_PORT|DEVOPS_USER|COOLIFY_SUDO_NOPASSWD_USER|ADDITIONAL_SUDO_USERS|SSH_PUBLIC_KEY|COOLIFY_PUBLIC_DOMAIN|CLOSE_COOLIFY_REALTIME_PORTS|COOLIFY_REALTIME_DOMAIN|COOLIFY_ROOT_USERNAME|COOLIFY_ROOT_USER_EMAIL|COOLIFY_ROOT_USER_PASSWORD|USER_PASSWORDS_ENCRYPTION_PASSWORD)=/ {
+/^(SSH_PORT|DEVOPS_USER|COOLIFY_SUDO_NOPASSWD_USER|ADDITIONAL_SUDO_USERS|SSH_PUBLIC_KEY|COOLIFY_PUBLIC_DOMAIN|CLOSE_COOLIFY_REALTIME_PORTS|DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX|COOLIFY_REALTIME_DOMAIN|COOLIFY_ROOT_USERNAME|COOLIFY_ROOT_USER_EMAIL|COOLIFY_ROOT_USER_PASSWORD|USER_PASSWORDS_ENCRYPTION_PASSWORD)=/ {
   print $1"=<set>"
 }
 ' /etc/vps-coolify-bootstrap/bootstrap.env
@@ -146,6 +149,12 @@ if sudo grep -n "CHANGE_ME" /etc/vps-coolify-bootstrap/bootstrap.env; then
 fi
 sudo sed -n 's/^COOLIFY_ROOT_USER_PASSWORD=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d "'\r" | awk '{print length($0)}'
 sudo sed -n 's/^USER_PASSWORDS_ENCRYPTION_PASSWORD=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d "'\r" | awk '{print length($0)}'
+root_pw="$(sudo sed -n 's/^COOLIFY_ROOT_USER_PASSWORD=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d "'\r")"
+if [[ ${#root_pw} -ge 16 && "$root_pw" =~ [a-z] && "$root_pw" =~ [A-Z] && "$root_pw" =~ [0-9] && "$root_pw" =~ [^[:alnum:]] ]]; then
+  echo "COOLIFY_ROOT_USER_PASSWORD complexity: OK"
+else
+  echo "COOLIFY_ROOT_USER_PASSWORD complexity: INVALID"
+fi
 ```
 
 `COOLIFY_ROOT_USER_PASSWORD` must be at least 16 characters and include lowercase, uppercase, digit, and symbol.
@@ -169,6 +178,8 @@ This script is idempotent and executes the following actions in order:
 - reset/apply UFW baseline rules (`SSH_PORT`, `80`, `443`)
 - enable `fail2ban` and `unattended-upgrades`
 - install/start Coolify if missing
+- apply Docker ParseAddr workaround policy when enabled (`DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX=true`)
+- ensure Coolify root account exists (`RootUserSeeder` + DB verification)
 - sync Coolify localhost server connection to `COOLIFY_SUDO_NOPASSWD_USER` + `SSH_PORT` and dedicated localhost SSH key
 - sync realtime host env (`PUSHER_HOST`, `PUSHER_PORT`, `PUSHER_SCHEME`) from effective realtime domain (`COOLIFY_REALTIME_DOMAIN` or `COOLIFY_PUBLIC_DOMAIN` fallback)
 - enforce sudo/docker/coolify memberships and sudo policy (passwordless for `DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` by default)
@@ -289,13 +300,30 @@ sudo chmod 440 /etc/sudoers.d/zz-coolify-nopasswd
 sudo visudo -c
 ```
 
-### D) Fix invalid IPv6 format in Coolify server settings
+### D) Fix `ParseAddr(".../64")` proxy start failures
 
-If logs show `ParseAddr(".../64")`, remove CIDR suffix from host IPv6.
-- valid host example: `2a01:4f8:1c1c:ad5f::1`
-- invalid for host field: `2a01:4f8:1c1c:ad5f::1/64`
+If logs show `ParseAddr(".../64")`, validate both layers:
+- Coolify host/IP field format:
+  - valid host example: `2a01:4f8:1c1c:ad5f::1`
+  - invalid host format: `2a01:4f8:1c1c:ad5f::1/64`
+- Docker IPv6 gateway parsing path (known upstream issue in vulnerable Docker behavior)
 
-Then revalidate server connection in Coolify UI.
+Bootstrap mitigation:
+- keep `DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX=true` in `/etc/vps-coolify-bootstrap/bootstrap.env` (default)
+- replay bootstrap:
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env
+```
+
+Quick checks:
+
+```bash
+docker version
+sudo docker info --format '{{.IPv6}}'
+```
+
+Then retry `Start Proxy` in Coolify UI.
 
 ## 9) If replay still fails, capture focused diagnostics
 
