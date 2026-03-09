@@ -16,6 +16,7 @@ Production-ready **VPS bootstrap for Coolify on Ubuntu 24.04 LTS** with VPS-Cool
 - reproducible VPS-Coolify init rendering from env templates
 - Linux/macOS + PowerShell support for operators
 - explicit recovery runbook for failed first boot
+- includes a Docmost deployment profile (env + compose guidance)
 - includes a Plane Community deployment profile (infra + env + compose guidance)
 - emergency provider-console SSH recovery helper (`scripts/recover-ssh-access.sh`)
 - public/generic templates with no private data
@@ -53,6 +54,7 @@ Canonical instructions were moved to GitHub Pages docs:
 - Onboarding troubleshooting: [docs/onboarding-troubleshooting.md](docs/onboarding-troubleshooting.md)
 - Bootstrap flow: [docs/bootstrap-flow.md](docs/bootstrap-flow.md)
 - Create Infra Network: [docs/create-infra-network.md](docs/create-infra-network.md)
+- Install Docmost on Coolify: [docs/install-docmost-on-coolify.md](docs/install-docmost-on-coolify.md)
 - Install Plane on Coolify: [docs/install-plane-on-coolify.md](docs/install-plane-on-coolify.md)
 - Plane incident prevention notes: [docs/plane-community-v1.2.3-incident-prevention.md](docs/plane-community-v1.2.3-incident-prevention.md)
 - VPS Coolify deployment modes: [docs/vps-coolify-deployment-modes.md](docs/vps-coolify-deployment-modes.md)
@@ -65,7 +67,8 @@ Recommended execution order:
 1. Bootstrap: [docs/getting-started.md](docs/getting-started.md)
 2. Coolify onboarding: [docs/onboarding-troubleshooting.md](docs/onboarding-troubleshooting.md)
 3. Internal service layer: [docs/create-infra-network.md](docs/create-infra-network.md)
-4. Plane deployment: [docs/install-plane-on-coolify.md](docs/install-plane-on-coolify.md)
+4. Docmost deployment: [docs/install-docmost-on-coolify.md](docs/install-docmost-on-coolify.md)
+5. Plane deployment: [docs/install-plane-on-coolify.md](docs/install-plane-on-coolify.md)
 
 ## Ubuntu Target
 

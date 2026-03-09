@@ -24,11 +24,13 @@ Production-ready public bootstrap for **Coolify on Ubuntu 24.04 LTS**.
   1. Bootstrap: [Getting Started](getting-started.md)
   2. Coolify onboarding: [Onboarding Troubleshooting](onboarding-troubleshooting.md)
   3. Internal service layer: [Create Infra Network](create-infra-network.md)
-  4. Workload deployment: [Install Plane on Coolify](install-plane-on-coolify.md)
+  4. Workload deployment: [Install Docmost on Coolify](install-docmost-on-coolify.md)
+  5. Workload deployment: [Install Plane on Coolify](install-plane-on-coolify.md)
 
 - [Getting Started](getting-started.md)
 - [Onboarding Troubleshooting](onboarding-troubleshooting.md)
 - [Create Infra Network](create-infra-network.md)
+- [Install Docmost on Coolify](install-docmost-on-coolify.md)
 - [Install Plane on Coolify](install-plane-on-coolify.md)
 - [Script Workflow](scripts-workflow.md)
 - [Bootstrap Env Reference](bootstrap-env-reference.md)
@@ -42,10 +44,10 @@ Production-ready public bootstrap for **Coolify on Ubuntu 24.04 LTS**.
 
 ## Repository Layout
 
-- `env/` env templates (`bootstrap.env.example`, `infra.env.example`, `plane-coolify.env.example`)
+- `env/` env templates (`bootstrap.env.example`, `infra.env.example`, `docmost-coolify.env.example`, `plane-coolify.env.example`)
 - `bootstrap-artifacts/` local generated secrets and VPS-Coolify init output (not committed)
 - `scripts/` bootstrap + helper scripts (Bash + PowerShell)
-- `templates/` `vps-init.template.yml` + infra/Plane compose templates
+- `templates/` `vps-init.template.yml` + infra/Docmost/Plane compose templates
 - `docs/` operational runbooks and documentation
 
 ## Primary Sources

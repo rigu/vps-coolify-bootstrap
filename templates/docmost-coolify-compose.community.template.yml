@@ -1,0 +1,33 @@
+# Docmost Community Compose for Coolify (external infra profile)
+#
+# Purpose:
+# - run Docmost app on Coolify
+# - consume shared infra services from external Docker network `infra`
+# - keep env variables visible/editable in Coolify UI
+
+services:
+  docmost:
+    image: "${DOCMOST_IMAGE:-docmost/docmost:latest}"
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      APP_URL: ${APP_URL:?Missing APP_URL}
+      APP_SECRET: ${APP_SECRET:?Missing APP_SECRET}
+      DATABASE_URL: ${DATABASE_URL:?Missing DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:?Missing REDIS_URL}
+      PORT: ${PORT:-3000}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+    volumes:
+      - docmost_storage:/app/data/storage
+    networks:
+      - default
+      - infra
+
+networks:
+  infra:
+    external: true
+    name: ${INFRA_NETWORK_NAME:-infra}
+
+volumes:
+  docmost_storage:

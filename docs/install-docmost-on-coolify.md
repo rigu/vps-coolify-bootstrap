@@ -1,0 +1,193 @@
+---
+---
+
+# Install Docmost on Coolify
+
+This guide adds Docmost as a workload on top of a VPS already bootstrapped with this repository.
+
+Expected order before using this page:
+1. Bootstrap server baseline
+2. Complete Coolify onboarding
+3. Create internal service layer (`infra`)
+4. Install Docmost
+
+Scope:
+- this repository bootstraps server baseline + Coolify
+- this guide covers Docmost deployment inside Coolify
+- this guide uses shared infra services for Postgres and Valkey (Redis protocol)
+
+## Files provided in this repository
+
+- Compose template:
+  - `templates/docmost-coolify-compose.community.template.yml`
+- Env template:
+  - `env/docmost-coolify.env.example`
+- Env generator scripts:
+  - `scripts/generate-docmost-secrets.sh`
+  - `scripts/generate-docmost-secrets.ps1`
+- Compose renderer scripts:
+  - `scripts/prepare-docmost-compose.sh`
+  - `scripts/prepare-docmost-compose.ps1`
+
+## Prerequisites
+
+- Coolify onboarding is complete and the dashboard is reachable on final HTTPS domain:
+  - expected end-state: `https://<coolify-domain>`
+  - `http://<server-ip>:8000` is only the temporary onboarding entrypoint
+- local server validation passes in Coolify (`Servers -> localhost`)
+- internal service layer is running and reachable:
+  - `postgres-apps`
+  - `valkey-apps`
+- external Docker network `infra` exists
+
+If infra is not ready, create it first:
+- [Create Infra Network](create-infra-network.md)
+
+## Local ownership: infra secrets vs Docmost secrets
+
+Recommended source of truth:
+- infra secrets are generated locally in `bootstrap-artifacts/production-infra.env`
+- Docmost env is generated locally in `bootstrap-artifacts/docmost.env`
+- Docmost generator syncs infra-dependent values from local infra env
+
+Infra -> Docmost synced keys (automatic in `generate-docmost-secrets.*`):
+- `POSTGRES_APPS_USER` -> `DATABASE_URL` user
+- `POSTGRES_APPS_PASSWORD` -> `DATABASE_URL` password
+- `POSTGRES_DOCMOST_DB` -> `DATABASE_URL` database
+- `POSTGRES_APPS_CONTAINER_NAME` -> `DATABASE_URL` host
+- `APPS_VALKEY_PASSWORD` -> `REDIS_URL` password
+- `VALKEY_APPS_CONTAINER_NAME` -> `REDIS_URL` host
+- `INFRA_NETWORK_NAME` -> `INFRA_NETWORK_NAME`
+
+## 1) Generate Docmost env locally
+
+Bash:
+
+```bash
+bash scripts/generate-docmost-secrets.sh
+```
+
+PowerShell:
+
+```powershell
+pwsh -File scripts/generate-docmost-secrets.ps1
+```
+
+Default output:
+- `bootstrap-artifacts/docmost.env`
+
+Default infra source:
+- `bootstrap-artifacts/production-infra.env`
+
+If infra env does not exist yet:
+- `generate-docmost-secrets.*` still succeeds and creates `bootstrap-artifacts/docmost.env`
+- script warns that infra sync is skipped
+- after infra env is created, rerun the Docmost generator so `DATABASE_URL` and `REDIS_URL` are synchronized
+
+Rerun after infra env is ready:
+
+Linux/macOS (Bash):
+
+```bash
+bash scripts/generate-docmost-secrets.sh
+```
+
+Windows (PowerShell):
+
+```powershell
+pwsh -File scripts/generate-docmost-secrets.ps1
+```
+
+Optional flags:
+- custom env path:
+  - Bash: `--env-file path/to/docmost.env`
+  - PowerShell: `-EnvFile path/to/docmost.env`
+- custom infra env path:
+  - Bash: `--infra-env-file path/to/production-infra.env`
+  - PowerShell: `-InfraEnvFile path/to/production-infra.env`
+- disable infra sync (advanced/testing):
+  - Bash: `--no-infra-sync`
+  - PowerShell: `-NoInfraSync`
+- rotate app secret:
+  - Bash: `--force-app-secret`
+  - PowerShell: `-ForceAppSecret`
+
+## 2) Render Docmost compose from env
+
+Bash:
+
+```bash
+bash scripts/prepare-docmost-compose.sh
+```
+
+PowerShell:
+
+```powershell
+pwsh -File scripts/prepare-docmost-compose.ps1
+```
+
+Default rendered output:
+- `bootstrap-artifacts/docmost-coolify-compose.community.yml`
+
+Rendered behavior:
+- output keeps `${VAR}` expressions so Coolify detects environment variables in UI
+- defaults are rewritten from `docmost.env` (for example `${APP_SECRET:-<value-from-docmost.env>}`)
+
+## 3) Create Docmost resource in Coolify
+
+1. Open `Projects -> <project> -> <environment>`.
+2. Create a new `Docker Compose` resource.
+3. Use a clear name (for example `docmost` or `wiki`).
+4. Paste the full content of one of:
+   - rendered file: `bootstrap-artifacts/docmost-coolify-compose.community.yml` (recommended)
+   - raw template: `templates/docmost-coolify-compose.community.template.yml`
+5. Save compose.
+
+## 4) Configure Docmost env values in Coolify
+
+1. Open env variables for the Docmost resource.
+2. Start from `bootstrap-artifacts/docmost.env`.
+3. Replace remaining `CHANGE_ME_*` values if any are still present.
+4. Save env values.
+
+Mandatory before first deploy:
+- `APP_URL`
+- `APP_SECRET`
+- `DATABASE_URL`
+- `REDIS_URL`
+
+## 5) Configure public domain routing
+
+Map your Docmost domain to service `docmost`, port `3000`.
+
+Recommended mapping:
+- `https://docs.example.com` -> service `docmost` -> port `3000`
+
+## 6) Deploy and verify
+
+Deploy resource in Coolify, then verify:
+
+```bash
+curl -sSI https://docs.example.com/
+curl -sSI https://docs.example.com/login
+```
+
+Container-level checks on VPS:
+
+```bash
+docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -i docmost
+docker logs --tail 120 <docmost-container-name>
+```
+
+## 7) Upgrade and rollback
+
+Safe path:
+1. Keep compose structure unchanged.
+2. Change only `DOCMOST_IMAGE` tag in env values.
+3. Redeploy.
+4. Roll back by restoring previous tag and redeploy.
+
+Default repository baseline uses:
+- `DOCMOST_IMAGE=docmost/docmost:latest`
+
+Pin to a fixed tag in production if you need deterministic upgrades.

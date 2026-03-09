@@ -30,7 +30,7 @@ defaults:
       type: "pages"
     values:
       title: Script Workflow
-      description: Detailed usage for bootstrap, infra, and Plane helper scripts (Bash and PowerShell).
+      description: Detailed usage for bootstrap, infra, Docmost, and Plane helper scripts (Bash and PowerShell).
   - scope:
       path: "bootstrap-env-reference.md"
       type: "pages"
@@ -80,6 +80,12 @@ defaults:
       title: Create Infra Network
       description: How to create and validate the shared external Docker network used by app workloads and shared services.
   - scope:
+      path: "install-docmost-on-coolify.md"
+      type: "pages"
+    values:
+      title: Install Docmost on Coolify
+      description: Practical deployment guide for Docmost workload on top of this VPS bootstrap.
+  - scope:
       path: "install-plane-on-coolify.md"
       type: "pages"
     values:
@@ -102,6 +108,7 @@ header_pages:
   - getting-started.md
   - onboarding-troubleshooting.md
   - create-infra-network.md
+  - install-docmost-on-coolify.md
   - install-plane-on-coolify.md
   - scripts-workflow.md
   - bootstrap-env-reference.md

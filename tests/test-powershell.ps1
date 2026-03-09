@@ -5,11 +5,14 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $GenerateScript = Join-Path $RepoRoot "scripts/generate-secrets.ps1"
 $GenerateInfraScript = Join-Path $RepoRoot "scripts/generate-infra-secrets.ps1"
 $GeneratePlaneScript = Join-Path $RepoRoot "scripts/generate-plane-secrets.ps1"
+$GenerateDocmostScript = Join-Path $RepoRoot "scripts/generate-docmost-secrets.ps1"
 $PrepareInfraScript = Join-Path $RepoRoot "scripts/prepare-infra-compose.ps1"
 $PreparePlaneComposeScript = Join-Path $RepoRoot "scripts/prepare-plane-compose.ps1"
+$PrepareDocmostComposeScript = Join-Path $RepoRoot "scripts/prepare-docmost-compose.ps1"
 $PrepareScript = Join-Path $RepoRoot "scripts/prepare-vps-coolify-init.ps1"
 $TemplatePath = Join-Path $RepoRoot "templates/vps-init.template.yml"
 $PlaneComposeTemplatePath = Join-Path $RepoRoot "templates/plane-coolify-compose.community.v1.2.3.full-with-proxy.yml"
+$DocmostComposeTemplatePath = Join-Path $RepoRoot "templates/docmost-coolify-compose.community.template.yml"
 
 $script:Total = 0
 $script:Failed = 0
@@ -413,6 +416,82 @@ Run-Test "prepare-infra-compose.ps1 fails on unresolved placeholders" {
 
         Invoke-NativeCommand -Description "prepare-infra-compose (placeholder env should fail)" -ExpectFailure -Command {
             & pwsh -NoLogo -NoProfile -File $PrepareInfraScript -EnvFile $envFile -OutputDir (Join-Path $tmp "out")
+        }
+    } finally {
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Run-Test "generate-docmost-secrets.ps1 creates env + app secret" {
+    $tmp = New-TempDir
+    try {
+        $envFile = Join-Path $tmp "docmost.env"
+        Invoke-NativeCommand -Description "generate-docmost-secrets (create env)" -Command {
+            & pwsh -NoLogo -NoProfile -File $GenerateDocmostScript -EnvFile $envFile -NoInfraSync
+        }
+
+        Assert-True (Test-Path -LiteralPath $envFile -PathType Leaf) "Docmost env file should be created"
+        $appSecret = Strip-Quotes (Env-Value -File $envFile -Key "APP_SECRET")
+        Assert-Match $appSecret '^[0-9a-f]{64}$' "APP_SECRET should be generated as 64 hex chars"
+    } finally {
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Run-Test "generate-docmost-secrets.ps1 syncs DATABASE_URL and REDIS_URL from infra env" {
+    $tmp = New-TempDir
+    try {
+        $envFile = Join-Path $tmp "docmost.env"
+        $infraFile = Join-Path $tmp "production-infra.env"
+
+        @"
+INFRA_NETWORK_NAME=infra-shared
+POSTGRES_APPS_USER=apps_admin
+POSTGRES_APPS_PASSWORD=InfraPgPass-42
+POSTGRES_DOCMOST_DB=docmost_main
+POSTGRES_APPS_CONTAINER_NAME=postgres-infra
+APPS_VALKEY_PASSWORD=InfraRedisPass-42
+VALKEY_APPS_CONTAINER_NAME=valkey-infra
+"@ | Set-Content -Path $infraFile -NoNewline
+
+        Invoke-NativeCommand -Description "generate-docmost-secrets (infra sync)" -Command {
+            & pwsh -NoLogo -NoProfile -File $GenerateDocmostScript -EnvFile $envFile -InfraEnvFile $infraFile
+        }
+
+        $dbUrl = Strip-Quotes (Env-Value -File $envFile -Key "DATABASE_URL")
+        $redisUrl = Strip-Quotes (Env-Value -File $envFile -Key "REDIS_URL")
+        $network = Strip-Quotes (Env-Value -File $envFile -Key "INFRA_NETWORK_NAME")
+
+        Assert-True ($dbUrl -eq "postgresql://apps_admin:InfraPgPass-42@postgres-infra:5432/docmost_main?schema=public") "DATABASE_URL should be synchronized from infra values"
+        Assert-True ($redisUrl -eq "redis://default:InfraRedisPass-42@valkey-infra:6379/1") "REDIS_URL should be synchronized from infra values"
+        Assert-True ($network -eq "infra-shared") "INFRA_NETWORK_NAME should be synchronized from infra values"
+    } finally {
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Run-Test "prepare-docmost-compose.ps1 renders compose from docmost env" {
+    $tmp = New-TempDir
+    try {
+        $envFile = Join-Path $tmp "docmost.env"
+        $outFile = Join-Path $tmp "docmost-compose.yml"
+        Invoke-NativeCommand -Description "generate-docmost-secrets (for compose render)" -Command {
+            & pwsh -NoLogo -NoProfile -File $GenerateDocmostScript -EnvFile $envFile -NoInfraSync
+        }
+        Invoke-NativeCommand -Description "prepare-docmost-compose (render output)" -Command {
+            & pwsh -NoLogo -NoProfile -File $PrepareDocmostComposeScript -EnvFile $envFile -TemplateFile $DocmostComposeTemplatePath -OutputFile $outFile
+        }
+
+        Assert-True (Test-Path -LiteralPath $outFile -PathType Leaf) "Rendered Docmost compose output should exist"
+        $content = Get-Content -LiteralPath $outFile -Raw
+        Assert-Match $content 'APP_SECRET:\s*\$\{APP_SECRET:-' "Rendered compose should preserve env variable syntax with defaults"
+        Assert-Match $content 'image:\s*"\$\{DOCMOST_IMAGE:-docmost/docmost:latest\}"' "Rendered compose should keep image variable with default"
+
+        foreach ($line in (Get-Content -LiteralPath $outFile)) {
+            if ($line.TrimStart().StartsWith("#")) { continue }
+            if ($line -match '\$\{[A-Za-z_][A-Za-z0-9_]*:\?') {
+                throw "Required interpolation should be converted to default interpolation on active lines"
+            }
         }
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

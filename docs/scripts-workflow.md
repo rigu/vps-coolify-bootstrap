@@ -10,6 +10,8 @@ This page documents the detailed local workflow for:
 - `scripts/prepare-infra-compose.sh` / `scripts/prepare-infra-compose.ps1`
 - `scripts/setup-infra.sh`
 - `scripts/verify-infra-state.sh`
+- `scripts/generate-docmost-secrets.sh` / `scripts/generate-docmost-secrets.ps1`
+- `scripts/prepare-docmost-compose.sh` / `scripts/prepare-docmost-compose.ps1`
 - `scripts/generate-plane-secrets.sh` / `scripts/generate-plane-secrets.ps1`
 
 ## PowerShell note (Windows)
@@ -177,6 +179,80 @@ Then return to default append mode:
 ```env
 SSH_KEY_ROTATE=0
 ```
+
+## Docmost env secret workflow (for Docmost deployment)
+
+Use this when deploying Docmost on top of this bootstrap.
+
+Local-first rule:
+- generate infra env locally first (`bootstrap-artifacts/production-infra.env`)
+- copy infra env to VPS and run infra setup there
+- generate Docmost env locally second (`bootstrap-artifacts/docmost.env`)
+- Docmost generator syncs infra-dependent URLs automatically
+
+Default generation:
+
+```bash
+bash scripts/generate-docmost-secrets.sh
+```
+
+PowerShell:
+
+```powershell
+pwsh -File scripts/generate-docmost-secrets.ps1
+```
+
+Default output:
+- `bootstrap-artifacts/docmost.env`
+
+Default infra source:
+- `bootstrap-artifacts/production-infra.env`
+
+If `production-infra.env` is missing:
+- Docmost generator does not fail; it prints a warning and skips infra sync
+- script still generates local `APP_SECRET` and writes/keeps env values
+- rerun after infra env exists to sync `DATABASE_URL` and `REDIS_URL`
+
+Optional flags:
+- custom env path:
+  - Bash: `--env-file <path>`
+  - PowerShell: `-EnvFile <path>`
+- custom infra env path:
+  - Bash: `--infra-env-file <path>`
+  - PowerShell: `-InfraEnvFile <path>`
+- disable infra sync:
+  - Bash: `--no-infra-sync`
+  - PowerShell: `-NoInfraSync`
+- rotate app secret:
+  - Bash: `--force-app-secret`
+  - PowerShell: `-ForceAppSecret`
+
+Details and deployment usage:
+- [Install Docmost on Coolify](install-docmost-on-coolify.md)
+
+## Docmost compose render workflow (apply docmost.env to template)
+
+Use this when you want a ready-to-paste compose file that keeps `${VAR}` syntax,
+but injects defaults from `docmost.env` (`${VAR:-value}`).
+
+```bash
+bash scripts/prepare-docmost-compose.sh
+```
+
+```powershell
+pwsh -File scripts/prepare-docmost-compose.ps1
+```
+
+Default inputs/outputs:
+- env source: `bootstrap-artifacts/docmost.env`
+- template source: `templates/docmost-coolify-compose.community.template.yml`
+- rendered output: `bootstrap-artifacts/docmost-coolify-compose.community.yml`
+
+Useful options:
+- `--env-file <path>`
+- `--template-file <path>`
+- `--output-file <path>`
+- `--overwrite`
 
 ## Plane env secret workflow (for Plane deployment)
 

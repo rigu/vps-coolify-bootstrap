@@ -145,9 +145,10 @@ Deploy workloads after onboarding:
 - configure runtime env vars
 - deploy and validate health
 
-Recommended next sequence for Plane:
+Recommended next sequence for workloads:
 1. Create internal service layer: [Create Infra Network](create-infra-network.md)
-2. Deploy Plane workload: [Install Plane on Coolify](install-plane-on-coolify.md)
+2. Deploy Docmost workload: [Install Docmost on Coolify](install-docmost-on-coolify.md)
+3. Deploy Plane workload: [Install Plane on Coolify](install-plane-on-coolify.md)
 
 ## 5) Advanced operations
 
@@ -157,6 +158,7 @@ Recommended next sequence for Plane:
 - VPS deployment lifecycle modes: [VPS Coolify Deployment Modes](vps-coolify-deployment-modes.md)
 - Realtime exposure modes and update procedure: [VPS Coolify Realtime Modes](vps-coolify-realtime-modes.md)
 - Create infra for workloads: [Create Infra Network](create-infra-network.md)
+- Docmost install guide (Coolify): [Install Docmost on Coolify](install-docmost-on-coolify.md)
 - Plane install guide (Coolify): [Install Plane on Coolify](install-plane-on-coolify.md)
 
 Back to [Docs Home](index.md)
