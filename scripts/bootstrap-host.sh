@@ -802,6 +802,9 @@ ensure_coolify_proxy_path_access() {
   chmod g+rwx "$root_root" 2>/dev/null || true
   chmod -R g+rwX "$root_root" 2>/dev/null || true
   find "$root_root" -type d -exec chmod g+s {} + 2>/dev/null || true
+  # OpenSSH refuses private keys with overly broad mode (for example 0660).
+  # Keep generated Coolify private keys owner-only readable.
+  find "$root_root" -type f -name 'ssh_key@*' -exec chmod 600 {} + 2>/dev/null || true
 
   if ! id "$user" >/dev/null 2>&1; then
     bootstrap_error "coolify localhost user ${user} does not exist for runtime path access sync."
@@ -825,7 +828,7 @@ ensure_coolify_proxy_path_access() {
     fi
   done
 
-  bootstrap_success "Coolify runtime path access synchronized for ${user} (${root_root} and child folders)."
+  bootstrap_success "Coolify runtime path access synchronized for ${user} (${root_root} and child folders) with SSH private key mode hardening."
   return 0
 }
 

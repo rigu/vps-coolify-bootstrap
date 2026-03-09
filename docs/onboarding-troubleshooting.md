@@ -102,8 +102,28 @@ sudo chmod g+rx /data/coolify
 sudo chgrp -R coolify /data/coolify/services /data/coolify/proxy 2>/dev/null || true
 sudo chmod -R g+rwX /data/coolify/services /data/coolify/proxy 2>/dev/null || true
 sudo find /data/coolify/services /data/coolify/proxy -type d -exec chmod g+s {} + 2>/dev/null || true
+sudo find /data/coolify -type f -name 'ssh_key@*' -exec chmod 600 {} + 2>/dev/null || true
 ```
 
 Then retry the action in Coolify UI.
+
+## 8) `UNPROTECTED PRIVATE KEY FILE` for Coolify localhost key
+
+Example error:
+- `Permissions 0660 for '/var/www/html/storage/app/ssh/keys/ssh_key@...' are too open`
+- `Load key "...": bad permissions`
+- `Permission denied (publickey)`
+
+Fix immediately:
+
+```bash
+sudo find /data/coolify -type f -name 'ssh_key@*' -exec chmod 600 {} +
+```
+
+Then replay bootstrap so the policy is reapplied consistently:
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env
+```
 
 Back to [Getting Started](getting-started.md)
