@@ -307,16 +307,19 @@ template_path="$(resolve_path "$template_file" "$env_dir")"
 output_path="$(resolve_path "$output_file" "$env_dir")"
 
 if [[ "$template_file" != /* && ! -f "$template_path" ]]; then
-  # If env file is outside the repo, fallback to default env base in repo.
-  fallback_template_path="$(resolve_path "$template_file" "$repo_root/bootstrap-artifacts")"
+  # If env file is outside the repo, resolve relative to default env base (env/).
+  # Use env/ instead of bootstrap-artifacts/ because the latter is gitignored and
+  # may not exist on a fresh clone (e.g. CI).  Both sit one level below repo root,
+  # so ../templates/… resolves identically.
+  fallback_template_path="$(resolve_path "$template_file" "$repo_root/env")"
   if [[ -f "$fallback_template_path" ]]; then
     template_path="$fallback_template_path"
   fi
 fi
 
 if [[ "$output_file" != /* && "$env_dir" != "$repo_root"* ]]; then
-  # For external env paths, keep relative output in repo workspace using default env base.
-  output_path="$(resolve_path "$output_file" "$repo_root/bootstrap-artifacts")"
+  # For external env paths, keep relative output in repo workspace.
+  output_path="$(resolve_path "$output_file" "$repo_root/env")"
 fi
 
 if [[ ! -f "$template_path" ]]; then
