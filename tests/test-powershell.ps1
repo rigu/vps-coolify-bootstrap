@@ -6,8 +6,10 @@ $GenerateScript = Join-Path $RepoRoot "scripts/generate-secrets.ps1"
 $GenerateInfraScript = Join-Path $RepoRoot "scripts/generate-infra-secrets.ps1"
 $GeneratePlaneScript = Join-Path $RepoRoot "scripts/generate-plane-secrets.ps1"
 $PrepareInfraScript = Join-Path $RepoRoot "scripts/prepare-infra-compose.ps1"
+$PreparePlaneComposeScript = Join-Path $RepoRoot "scripts/prepare-plane-compose.ps1"
 $PrepareScript = Join-Path $RepoRoot "scripts/prepare-vps-coolify-init.ps1"
 $TemplatePath = Join-Path $RepoRoot "templates/vps-init.template.yml"
+$PlaneComposeTemplatePath = Join-Path $RepoRoot "templates/plane-coolify-compose.community.v1.2.3.full-with-proxy.yml"
 
 $script:Total = 0
 $script:Failed = 0
@@ -411,6 +413,75 @@ Run-Test "prepare-infra-compose.ps1 fails on unresolved placeholders" {
 
         Invoke-NativeCommand -Description "prepare-infra-compose (placeholder env should fail)" -ExpectFailure -Command {
             & pwsh -NoLogo -NoProfile -File $PrepareInfraScript -EnvFile $envFile -OutputDir (Join-Path $tmp "out")
+        }
+    } finally {
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Run-Test "prepare-plane-compose.ps1 renders compose from plane env" {
+    $tmp = New-TempDir
+    try {
+        $envFile = Join-Path $tmp "plane.env"
+        $outFile = Join-Path $tmp "plane-compose.yml"
+        Invoke-NativeCommand -Description "generate-plane-secrets (for prepare input)" -Command {
+            & pwsh -NoLogo -NoProfile -File $GeneratePlaneScript -EnvFile $envFile -NoInfraSync
+        }
+        Invoke-NativeCommand -Description "prepare-plane-compose (render output)" -Command {
+            & pwsh -NoLogo -NoProfile -File $PreparePlaneComposeScript -EnvFile $envFile -TemplateFile $PlaneComposeTemplatePath -OutputFile $outFile
+        }
+
+        Assert-True (Test-Path -LiteralPath $outFile -PathType Leaf) "Rendered plane compose output should exist"
+        $content = Get-Content -LiteralPath $outFile -Raw
+        Assert-Match $content 'makeplane/plane-proxy:v1\.2\.3' "Rendered compose should resolve default Plane proxy image"
+
+        foreach ($line in (Get-Content -LiteralPath $outFile)) {
+            if ($line.TrimStart().StartsWith("#")) { continue }
+            if ($line.Contains('${')) { throw "Rendered compose should not contain unresolved interpolation on active lines" }
+        }
+    } finally {
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Run-Test "prepare-plane-compose.ps1 fails when required vars are missing" {
+    $tmp = New-TempDir
+    try {
+        $envFile = Join-Path $tmp "plane.env"
+        $outFile = Join-Path $tmp "plane-compose.yml"
+        Invoke-NativeCommand -Description "generate-plane-secrets (for missing-required test)" -Command {
+            & pwsh -NoLogo -NoProfile -File $GeneratePlaneScript -EnvFile $envFile -NoInfraSync
+        }
+        $lines = Get-Content -LiteralPath $envFile
+        $lines = $lines | Where-Object { $_ -notmatch '^SECRET_KEY=' }
+        Set-Content -LiteralPath $envFile -Value $lines
+
+        Invoke-NativeCommand -Description "prepare-plane-compose (missing required value)" -ExpectFailure -Command {
+            & pwsh -NoLogo -NoProfile -File $PreparePlaneComposeScript -EnvFile $envFile -TemplateFile $PlaneComposeTemplatePath -OutputFile $outFile
+        }
+    } finally {
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Run-Test "prepare-plane-compose.ps1 supports -Overwrite" {
+    $tmp = New-TempDir
+    try {
+        $envFile = Join-Path $tmp "plane.env"
+        $outFile = Join-Path $tmp "plane-compose.yml"
+        Invoke-NativeCommand -Description "generate-plane-secrets (for overwrite test)" -Command {
+            & pwsh -NoLogo -NoProfile -File $GeneratePlaneScript -EnvFile $envFile -NoInfraSync
+        }
+        Invoke-NativeCommand -Description "prepare-plane-compose (initial render)" -Command {
+            & pwsh -NoLogo -NoProfile -File $PreparePlaneComposeScript -EnvFile $envFile -TemplateFile $PlaneComposeTemplatePath -OutputFile $outFile
+        }
+
+        Invoke-NativeCommand -Description "prepare-plane-compose (second render without overwrite)" -ExpectFailure -Command {
+            & pwsh -NoLogo -NoProfile -File $PreparePlaneComposeScript -EnvFile $envFile -TemplateFile $PlaneComposeTemplatePath -OutputFile $outFile
+        }
+
+        Invoke-NativeCommand -Description "prepare-plane-compose (rerender with overwrite)" -Command {
+            & pwsh -NoLogo -NoProfile -File $PreparePlaneComposeScript -EnvFile $envFile -TemplateFile $PlaneComposeTemplatePath -OutputFile $outFile -Overwrite
         }
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

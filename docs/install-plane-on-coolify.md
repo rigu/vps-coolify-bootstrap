@@ -43,6 +43,9 @@ Important:
 - Env secret generator scripts:
   - `scripts/generate-plane-secrets.sh`
   - `scripts/generate-plane-secrets.ps1`
+- Compose renderer script:
+  - `scripts/prepare-plane-compose.sh`
+  - `scripts/prepare-plane-compose.ps1`
 - Incident-prevention notes:
   - [Plane Incident Prevention Notes](plane-community-v1.2.3-incident-prevention.md)
 
@@ -161,11 +164,25 @@ Notes:
 
 ## 2) Create Plane resource in Coolify
 
+Optional: render compose with values from `bootstrap-artifacts/plane.env` first:
+
+```bash
+bash scripts/prepare-plane-compose.sh
+```
+
+```powershell
+pwsh -File scripts/prepare-plane-compose.ps1
+```
+
+Default rendered output:
+- `bootstrap-artifacts/plane-coolify-compose.community.v1.2.3.full-with-proxy.yml`
+
 1. Open `Projects -> <project> -> <environment>`.
 2. Create a new `Docker Compose` resource.
 3. Use a clear name (for example `plane` or `projects`).
-4. Paste the full content of:
-   - `templates/plane-coolify-compose.community.v1.2.3.full-with-proxy.yml`
+4. Paste the full content of one of:
+   - rendered file: `bootstrap-artifacts/plane-coolify-compose.community.v1.2.3.full-with-proxy.yml` (recommended after running renderer)
+   - raw template: `templates/plane-coolify-compose.community.v1.2.3.full-with-proxy.yml`
 5. Save compose.
 
 ## 3) Configure Plane environment values

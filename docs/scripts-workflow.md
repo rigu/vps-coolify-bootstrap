@@ -258,6 +258,29 @@ URLs regenerated when needed:
 Details and deployment usage:
 - [Install Plane on Coolify](install-plane-on-coolify.md)
 
+## Plane compose render workflow (apply plane.env to template)
+
+Use this when you want a ready-to-paste compose file with variables resolved from `plane.env`.
+
+```bash
+bash scripts/prepare-plane-compose.sh
+```
+
+```powershell
+pwsh -File scripts/prepare-plane-compose.ps1
+```
+
+Default inputs/outputs:
+- env source: `bootstrap-artifacts/plane.env`
+- template source: `templates/plane-coolify-compose.community.v1.2.3.full-with-proxy.yml`
+- rendered output: `bootstrap-artifacts/plane-coolify-compose.community.v1.2.3.full-with-proxy.yml`
+
+Useful options:
+- `--env-file <path>`
+- `--template-file <path>`
+- `--output-file <path>`
+- `--overwrite`
+
 ## Infra env + compose workflow (internal service layer)
 
 Generate infra env locally:
