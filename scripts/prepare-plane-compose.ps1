@@ -50,7 +50,8 @@ function Load-EnvMap {
 function Resolve-ComposeExpr {
     param(
         [string]$Expr,
-        [hashtable]$EnvMap
+        [hashtable]$EnvMap,
+        [switch]$PreserveToken
     )
     $m = [regex]::Match($Expr, '^(?<name>[A-Za-z_][A-Za-z0-9_]*)(?:(?<op>:\-|\-|:\?|\?|:\+|\+)(?<arg>.*))?$', [System.Text.RegularExpressions.RegexOptions]::Singleline)
     if (-not $m.Success) {
@@ -62,6 +63,52 @@ function Resolve-ComposeExpr {
     $arg = $m.Groups["arg"].Value
     $isSet = $EnvMap.ContainsKey($name)
     $value = if ($isSet) { [string]$EnvMap[$name] } else { "" }
+
+    if (-not [string]::IsNullOrEmpty($arg) -and $arg.Contains('${')) {
+        $arg = Process-ComposeText -Text $arg -EnvMap $EnvMap -PreserveTokens:$false
+    }
+
+    if ($PreserveToken) {
+        $defaultValue = ""
+        switch ($op) {
+            ":?" {
+                if ($isSet -and -not [string]::IsNullOrEmpty($value)) {
+                    $defaultValue = $value
+                } else {
+                    if (-not [string]::IsNullOrWhiteSpace($arg)) { throw $arg }
+                    throw "$name is required"
+                }
+            }
+            "?" {
+                if ($isSet) {
+                    $defaultValue = $value
+                } else {
+                    if (-not [string]::IsNullOrWhiteSpace($arg)) { throw $arg }
+                    throw "$name is required"
+                }
+            }
+            default {
+                if ($isSet) {
+                    $defaultValue = $value
+                } elseif ($op -eq ":-" -or $op -eq "-") {
+                    $defaultValue = $arg
+                } elseif ($op -eq ":+" -or $op -eq "+") {
+                    $defaultValue = ""
+                } else {
+                    $defaultValue = ""
+                }
+            }
+        }
+
+        if ($defaultValue.Contains("`n") -or $defaultValue.Contains("`r")) {
+            throw "$name default value contains a newline and cannot be used in interpolation."
+        }
+        if ($defaultValue.Contains("}")) {
+            throw "$name default value contains '}' and cannot be used in interpolation."
+        }
+
+        return ('${' + $name + ':-' + $defaultValue + '}')
+    }
 
     switch ($op) {
         "" {
@@ -100,31 +147,63 @@ function Resolve-ComposeExpr {
     }
 }
 
-function Interpolate-ComposeLine {
+function Parse-ComposeToken {
     param(
-        [string]$Line,
-        [hashtable]$EnvMap
+        [string]$Text,
+        [int]$StartIndex
     )
 
-    if ($Line.TrimStart().StartsWith("#")) {
-        return $Line
+    if (($StartIndex + 1) -ge $Text.Length -or $Text[$StartIndex] -ne '$' -or $Text[$StartIndex + 1] -ne '{') {
+        throw "internal parse error: token does not start with `${"
     }
 
-    $result = $Line
-    for ($i = 0; $i -lt 1000; $i++) {
-        $state = [pscustomobject]@{ Changed = $false }
-        $result = [regex]::Replace($result, '\$\{([^{}]+)\}', {
-            param($match)
-            $state.Changed = $true
-            Resolve-ComposeExpr -Expr $match.Groups[1].Value -EnvMap $EnvMap
-        })
+    $i = $StartIndex + 2
+    $depth = 1
 
-        if (-not $state.Changed) {
-            return $result
+    while ($i -lt $Text.Length) {
+        if (($i + 1) -lt $Text.Length -and $Text[$i] -eq '$' -and $Text[$i + 1] -eq '{') {
+            $depth++
+            $i += 2
+            continue
         }
+        if ($Text[$i] -eq '}') {
+            $depth--
+            if ($depth -eq 0) {
+                $exprStart = $StartIndex + 2
+                $expr = $Text.Substring($exprStart, $i - $exprStart)
+                return [pscustomobject]@{
+                    Expression = $expr
+                    EndIndex = $i + 1
+                }
+            }
+        }
+        $i++
     }
 
-    throw "interpolation depth exceeded (possible recursive expression)"
+    throw "unclosed compose interpolation token"
+}
+
+function Process-ComposeText {
+    param(
+        [string]$Text,
+        [hashtable]$EnvMap,
+        [switch]$PreserveTokens
+    )
+
+    $sb = New-Object System.Text.StringBuilder
+    $i = 0
+    while ($i -lt $Text.Length) {
+        if (($i + 1) -lt $Text.Length -and $Text[$i] -eq '$' -and $Text[$i + 1] -eq '{') {
+            $token = Parse-ComposeToken -Text $Text -StartIndex $i
+            $resolved = Resolve-ComposeExpr -Expr $token.Expression -EnvMap $EnvMap -PreserveToken:$PreserveTokens
+            [void]$sb.Append($resolved)
+            $i = [int]$token.EndIndex
+            continue
+        }
+        [void]$sb.Append($Text[$i])
+        $i++
+    }
+    return $sb.ToString()
 }
 
 try {
@@ -172,7 +251,11 @@ try {
     # Preserve original line endings by normalizing to LF in rendered output.
     $rendered = New-Object System.Collections.Generic.List[string]
     foreach ($line in $templateText -split "`r`n|`n|`r") {
-        $rendered.Add((Interpolate-ComposeLine -Line $line -EnvMap $envMap))
+        if ($line.TrimStart().StartsWith("#")) {
+            $rendered.Add($line)
+            continue
+        }
+        $rendered.Add((Process-ComposeText -Text $line -EnvMap $envMap -PreserveTokens:$true))
     }
     $final = ($rendered -join "`n")
 

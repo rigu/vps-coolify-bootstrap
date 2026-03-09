@@ -177,6 +177,10 @@ pwsh -File scripts/prepare-plane-compose.ps1
 Default rendered output:
 - `bootstrap-artifacts/plane-coolify-compose.community.v1.2.3.full-with-proxy.yml`
 
+Rendered behavior:
+- output keeps `${VAR}` expressions so Coolify detects environment variables in UI
+- defaults are rewritten from `plane.env` (for example `${SECRET_KEY:-<value-from-plane.env>}`)
+
 1. Open `Projects -> <project> -> <environment>`.
 2. Create a new `Docker Compose` resource.
 3. Use a clear name (for example `plane` or `projects`).

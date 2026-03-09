@@ -433,11 +433,17 @@ Run-Test "prepare-plane-compose.ps1 renders compose from plane env" {
 
         Assert-True (Test-Path -LiteralPath $outFile -PathType Leaf) "Rendered plane compose output should exist"
         $content = Get-Content -LiteralPath $outFile -Raw
-        Assert-Match $content 'makeplane/plane-proxy:v1\.2\.3' "Rendered compose should resolve default Plane proxy image"
+        $secret = Strip-Quotes (Env-Value -File $envFile -Key "SECRET_KEY")
+
+        Assert-Match $content 'SECRET_KEY:\s*\$\{SECRET_KEY:-' "Rendered compose should preserve env variable syntax with defaults"
+        Assert-Match $content 'image:\s*"\$\{PLANE_PROXY_IMAGE:-makeplane/plane-proxy:v1\.2\.3\}"' "Rendered compose should keep proxy image variable with default"
+        Assert-Match $content ("SECRET_KEY:\s*\$\{SECRET_KEY:-" + [regex]::Escape($secret) + "\}") "SECRET_KEY default should come from plane env"
 
         foreach ($line in (Get-Content -LiteralPath $outFile)) {
             if ($line.TrimStart().StartsWith("#")) { continue }
-            if ($line.Contains('${')) { throw "Rendered compose should not contain unresolved interpolation on active lines" }
+            if ($line -match '\$\{[A-Za-z_][A-Za-z0-9_]*:\?') {
+                throw "Required interpolation should be converted to default interpolation on active lines"
+            }
         }
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

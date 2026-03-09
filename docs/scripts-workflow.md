@@ -260,7 +260,8 @@ Details and deployment usage:
 
 ## Plane compose render workflow (apply plane.env to template)
 
-Use this when you want a ready-to-paste compose file with variables resolved from `plane.env`.
+Use this when you want a ready-to-paste compose file that keeps `${VAR}` syntax,
+but injects defaults from `plane.env` (`${VAR:-value}`).
 
 ```bash
 bash scripts/prepare-plane-compose.sh

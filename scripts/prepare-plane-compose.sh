@@ -10,7 +10,8 @@ Usage:
 
 Behavior:
   - If env file is missing, script creates parent directory and copies env/plane-coolify.env.example.
-  - Resolves Docker Compose-style variables (${VAR}, ${VAR:-x}, ${VAR:?msg}, etc.) from the env file.
+  - Rewrites Docker Compose-style variables to `${VAR:-<value-from-plane.env>}` defaults.
+  - Keeps variable expressions in output so Coolify can manage env vars in UI.
   - Writes rendered compose file to bootstrap-artifacts by default.
 USAGE
 }
@@ -128,35 +129,107 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 bootstrap_info "Rendering template compose interpolation values."
-python3 - "$template_file" "$output_file" <<'PY'
+python3 - "$template_file" "$output_file" "$env_file" <<'PY'
 import os
 import re
 import sys
 
-if len(sys.argv) != 3:
+if len(sys.argv) != 4:
     print("ERROR: internal argument mismatch", file=sys.stderr)
     sys.exit(1)
 
 template_path = sys.argv[1]
 output_path = sys.argv[2]
+env_path = sys.argv[3]
 
 with open(template_path, "r", encoding="utf-8") as fh:
     content = fh.read()
 
-pattern = re.compile(r"\$\{([^{}]+)\}")
 expr_re = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)(?:(:?[-+?])(.*))?$", re.S)
 
 
-def resolve_expr(expr: str) -> str:
+def load_env_map(path: str) -> dict[str, str]:
+    env: dict[str, str] = {}
+    with open(path, "r", encoding="utf-8") as fh:
+        for raw_line in fh:
+            line = raw_line.rstrip("\r\n")
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            m = re.match(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$", line)
+            if not m:
+                continue
+            key = m.group(1)
+            raw_value = m.group(2).strip()
+            if re.match(r"^'(.*)'$", raw_value, re.S):
+                value = re.match(r"^'(.*)'$", raw_value, re.S).group(1)
+            elif re.match(r'^"(.*)"$', raw_value, re.S):
+                value = re.match(r'^"(.*)"$', raw_value, re.S).group(1)
+                value = value.replace("\\\\", "\\").replace('\\"', '"').replace("\\$", "$")
+            else:
+                value = raw_value
+            env[key] = value
+    return env
+
+
+env_map = load_env_map(env_path)
+
+
+def parse_token(text: str, start: int) -> tuple[str, int]:
+    if not text.startswith("${", start):
+        raise ValueError("internal parse error: token does not start with ${")
+    i = start + 2
+    depth = 1
+    while i < len(text):
+        if text.startswith("${", i):
+            depth += 1
+            i += 2
+            continue
+        if text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start + 2 : i], i + 1
+        i += 1
+    raise ValueError("unclosed compose interpolation token")
+
+
+def resolve_expr(expr: str, preserve_token: bool) -> str:
     match = expr_re.match(expr)
     if not match:
         raise ValueError(f"unsupported compose interpolation expression: ${{{expr}}}")
 
     name, op, arg = match.group(1), match.group(2), match.group(3)
-    is_set = name in os.environ
-    value = os.environ.get(name, "")
+    is_set = name in env_map
+    value = env_map.get(name, "")
+    op = op or ""
+    arg = arg or ""
+    if "${" in arg:
+        arg = process_text(arg, preserve_tokens=False)
 
-    if op is None:
+    def required_error() -> ValueError:
+        return ValueError(arg if arg else f"{name} is required")
+
+    if preserve_token:
+        if op in (":?", "?"):
+            if (op == ":?" and is_set and value != "") or (op == "?" and is_set):
+                default_value = value
+            else:
+                raise required_error()
+        elif is_set:
+            default_value = value
+        elif op in (":-", "-"):
+            default_value = arg
+        elif op in (":+", "+"):
+            default_value = ""
+        else:
+            default_value = ""
+
+        if "\n" in default_value or "\r" in default_value:
+            raise ValueError(f"{name} default value contains a newline and cannot be used in interpolation.")
+        if "}" in default_value:
+            raise ValueError(f"{name} default value contains '}}' and cannot be used in interpolation.")
+        return f"${{{name}:-{default_value}}}"
+
+    if op == "":
         return value if is_set else ""
     if op == ":-":
         return value if (is_set and value != "") else arg
@@ -165,11 +238,11 @@ def resolve_expr(expr: str) -> str:
     if op == ":?":
         if is_set and value != "":
             return value
-        raise ValueError(arg if arg else f"{name} is required")
+        raise required_error()
     if op == "?":
         if is_set:
             return value
-        raise ValueError(arg if arg else f"{name} is required")
+        raise required_error()
     if op == ":+":  # set and non-empty
         return arg if (is_set and value != "") else ""
     if op == "+":  # set (even if empty)
@@ -178,21 +251,18 @@ def resolve_expr(expr: str) -> str:
     raise ValueError(f"unsupported compose interpolation operator in: ${{{expr}}}")
 
 
-def interpolate_fragment(fragment: str) -> str:
-    current = fragment
-    for _ in range(1000):
-        changed = {"value": False}
-
-        def _replace(m: re.Match[str]) -> str:
-            changed["value"] = True
-            return resolve_expr(m.group(1))
-
-        rendered = pattern.sub(_replace, current)
-        if not changed["value"] or rendered == current:
-            return rendered
-        current = rendered
-
-    raise ValueError("interpolation depth exceeded (possible recursive expression)")
+def process_text(text: str, preserve_tokens: bool) -> str:
+    result: list[str] = []
+    i = 0
+    while i < len(text):
+        if text.startswith("${", i):
+            expr, end = parse_token(text, i)
+            result.append(resolve_expr(expr, preserve_tokens))
+            i = end
+            continue
+        result.append(text[i])
+        i += 1
+    return "".join(result)
 
 
 try:
@@ -201,7 +271,7 @@ try:
         if line.lstrip().startswith("#"):
             rendered_lines.append(line)
             continue
-        rendered_lines.append(interpolate_fragment(line))
+        rendered_lines.append(process_text(line, preserve_tokens=True))
 
     content = "".join(rendered_lines)
 

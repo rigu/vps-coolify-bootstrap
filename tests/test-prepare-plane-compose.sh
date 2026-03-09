@@ -19,14 +19,15 @@ test_prepare_plane_compose_renders_from_plane_env() {
   bash "$prep_script" --env-file "$env_file" --template-file "$template_file" --output-file "$out_file" >/dev/null
 
   [[ -f "$out_file" ]] || { echo "missing rendered compose output" >&2; return 1; }
-  if awk '!/^[[:space:]]*#/' "$out_file" | grep -Eq '\$\{'; then
-    echo "rendered compose has unresolved \${...} tokens in active YAML lines" >&2
+  assert_file_contains "$out_file" "SECRET_KEY: \\\${SECRET_KEY:-" "compose should preserve env variable syntax with defaults" || return 1
+  assert_file_contains "$out_file" "image: \"\\\${PLANE_PROXY_IMAGE:-makeplane/plane-proxy:v1\\.2\\.3}\"" "proxy image should keep variable with resolved default" || return 1
+  if awk '!/^[[:space:]]*#/' "$out_file" | grep -Eq '\$\{[A-Za-z_][A-Za-z0-9_]*:\?'; then
+    echo "required interpolation should be converted to default interpolation on active lines" >&2
     return 1
   fi
-  assert_file_contains "$out_file" 'image: "makeplane/plane-proxy:v1\.2\.3"' "proxy image should resolve default Plane tag" || return 1
 
   secret="$(strip_env_quotes "$(env_value "$env_file" SECRET_KEY)")"
-  assert_file_contains "$out_file" "SECRET_KEY: ${secret}" "SECRET_KEY should be injected from plane env" || return 1
+  assert_file_contains "$out_file" "SECRET_KEY: \\\${SECRET_KEY:-${secret}}" "SECRET_KEY default should come from plane env" || return 1
 
   if command -v python3 >/dev/null 2>&1; then
     python3 - <<PY
@@ -64,7 +65,7 @@ test_prepare_plane_compose_creates_env_from_example_when_missing() {
 
   [[ -f "$env_file" ]] || { echo "env file was not created from example" >&2; return 1; }
   [[ -f "$out_file" ]] || { echo "rendered compose output was not created" >&2; return 1; }
-  assert_file_contains "$out_file" 'SECRET_KEY: CHANGE_ME_plane_secret_key_min_50_chars' "example env values should be rendered when env is auto-created" || return 1
+  assert_file_contains "$out_file" "SECRET_KEY: \\\${SECRET_KEY:-CHANGE_ME_plane_secret_key_min_50_chars}" "example env values should be used as defaults when env is auto-created" || return 1
 
   rm -rf "$tmpdir"
 }
