@@ -1,0 +1,279 @@
+# Plane Community Coolify Compose (v1.2.3, full-with-proxy)
+#
+# Purpose:
+# - keep Plane Community on public v1.2.3 images
+# - align env-group structure with Coolify's Plane template
+# - include extra topology services (proxy/space/admin/live)
+# - preserve this repo's shared external services
+#
+# External dependencies (already running in this repo):
+# - postgres-apps
+# - valkey-apps
+# - rabbitmq-plane
+# - seaweedfs-plane
+#
+# Notes:
+# - This file intentionally keeps bundled stateful services disabled
+#   (no plane-db, plane-redis, plane-mq).
+# - Plane proxy v1.2.3 routes bucket traffic to `plane-minio:9000`.
+#   This compose adds a lightweight `plane-minio` TCP forwarder service
+#   that points to `seaweedfs-plane:8333` on the shared `infra` network.
+# - all Plane service images default to upstream `artifacts.plane.so/makeplane/*` community tags and can be
+#   overridden with PLANE_*_IMAGE env variables when needed.
+# - critical secrets/connection values use required `${VAR:?...}` expansion
+#   so deploy fails fast if env configuration is incomplete.
+
+x-db-env: &db-env
+  POSTGRES_USER: ${POSTGRES_USER:-apps_admin}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Missing POSTGRES_PASSWORD}
+  POSTGRES_DB: ${POSTGRES_DB:-plane}
+  POSTGRES_HOST: ${POSTGRES_HOST:-postgres-apps}
+  POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+  DATABASE_URL: ${DATABASE_URL:?Missing DATABASE_URL}
+  # Keep DB_URL aligned with DATABASE_URL for Plane component compatibility.
+  DB_URL: ${DATABASE_URL:?Missing DATABASE_URL}
+
+x-redis-env: &redis-env
+  REDIS_HOST: ${REDIS_HOST:-valkey-apps}
+  REDIS_PORT: ${REDIS_PORT:-6379}
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?Missing REDIS_PASSWORD}
+  REDIS_URL: ${REDIS_URL:?Missing REDIS_URL}
+
+x-aws-s3-env: &aws-s3-env
+  USE_MINIO: ${USE_MINIO:-1}
+  AWS_REGION: ${AWS_REGION:-eu-central-1}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?Missing AWS_ACCESS_KEY_ID}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?Missing AWS_SECRET_ACCESS_KEY}
+  AWS_S3_ENDPOINT_URL: ${AWS_S3_ENDPOINT_URL:-https://projects.example.com}
+  AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-plane-uploads}
+  BUCKET_NAME: ${BUCKET_NAME:-plane-uploads}
+
+x-mq-env: &mq-env
+  RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq-plane}
+  RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+  RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-plane}
+  RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?Missing RABBITMQ_DEFAULT_PASS}
+  RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST:-plane}
+  RABBITMQ_VHOST: ${RABBITMQ_VHOST:-plane}
+  AMQP_URL: ${AMQP_URL:?Missing AMQP_URL}
+
+x-live-env: &live-env
+  API_BASE_URL: ${API_BASE_URL:-http://api:8000}
+  LIVE_SERVER_SECRET_KEY: ${LIVE_SERVER_SECRET_KEY:?Missing LIVE_SERVER_SECRET_KEY}
+
+x-plane-web-env: &plane-web-env
+  APP_DOMAIN: ${APP_DOMAIN:-projects.example.com}
+  WEB_URL: ${WEB_URL:-https://projects.example.com}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://projects.example.com}
+  API_BASE_URL: ${API_BASE_URL:-http://api:8000}
+
+x-app-env: &app-env
+  APP_RELEASE: ${PLANE_APP_VERSION:-v1.2.3}
+  APP_VERSION: ${PLANE_APP_VERSION:-v1.2.3}
+  APP_DOMAIN: ${APP_DOMAIN:-projects.example.com}
+  WEB_URL: ${WEB_URL:-https://projects.example.com}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://projects.example.com}
+  DEBUG: ${DEBUG:-0}
+  GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
+  USE_MINIO: ${USE_MINIO:-1}
+  USE_STORAGE_PROXY: ${USE_STORAGE_PROXY:-1}
+  SECRET_KEY: ${SECRET_KEY:?Missing SECRET_KEY}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+  API_BASE_URL: ${API_BASE_URL:-http://api:8000}
+  FILE_SIZE_LIMIT: ${FILE_SIZE_LIMIT:-5242880}
+  API_KEY_RATE_LIMIT: ${API_KEY_RATE_LIMIT:-60/minute}
+  MINIO_ENDPOINT_SSL: ${MINIO_ENDPOINT_SSL:-1}
+  SSL_VERIFY: ${SSL_VERIFY:-1}
+  LIVE_SERVER_SECRET_KEY: ${LIVE_SERVER_SECRET_KEY:?Missing LIVE_SERVER_SECRET_KEY}
+  FEATURE_FLAG_SERVER_BASE_URL: ${FEATURE_FLAG_SERVER_BASE_URL:-}
+  PAYMENT_SERVER_BASE_URL: ${PAYMENT_SERVER_BASE_URL:-}
+  SILO_HMAC_SECRET_KEY: ${SILO_HMAC_SECRET_KEY:?Missing SILO_HMAC_SECRET_KEY}
+  MACHINE_SIGNATURE: ${MACHINE_SIGNATURE:-}
+  DEPLOY_PLATFORM: ${DEPLOY_PLATFORM:-coolify}
+  PRIME_HOST: ${PRIME_HOST:-}
+
+x-plane-service-defaults: &plane-service-defaults
+  restart: unless-stopped
+  networks:
+    - default
+    - infra
+
+x-proxy-env: &proxy-env
+  SITE_ADDRESS: :80
+  FILE_SIZE_LIMIT: ${FILE_SIZE_LIMIT:-5242880}
+  BUCKET_NAME: ${BUCKET_NAME:-plane-uploads}
+
+services:
+  plane-minio:
+    <<: *plane-service-defaults
+    # Keep v1.2.3 proxy compatible while using SeaweedFS as object storage.
+    image: "${PLANE_MINIO_FORWARDER_IMAGE:-alpine/socat}"
+    command:
+      - "TCP-LISTEN:9000,fork,reuseaddr"
+      - "TCP:seaweedfs-plane:8333"
+
+  proxy:
+    <<: *plane-service-defaults
+    # Public entrypoint when you want Plane's own proxy in front of all roles.
+    image: "${PLANE_PROXY_IMAGE:-artifacts.plane.so/makeplane/plane-proxy:${PLANE_APP_VERSION:-v1.2.3}}"
+    expose:
+      - "80"
+    environment:
+      <<: *proxy-env
+    depends_on:
+      - plane-minio
+      - web
+      - api
+      - space
+      - admin
+      - live
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:80"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+  web:
+    <<: *plane-service-defaults
+    # Frontend service (internal). In this topology, route public traffic to proxy:80.
+    image: "${PLANE_WEB_IMAGE:-artifacts.plane.so/makeplane/plane-frontend:${PLANE_APP_VERSION:-v1.2.3}}"
+    expose:
+      - "3000"
+    environment:
+      <<: *plane-web-env
+    depends_on:
+      - api
+      - worker
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  space:
+    <<: *plane-service-defaults
+    # Optional service aligned with Coolify Plane template topology.
+    image: "${PLANE_SPACE_IMAGE:-artifacts.plane.so/makeplane/plane-space:${PLANE_APP_VERSION:-v1.2.3}}"
+    environment:
+      <<: *plane-web-env
+    depends_on:
+      - api
+      - worker
+      - web
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          node -e "const net=require('net');const s=net.connect(3000,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),2000);"
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  admin:
+    <<: *plane-service-defaults
+    # Optional service aligned with Coolify Plane template topology.
+    image: "${PLANE_ADMIN_IMAGE:-artifacts.plane.so/makeplane/plane-admin:${PLANE_APP_VERSION:-v1.2.3}}"
+    environment:
+      <<: *plane-web-env
+    depends_on:
+      - api
+      - web
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          node -e "const net=require('net');const s=net.connect(3000,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),2000);"
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  live:
+    <<: *plane-service-defaults
+    # Optional service aligned with Coolify Plane template topology.
+    image: "${PLANE_LIVE_IMAGE:-artifacts.plane.so/makeplane/plane-live:${PLANE_APP_VERSION:-v1.2.3}}"
+    environment:
+      <<: [ *app-env, *live-env, *redis-env ]
+    depends_on:
+      - api
+      - web
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          node -e "const net=require('net');const s=net.connect(3000,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),2000);"
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  api:
+    <<: *plane-service-defaults
+    image: "${PLANE_BACKEND_IMAGE:-artifacts.plane.so/makeplane/plane-backend:${PLANE_APP_VERSION:-v1.2.3}}"
+    command: "${PLANE_API_COMMAND:-./bin/docker-entrypoint-api.sh}"
+    expose:
+      - "8000"
+    environment:
+      <<: [ *app-env, *db-env, *redis-env, *aws-s3-env, *mq-env ]
+    volumes:
+      - api_logs:/code/plane/logs
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          python -c "import socket,sys;s=socket.socket();s.settimeout(2);s.connect(('127.0.0.1',8000));s.close();sys.exit(0)"
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  worker:
+    <<: *plane-service-defaults
+    image: "${PLANE_BACKEND_IMAGE:-artifacts.plane.so/makeplane/plane-backend:${PLANE_APP_VERSION:-v1.2.3}}"
+    command: "${PLANE_WORKER_COMMAND:-./bin/docker-entrypoint-worker.sh}"
+    environment:
+      <<: [ *app-env, *db-env, *redis-env, *aws-s3-env, *mq-env ]
+    volumes:
+      - worker_logs:/code/plane/logs
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD-SHELL", "ps -ef | grep -Eq '[c]elery|[d]ocker-entrypoint-worker\\.sh'"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+
+  beat-worker:
+    <<: *plane-service-defaults
+    image: "${PLANE_BACKEND_IMAGE:-artifacts.plane.so/makeplane/plane-backend:${PLANE_APP_VERSION:-v1.2.3}}"
+    command: "${PLANE_BEAT_COMMAND:-./bin/docker-entrypoint-beat.sh}"
+    environment:
+      <<: [ *app-env, *db-env, *redis-env, *aws-s3-env, *mq-env ]
+    volumes:
+      - beat_worker_logs:/code/plane/logs
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD-SHELL", "ps -ef | grep -Eq '[c]elery.*beat|[d]ocker-entrypoint-beat\\.sh'"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+
+  migrator:
+    <<: *plane-service-defaults
+    image: "${PLANE_BACKEND_IMAGE:-artifacts.plane.so/makeplane/plane-backend:${PLANE_APP_VERSION:-v1.2.3}}"
+    restart: "no"
+    command: "${PLANE_MIGRATOR_COMMAND:-./bin/docker-entrypoint-migrator.sh}"
+    environment:
+      <<: [ *app-env, *db-env, *redis-env, *aws-s3-env, *mq-env ]
+    volumes:
+      - migrator_logs:/code/plane/logs
+
+networks:
+  infra:
+    external: true
+    name: infra
+
+volumes:
+  api_logs:
+  worker_logs:
+  beat_worker_logs:
+  migrator_logs:
