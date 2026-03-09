@@ -16,6 +16,7 @@ Production-ready **VPS bootstrap for Coolify on Ubuntu 24.04 LTS** with VPS-Cool
 - reproducible VPS-Coolify init rendering from env templates
 - Linux/macOS + PowerShell support for operators
 - explicit recovery runbook for failed first boot
+- includes a Plane Community deployment profile (infra + env + compose guidance)
 - emergency provider-console SSH recovery helper (`scripts/recover-ssh-access.sh`)
 - public/generic templates with no private data
 
