@@ -337,6 +337,8 @@ sudo bash /opt/vps-coolify-bootstrap/scripts/verify-infra-state.sh --env-file /s
 
 Permanent fix:
 - updated `setup-infra.sh` now installs `valkey.conf` and `seaweedfs-s3-config.json` with `644` so non-root container users can read mounted configs.
+- updated `setup-infra.sh` also ensures the SeaweedFS S3 bucket from `PLANE_S3_BUCKET`
+  (default `plane-uploads`) exists after deploy.
 
 ## Quick checklist
 

@@ -305,6 +305,7 @@ RABBITMQ_PLANE_CONTAINER_NAME=rabbit-infra
 PLANE_S3_ACCESS_KEY=PLNINFRAKEY123456789
 PLANE_S3_SECRET_KEY=InfraS3SecretValue42
 PLANE_S3_BUCKET=plane-artifacts
+SEAWEEDFS_PLANE_CONTAINER_NAME=seaweedfs-infra
 "@ | Set-Content -Path $infraFile -NoNewline
 
         Invoke-NativeCommand -Description "generate-plane-secrets (infra sync)" -Command {
@@ -325,6 +326,7 @@ PLANE_S3_BUCKET=plane-artifacts
         Assert-True ((Strip-Quotes (Env-Value -File $envFile -Key "AWS_SECRET_ACCESS_KEY")) -eq "InfraS3SecretValue42") "AWS_SECRET_ACCESS_KEY should sync from infra"
         Assert-True ((Strip-Quotes (Env-Value -File $envFile -Key "AWS_S3_BUCKET_NAME")) -eq "plane-artifacts") "AWS_S3_BUCKET_NAME should sync from infra"
         Assert-True ((Strip-Quotes (Env-Value -File $envFile -Key "BUCKET_NAME")) -eq "plane-artifacts") "BUCKET_NAME should sync from infra"
+        Assert-True ((Strip-Quotes (Env-Value -File $envFile -Key "AWS_S3_ENDPOINT_URL")) -eq "http://seaweedfs-infra:8333") "AWS_S3_ENDPOINT_URL should sync from infra"
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }

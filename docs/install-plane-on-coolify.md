@@ -64,6 +64,8 @@ Important:
   - `rabbitmq-plane`
   - `seaweedfs-plane`
   - if you changed infra container-name overrides, use your custom names instead
+- ensure infra setup was executed from this repo scripts so SeaweedFS S3 bucket
+  (`PLANE_S3_BUCKET`, default `plane-uploads`) is created before Plane deploy
 - external Docker network `infra` exists, and shared services are attached to it
   (Plane services are attached during Step 5)
 
@@ -92,6 +94,7 @@ Infra -> Plane synced keys (automatic in `generate-plane-secrets.*`):
 - `PLANE_S3_ACCESS_KEY` -> `AWS_ACCESS_KEY_ID`
 - `PLANE_S3_SECRET_KEY` -> `AWS_SECRET_ACCESS_KEY`
 - `PLANE_S3_BUCKET` -> `AWS_S3_BUCKET_NAME` and `BUCKET_NAME`
+- `SEAWEEDFS_PLANE_CONTAINER_NAME` -> `AWS_S3_ENDPOINT_URL` (`http://<container>:8333`)
 
 Dependent URLs are regenerated when needed:
 - `DATABASE_URL`
@@ -204,6 +207,7 @@ Critical required values before deploy:
 - `RABBITMQ_DEFAULT_PASS`
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
+- `AWS_S3_ENDPOINT_URL` (internal SeaweedFS endpoint, e.g. `http://seaweedfs-plane:8333`)
 - `SILO_HMAC_SECRET_KEY`
 - `LIVE_SERVER_SECRET_KEY`
 

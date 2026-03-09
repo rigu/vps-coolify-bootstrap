@@ -113,6 +113,26 @@ validate_localhost_binding() {
   fi
 }
 
+list_seaweedfs_s3_buckets() {
+  local container="$1"
+  printf 's3.bucket.list\n' | run_root docker exec -i "$container" weed shell 2>/dev/null || true
+}
+
+assert_seaweedfs_s3_bucket_exists() {
+  local container="$1"
+  local bucket="$2"
+  local buckets=""
+
+  buckets="$(list_seaweedfs_s3_buckets "$container")"
+  if grep -Fq "$bucket" <<<"$buckets"; then
+    bootstrap_success "SeaweedFS bucket exists: $bucket"
+    return 0
+  fi
+
+  bootstrap_error "SeaweedFS bucket missing: $bucket"
+  return 1
+}
+
 assert_file_exists() {
   local file="$1"
   if [[ ! -f "$file" ]]; then
@@ -210,6 +230,7 @@ POSTGRES_APPS_CONTAINER_NAME="${POSTGRES_APPS_CONTAINER_NAME:-postgres-apps}"
 VALKEY_APPS_CONTAINER_NAME="${VALKEY_APPS_CONTAINER_NAME:-valkey-apps}"
 RABBITMQ_PLANE_CONTAINER_NAME="${RABBITMQ_PLANE_CONTAINER_NAME:-rabbitmq-plane}"
 SEAWEEDFS_PLANE_CONTAINER_NAME="${SEAWEEDFS_PLANE_CONTAINER_NAME:-seaweedfs-plane}"
+PLANE_S3_BUCKET="${PLANE_S3_BUCKET:-plane-uploads}"
 
 for pvar in POSTGRES_APPS_HOST_PORT VALKEY_HOST_PORT RABBITMQ_AMQP_HOST_PORT RABBITMQ_UI_HOST_PORT SEAWEEDFS_S3_HOST_PORT; do
   assert_numeric_port_var "$pvar"
@@ -253,6 +274,7 @@ for cn in "${managed_containers[@]}"; do
   fi
 done
 bootstrap_success "Container network attachment validation passed."
+assert_seaweedfs_s3_bucket_exists "$SEAWEEDFS_PLANE_CONTAINER_NAME" "$PLANE_S3_BUCKET"
 
 validate_localhost_binding "$POSTGRES_APPS_HOST_PORT"
 validate_localhost_binding "$VALKEY_HOST_PORT"

@@ -345,6 +345,7 @@ Infra -> Plane sync mapping:
 - `PLANE_S3_ACCESS_KEY` -> `AWS_ACCESS_KEY_ID`
 - `PLANE_S3_SECRET_KEY` -> `AWS_SECRET_ACCESS_KEY`
 - `PLANE_S3_BUCKET` -> `AWS_S3_BUCKET_NAME` + `BUCKET_NAME`
+- `SEAWEEDFS_PLANE_CONTAINER_NAME` -> `AWS_S3_ENDPOINT_URL` (`http://<container>:8333`)
 
 URLs regenerated when needed:
 - `DATABASE_URL`
@@ -417,6 +418,9 @@ ssh -p <SSH_PORT> <DEVOPS_USER>@<server-ip>
 sudo bash /opt/vps-coolify-bootstrap/scripts/setup-infra.sh --env-file /tmp/production-infra.env
 sudo bash /opt/vps-coolify-bootstrap/scripts/verify-infra-state.sh --env-file /srv/infra/production-infra.env
 ```
+
+`setup-infra.sh` now also ensures the SeaweedFS S3 bucket defined by
+`PLANE_S3_BUCKET` (default `plane-uploads`) exists.
 
 Use your actual server admin account for `<DEVOPS_USER>` (default: `devops`).
 

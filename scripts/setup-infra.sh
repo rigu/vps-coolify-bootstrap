@@ -135,6 +135,35 @@ validate_localhost_binding() {
   fi
 }
 
+list_seaweedfs_s3_buckets() {
+  local container="$1"
+  printf 's3.bucket.list\n' | run_root docker exec -i "$container" weed shell 2>/dev/null || true
+}
+
+ensure_seaweedfs_s3_bucket() {
+  local container="$1"
+  local bucket="$2"
+  local buckets=""
+
+  buckets="$(list_seaweedfs_s3_buckets "$container")"
+  if grep -Fq "$bucket" <<<"$buckets"; then
+    bootstrap_success "SeaweedFS bucket already exists: $bucket"
+    return 0
+  fi
+
+  bootstrap_info "Creating SeaweedFS bucket: $bucket"
+  printf 's3.bucket.create -name=%s\n' "$bucket" | run_root docker exec -i "$container" weed shell >/dev/null
+
+  buckets="$(list_seaweedfs_s3_buckets "$container")"
+  if grep -Fq "$bucket" <<<"$buckets"; then
+    bootstrap_success "SeaweedFS bucket ensured: $bucket"
+    return 0
+  fi
+
+  bootstrap_error "Failed to verify SeaweedFS bucket after creation attempt: $bucket"
+  return 1
+}
+
 env_file="bootstrap-artifacts/production-infra.env"
 render_dir="bootstrap-artifacts/infra"
 runtime_dir="/srv/infra"
@@ -285,6 +314,7 @@ POSTGRES_APPS_CONTAINER_NAME="${POSTGRES_APPS_CONTAINER_NAME:-postgres-apps}"
 VALKEY_APPS_CONTAINER_NAME="${VALKEY_APPS_CONTAINER_NAME:-valkey-apps}"
 RABBITMQ_PLANE_CONTAINER_NAME="${RABBITMQ_PLANE_CONTAINER_NAME:-rabbitmq-plane}"
 SEAWEEDFS_PLANE_CONTAINER_NAME="${SEAWEEDFS_PLANE_CONTAINER_NAME:-seaweedfs-plane}"
+PLANE_S3_BUCKET="${PLANE_S3_BUCKET:-plane-uploads}"
 
 for pvar in POSTGRES_APPS_HOST_PORT VALKEY_HOST_PORT RABBITMQ_AMQP_HOST_PORT RABBITMQ_UI_HOST_PORT SEAWEEDFS_S3_HOST_PORT; do
   if [[ -z "${!pvar:-}" ]]; then
@@ -326,6 +356,12 @@ if (( skip_deploy == 0 )); then
   bootstrap_success "Infra stack deployed."
 else
   bootstrap_warn "Skipping deploy (--skip-deploy)."
+fi
+
+if run_root docker ps --format '{{.Names}}' | grep -Fxq "$SEAWEEDFS_PLANE_CONTAINER_NAME"; then
+  ensure_seaweedfs_s3_bucket "$SEAWEEDFS_PLANE_CONTAINER_NAME" "$PLANE_S3_BUCKET"
+else
+  bootstrap_warn "Skipping SeaweedFS bucket ensure because container is not running: $SEAWEEDFS_PLANE_CONTAINER_NAME"
 fi
 
 if (( skip_validate == 0 )); then

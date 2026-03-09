@@ -219,6 +219,7 @@ rabbitmq_port="${current[RABBITMQ_PORT]:-5672}"
 rabbitmq_vhost="${current[RABBITMQ_VHOST]:-${current[RABBITMQ_DEFAULT_VHOST]:-plane}}"
 aws_s3_bucket_name="${current[AWS_S3_BUCKET_NAME]:-plane-uploads}"
 bucket_name="${current[BUCKET_NAME]:-plane-uploads}"
+aws_s3_endpoint_url="${current[AWS_S3_ENDPOINT_URL]:-http://seaweedfs-plane:8333}"
 
 postgres_password_from_infra=0
 redis_password_from_infra=0
@@ -294,6 +295,10 @@ fi
 if is_usable_infra_value "${infra[PLANE_S3_BUCKET]:-}"; then
   aws_s3_bucket_name="${infra[PLANE_S3_BUCKET]}"
   bucket_name="${infra[PLANE_S3_BUCKET]}"
+  infra_sync_applied=1
+fi
+if is_usable_infra_value "${infra[SEAWEEDFS_PLANE_CONTAINER_NAME]:-}"; then
+  aws_s3_endpoint_url="http://${infra[SEAWEEDFS_PLANE_CONTAINER_NAME]}:8333"
   infra_sync_applied=1
 fi
 
@@ -376,6 +381,7 @@ saw_rabbitmq_default_vhost=0
 saw_rabbitmq_vhost=0
 saw_aws_s3_bucket_name=0
 saw_bucket_name=0
+saw_aws_s3_endpoint_url=0
 
 while IFS= read -r line || [[ -n "$line" ]]; do
   case "$line" in
@@ -398,6 +404,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     RABBITMQ_DEFAULT_USER=*) saw_rabbitmq_default_user=1; sync_kv "RABBITMQ_DEFAULT_USER" "$rabbitmq_user" >> "$tmp" ;;
     RABBITMQ_DEFAULT_VHOST=*) saw_rabbitmq_default_vhost=1; sync_kv "RABBITMQ_DEFAULT_VHOST" "$rabbitmq_vhost" >> "$tmp" ;;
     RABBITMQ_VHOST=*) saw_rabbitmq_vhost=1; sync_kv "RABBITMQ_VHOST" "$rabbitmq_vhost" >> "$tmp" ;;
+    AWS_S3_ENDPOINT_URL=*) saw_aws_s3_endpoint_url=1; sync_kv "AWS_S3_ENDPOINT_URL" "$aws_s3_endpoint_url" >> "$tmp" ;;
     AWS_S3_BUCKET_NAME=*) saw_aws_s3_bucket_name=1; sync_kv "AWS_S3_BUCKET_NAME" "$aws_s3_bucket_name" >> "$tmp" ;;
     BUCKET_NAME=*) saw_bucket_name=1; sync_kv "BUCKET_NAME" "$bucket_name" >> "$tmp" ;;
     *) printf '%s\n' "$line" >> "$tmp" ;;
@@ -423,6 +430,7 @@ done < "$env_file"
 (( saw_rabbitmq_default_user == 1 )) || sync_kv "RABBITMQ_DEFAULT_USER" "$rabbitmq_user" >> "$tmp"
 (( saw_rabbitmq_default_vhost == 1 )) || sync_kv "RABBITMQ_DEFAULT_VHOST" "$rabbitmq_vhost" >> "$tmp"
 (( saw_rabbitmq_vhost == 1 )) || sync_kv "RABBITMQ_VHOST" "$rabbitmq_vhost" >> "$tmp"
+(( saw_aws_s3_endpoint_url == 1 )) || sync_kv "AWS_S3_ENDPOINT_URL" "$aws_s3_endpoint_url" >> "$tmp"
 (( saw_aws_s3_bucket_name == 1 )) || sync_kv "AWS_S3_BUCKET_NAME" "$aws_s3_bucket_name" >> "$tmp"
 (( saw_bucket_name == 1 )) || sync_kv "BUCKET_NAME" "$bucket_name" >> "$tmp"
 

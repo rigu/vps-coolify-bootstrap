@@ -40,17 +40,19 @@ Root cause:
 - Browser blocked HTTP requests from an HTTPS page.
 
 Applied solution:
-- Force Plane storage-proxy mode and HTTPS endpoint semantics:
+- Force Plane storage-proxy mode and request-based HTTPS semantics:
   - `USE_STORAGE_PROXY=1`
   - `USE_MINIO=1`
   - `MINIO_ENDPOINT_SSL=1`
-  - `AWS_S3_ENDPOINT_URL=https://projects.example.com`
+  - `AWS_S3_ENDPOINT_URL=http://seaweedfs-plane:8333`
 - Keep bucket names aligned:
   - `AWS_S3_BUCKET_NAME=plane-uploads`
   - `BUCKET_NAME=plane-uploads`
 
 Why this works:
-- Browser only talks to HTTPS host (`projects.example.com`), not internal HTTP storage.
+- Plane backend uses internal S3 endpoint for bucket checks/startup tasks.
+- Browser upload/download URLs stay HTTPS because Plane derives endpoint from
+  incoming request host when `USE_MINIO=1` and `MINIO_ENDPOINT_SSL=1`.
 - Plane proxy handles storage routing internally.
 
 ### 2) 502 on `/plane-uploads`

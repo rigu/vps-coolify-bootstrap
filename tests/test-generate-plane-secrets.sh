@@ -21,6 +21,7 @@ test_creates_missing_env_and_generates_secrets_and_urls() {
   assert_file_contains "$env_file" '^DATABASE_URL=' "env should contain DATABASE_URL"
   assert_file_contains "$env_file" '^REDIS_URL=' "env should contain REDIS_URL"
   assert_file_contains "$env_file" '^AMQP_URL=' "env should contain AMQP_URL"
+  assert_file_contains "$env_file" '^AWS_S3_ENDPOINT_URL=' "env should contain AWS_S3_ENDPOINT_URL"
 
   secret="$(strip_env_quotes "$(env_value "$env_file" SECRET_KEY)")"
   db_pass="$(strip_env_quotes "$(env_value "$env_file" POSTGRES_PASSWORD)")"
@@ -112,6 +113,7 @@ RABBITMQ_PLANE_CONTAINER_NAME='rabbit-infra'
 PLANE_S3_ACCESS_KEY='PLNINFRAKEY123456789'
 PLANE_S3_SECRET_KEY='InfraS3SecretValue42'
 PLANE_S3_BUCKET='plane-artifacts'
+SEAWEEDFS_PLANE_CONTAINER_NAME='seaweedfs-infra'
 EOF
 
   bash "$script" --env-file "$env_file" --infra-env-file "$infra_file" >/dev/null
@@ -134,6 +136,7 @@ EOF
   assert_eq "plane_vhost" "$(strip_env_quotes "$(env_value "$env_file" RABBITMQ_VHOST)")" "RABBITMQ_VHOST should sync from infra"
   assert_eq "plane-artifacts" "$(strip_env_quotes "$(env_value "$env_file" AWS_S3_BUCKET_NAME)")" "AWS_S3_BUCKET_NAME should sync from infra"
   assert_eq "plane-artifacts" "$(strip_env_quotes "$(env_value "$env_file" BUCKET_NAME)")" "BUCKET_NAME should sync from infra"
+  assert_eq "http://seaweedfs-infra:8333" "$(strip_env_quotes "$(env_value "$env_file" AWS_S3_ENDPOINT_URL)")" "AWS_S3_ENDPOINT_URL should sync from infra"
 
   assert_eq "InfraPgPass-42" "$pg_pass" "POSTGRES_PASSWORD should sync from infra"
   assert_eq "InfraRedisPass-42" "$redis_pass" "REDIS_PASSWORD should sync from infra"

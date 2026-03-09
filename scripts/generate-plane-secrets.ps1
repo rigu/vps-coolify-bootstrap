@@ -129,6 +129,7 @@ $rabbitmqUser = if ($kv.ContainsKey("RABBITMQ_DEFAULT_USER") -and -not [string]:
 $rabbitmqHost = if ($kv.ContainsKey("RABBITMQ_HOST") -and -not [string]::IsNullOrWhiteSpace([string]$kv["RABBITMQ_HOST"])) { [string]$kv["RABBITMQ_HOST"] } else { "rabbitmq-plane" }
 $rabbitmqPort = if ($kv.ContainsKey("RABBITMQ_PORT") -and -not [string]::IsNullOrWhiteSpace([string]$kv["RABBITMQ_PORT"])) { [string]$kv["RABBITMQ_PORT"] } else { "5672" }
 $rabbitmqVhost = if ($kv.ContainsKey("RABBITMQ_VHOST") -and -not [string]::IsNullOrWhiteSpace([string]$kv["RABBITMQ_VHOST"])) { [string]$kv["RABBITMQ_VHOST"] } elseif ($kv.ContainsKey("RABBITMQ_DEFAULT_VHOST") -and -not [string]::IsNullOrWhiteSpace([string]$kv["RABBITMQ_DEFAULT_VHOST"])) { [string]$kv["RABBITMQ_DEFAULT_VHOST"] } else { "plane" }
+$awsS3EndpointUrl = if ($kv.ContainsKey("AWS_S3_ENDPOINT_URL") -and -not [string]::IsNullOrWhiteSpace([string]$kv["AWS_S3_ENDPOINT_URL"])) { [string]$kv["AWS_S3_ENDPOINT_URL"] } else { "http://seaweedfs-plane:8333" }
 $awsS3BucketName = if ($kv.ContainsKey("AWS_S3_BUCKET_NAME") -and -not [string]::IsNullOrWhiteSpace([string]$kv["AWS_S3_BUCKET_NAME"])) { [string]$kv["AWS_S3_BUCKET_NAME"] } else { "plane-uploads" }
 $bucketName = if ($kv.ContainsKey("BUCKET_NAME") -and -not [string]::IsNullOrWhiteSpace([string]$kv["BUCKET_NAME"])) { [string]$kv["BUCKET_NAME"] } else { "plane-uploads" }
 
@@ -209,6 +210,10 @@ if (-not $NoInfraSync -and $infra.Count -gt 0) {
         $bucketName = [string]$infra["PLANE_S3_BUCKET"]
         $infraSyncApplied = $true
     }
+    if (Test-UsableInfraValue -Value ([string]$infra["SEAWEEDFS_PLANE_CONTAINER_NAME"])) {
+        $awsS3EndpointUrl = "http://" + [string]$infra["SEAWEEDFS_PLANE_CONTAINER_NAME"] + ":8333"
+        $infraSyncApplied = $true
+    }
 }
 
 $passwordsChanged = $false
@@ -287,6 +292,7 @@ $saw = @{
     "RABBITMQ_DEFAULT_USER" = $false
     "RABBITMQ_DEFAULT_VHOST" = $false
     "RABBITMQ_VHOST" = $false
+    "AWS_S3_ENDPOINT_URL" = $false
     "AWS_S3_BUCKET_NAME" = $false
     "BUCKET_NAME" = $false
 }
@@ -311,6 +317,7 @@ $updated = @{
     "RABBITMQ_DEFAULT_USER" = $rabbitmqUser
     "RABBITMQ_DEFAULT_VHOST" = $rabbitmqVhost
     "RABBITMQ_VHOST" = $rabbitmqVhost
+    "AWS_S3_ENDPOINT_URL" = $awsS3EndpointUrl
     "AWS_S3_BUCKET_NAME" = $awsS3BucketName
     "BUCKET_NAME" = $bucketName
 }
