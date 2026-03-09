@@ -151,6 +151,7 @@ Rendered behavior:
    - rendered file: `bootstrap-artifacts/docmost-coolify-compose.community.yml` (recommended)
    - raw template: `templates/docmost-coolify-compose.community.template.yml`
 5. Save compose.
+6. Confirm both services are present in the stack: `docmost` and `typesense`.
 
 ## 4) Configure Docmost env values in Coolify
 
@@ -164,6 +165,10 @@ Mandatory before first deploy:
 - `APP_SECRET`
 - `DATABASE_URL`
 - `REDIS_URL`
+
+Typesense for search in this template:
+- compose includes a `typesense` service in the same stack as Docmost
+- keep `TYPESENSE_URL=http://typesense:8108` unless you intentionally use an external Typesense endpoint
 
 ## 5) Configure public domain routing
 

@@ -3,12 +3,15 @@
 # Purpose:
 # - run Docmost app on Coolify
 # - consume shared infra services from external Docker network `infra`
+# - run bundled Typesense container for search (`SEARCH_DRIVER=typesense`)
 # - keep env variables visible/editable in Coolify UI
 
 services:
   docmost:
     image: "${DOCMOST_IMAGE:-docmost/docmost:latest}"
     restart: unless-stopped
+    depends_on:
+      - typesense
     expose:
       - "3000"
     environment:
@@ -35,14 +38,26 @@ services:
       AWS_S3_FORCE_PATH_STYLE: ${AWS_S3_FORCE_PATH_STYLE:-true}
       DISABLE_TELEMETRY: ${DISABLE_TELEMETRY:-true}
       SEARCH_DRIVER: ${SEARCH_DRIVER:-typesense}
-      TYPESENSE_URL: ${TYPESENSE_URL:-}
-      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-}
+      TYPESENSE_URL: ${TYPESENSE_URL:-http://typesense:8108}
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-CHANGE_ME_typesense_api_key}
       TYPESENSE_LOCALE: ${TYPESENSE_LOCALE:-en}
     volumes:
       - docmost_storage:/app/data/storage
     networks:
       - default
       - infra
+  typesense:
+    image: "${TYPESENSE_IMAGE:-typesense/typesense:30.1}"
+    restart: unless-stopped
+    expose:
+      - "8108"
+    command:
+      - "--data-dir"
+      - "/data"
+      - "--api-key=${TYPESENSE_API_KEY:-CHANGE_ME_typesense_api_key}"
+      - "--enable-cors"
+    volumes:
+      - docmost_typesense_data:/data
 
 networks:
   infra:
@@ -51,3 +66,4 @@ networks:
 
 volumes:
   docmost_storage:
+  docmost_typesense_data:

@@ -135,7 +135,7 @@ try {
     $awsS3ForcePathStyle = if ($cfg.ContainsKey("AWS_S3_FORCE_PATH_STYLE") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["AWS_S3_FORCE_PATH_STYLE"])) { [string]$cfg["AWS_S3_FORCE_PATH_STYLE"] } else { "true" }
     $disableTelemetry = if ($cfg.ContainsKey("DISABLE_TELEMETRY") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["DISABLE_TELEMETRY"])) { [string]$cfg["DISABLE_TELEMETRY"] } else { "true" }
     $searchDriver = if ($cfg.ContainsKey("SEARCH_DRIVER") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SEARCH_DRIVER"])) { [string]$cfg["SEARCH_DRIVER"] } else { "typesense" }
-    $typesenseUrl = if ($cfg.ContainsKey("TYPESENSE_URL") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["TYPESENSE_URL"])) { [string]$cfg["TYPESENSE_URL"] } else { "CHANGE_ME_typesense_url" }
+    $typesenseUrl = if ($cfg.ContainsKey("TYPESENSE_URL") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["TYPESENSE_URL"])) { [string]$cfg["TYPESENSE_URL"] } else { "http://typesense:8108" }
     $typesenseApiKey = if ($cfg.ContainsKey("TYPESENSE_API_KEY") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["TYPESENSE_API_KEY"])) { [string]$cfg["TYPESENSE_API_KEY"] } else { "CHANGE_ME_typesense_api_key" }
     $typesenseLocale = if ($cfg.ContainsKey("TYPESENSE_LOCALE") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["TYPESENSE_LOCALE"])) { [string]$cfg["TYPESENSE_LOCALE"] } else { "en" }
 

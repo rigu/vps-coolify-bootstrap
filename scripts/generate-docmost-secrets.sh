@@ -215,7 +215,7 @@ aws_s3_endpoint="${current[AWS_S3_ENDPOINT]:-http://seaweedfs-plane:8333}"
 aws_s3_force_path_style="${current[AWS_S3_FORCE_PATH_STYLE]:-true}"
 disable_telemetry="${current[DISABLE_TELEMETRY]:-true}"
 search_driver="${current[SEARCH_DRIVER]:-typesense}"
-typesense_url="${current[TYPESENSE_URL]:-CHANGE_ME_typesense_url}"
+typesense_url="${current[TYPESENSE_URL]:-http://typesense:8108}"
 typesense_api_key="${current[TYPESENSE_API_KEY]:-CHANGE_ME_typesense_api_key}"
 typesense_locale="${current[TYPESENSE_LOCALE]:-en}"
 

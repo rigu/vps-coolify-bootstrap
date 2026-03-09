@@ -209,6 +209,10 @@ Infra -> Docmost sync mapping:
 - `DISABLE_TELEMETRY` -> `DISABLE_TELEMETRY`
 - `SEARCH_DRIVER`, `TYPESENSE_URL`, `TYPESENSE_API_KEY`, `TYPESENSE_LOCALE` -> same keys in Docmost env (when present)
 
+Compose behavior for search:
+- `templates/docmost-coolify-compose.community.template.yml` includes a bundled `typesense` container
+- default internal endpoint is `TYPESENSE_URL=http://typesense:8108`
+
 Default generation:
 
 ```bash
