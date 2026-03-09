@@ -122,9 +122,13 @@ If infra env does not exist yet:
 
 Rerun commands after infra env is ready:
 
+Linux/macOS (Bash):
+
 ```bash
 bash scripts/generate-plane-secrets.sh
 ```
+
+Windows (PowerShell):
 
 ```powershell
 pwsh -File scripts/generate-plane-secrets.ps1
