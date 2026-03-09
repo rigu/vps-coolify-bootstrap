@@ -195,7 +195,7 @@ Recommended runtime files:
 
 Recommended permissions:
 - env files with secrets: `600`
-- secret config files: `640`
+- service runtime configs mounted read-only into containers: `644`
 - compose and non-secret configs: `644`
 
 Example:
@@ -203,6 +203,7 @@ Example:
 ```bash
 sudo chown root:root /srv/infra/*
 sudo chmod 600 /srv/infra/production-infra.env
+sudo chmod 644 /srv/infra/valkey.conf /srv/infra/seaweedfs-s3-config.json
 ```
 
 ### 3) Generate infra env locally (only env), then copy to server
@@ -308,6 +309,23 @@ networks:
 ```
 
 3. redeploy resource
+
+## Troubleshooting: `valkey-apps` unhealthy with `valkey.conf` permission denied
+
+Symptom:
+- `verify-infra-state.sh` reports `valkey-apps` unhealthy
+- container logs show `Fatal error, can't open config file '/etc/valkey/valkey.conf': Permission denied`
+
+Fix on VPS:
+
+```bash
+sudo chmod 644 /srv/infra/valkey.conf
+sudo docker compose -f /srv/infra/docker-compose.yml --env-file /srv/infra/production-infra.env up -d valkey-apps
+sudo bash /opt/vps-coolify-bootstrap/scripts/verify-infra-state.sh --env-file /srv/infra/production-infra.env
+```
+
+Permanent fix:
+- updated `setup-infra.sh` now installs `valkey.conf` and `seaweedfs-s3-config.json` with `644` so non-root container users can read mounted configs.
 
 ## Quick checklist
 

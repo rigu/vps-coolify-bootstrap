@@ -303,8 +303,10 @@ fi
 bootstrap_info "Synchronizing runtime files to $runtime_dir"
 run_root install -d -m 750 -o root -g root "$runtime_dir"
 run_root install -m 644 -o root -g root "$render_dir/docker-compose.yml" "$runtime_dir/docker-compose.yml"
-run_root install -m 640 -o root -g root "$render_dir/valkey.conf" "$runtime_dir/valkey.conf"
-run_root install -m 640 -o root -g root "$render_dir/seaweedfs-s3-config.json" "$runtime_dir/seaweedfs-s3-config.json"
+# Keep runtime service configs readable by non-root container users.
+# Parent directory remains root-owned (750), so host-side exposure stays constrained.
+run_root install -m 644 -o root -g root "$render_dir/valkey.conf" "$runtime_dir/valkey.conf"
+run_root install -m 644 -o root -g root "$render_dir/seaweedfs-s3-config.json" "$runtime_dir/seaweedfs-s3-config.json"
 run_root install -m 755 -o root -g root "$render_dir/postgres-apps-init.sh" "$runtime_dir/postgres-apps-init.sh"
 run_root install -m 600 -o root -g root "$env_file" "$runtime_dir/production-infra.env"
 bootstrap_success "Runtime files synchronized to $runtime_dir"
