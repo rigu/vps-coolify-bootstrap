@@ -85,14 +85,18 @@ pwsh -File scripts/generate-infra-secrets.ps1
 Linux/macOS:
 
 ```bash
-scp bootstrap-artifacts/production-infra.env devops@<server-ip>:/tmp/production-infra.env
+scp -P <SSH_PORT> bootstrap-artifacts/production-infra.env devops@<server-ip>:/tmp/production-infra.env
 ```
 
 Windows (PowerShell):
 
 ```powershell
-scp .\bootstrap-artifacts\production-infra.env devops@<server-ip>:/tmp/production-infra.env
+scp -P <SSH_PORT> .\bootstrap-artifacts\production-infra.env devops@<server-ip>:/tmp/production-infra.env
 ```
+
+Note:
+- `scp` uses `-P` (uppercase) for port
+- `ssh` uses `-p` (lowercase) for port
 
 ### VPS apply (generate/render/deploy on server)
 
@@ -220,13 +224,13 @@ Copy it to VPS:
 Linux/macOS:
 
 ```bash
-scp bootstrap-artifacts/production-infra.env devops@<server-ip>:/tmp/production-infra.env
+scp -P <SSH_PORT> bootstrap-artifacts/production-infra.env devops@<server-ip>:/tmp/production-infra.env
 ```
 
 Windows (PowerShell):
 
 ```powershell
-scp .\bootstrap-artifacts\production-infra.env devops@<server-ip>:/tmp/production-infra.env
+scp -P <SSH_PORT> .\bootstrap-artifacts\production-infra.env devops@<server-ip>:/tmp/production-infra.env
 ```
 
 Then run server-side generation/render/deploy:

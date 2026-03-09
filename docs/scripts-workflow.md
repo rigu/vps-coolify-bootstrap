@@ -282,16 +282,16 @@ Copy env to VPS, then run server-side setup:
 Linux/macOS:
 
 ```bash
-scp bootstrap-artifacts/production-infra.env devops@<server-ip>:/tmp/production-infra.env
-ssh devops@<server-ip>
+scp -P <SSH_PORT> bootstrap-artifacts/production-infra.env devops@<server-ip>:/tmp/production-infra.env
+ssh -p <SSH_PORT> devops@<server-ip>
 sudo bash /opt/vps-coolify-bootstrap/scripts/setup-infra.sh --env-file /tmp/production-infra.env
 ```
 
 Windows (PowerShell):
 
 ```powershell
-scp .\bootstrap-artifacts\production-infra.env devops@<server-ip>:/tmp/production-infra.env
-ssh devops@<server-ip>
+scp -P <SSH_PORT> .\bootstrap-artifacts\production-infra.env devops@<server-ip>:/tmp/production-infra.env
+ssh -p <SSH_PORT> devops@<server-ip>
 sudo bash /opt/vps-coolify-bootstrap/scripts/setup-infra.sh --env-file /tmp/production-infra.env
 ```
 
