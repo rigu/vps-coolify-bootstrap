@@ -9,6 +9,7 @@ This page documents the detailed local workflow for:
 - `scripts/generate-infra-secrets.sh` / `scripts/generate-infra-secrets.ps1`
 - `scripts/prepare-infra-compose.sh` / `scripts/prepare-infra-compose.ps1`
 - `scripts/setup-infra.sh`
+- `scripts/verify-infra-state.sh`
 - `scripts/generate-plane-secrets.sh` / `scripts/generate-plane-secrets.ps1`
 
 ## PowerShell note (Windows)
@@ -285,6 +286,7 @@ Linux/macOS:
 scp -P <SSH_PORT> bootstrap-artifacts/production-infra.env devops@<server-ip>:/tmp/production-infra.env
 ssh -p <SSH_PORT> devops@<server-ip>
 sudo bash /opt/vps-coolify-bootstrap/scripts/setup-infra.sh --env-file /tmp/production-infra.env
+sudo bash /opt/vps-coolify-bootstrap/scripts/verify-infra-state.sh --env-file /srv/infra/production-infra.env
 ```
 
 Windows (PowerShell):
@@ -293,6 +295,7 @@ Windows (PowerShell):
 scp -P <SSH_PORT> .\bootstrap-artifacts\production-infra.env devops@<server-ip>:/tmp/production-infra.env
 ssh -p <SSH_PORT> devops@<server-ip>
 sudo bash /opt/vps-coolify-bootstrap/scripts/setup-infra.sh --env-file /tmp/production-infra.env
+sudo bash /opt/vps-coolify-bootstrap/scripts/verify-infra-state.sh --env-file /srv/infra/production-infra.env
 ```
 
 What happens server-side:
@@ -312,6 +315,16 @@ Useful options:
 - `--runtime-dir <path>`: change runtime directory (default `/srv/infra`)
 - `--skip-deploy`: generate/sync only, without `docker compose up -d`
 - `--skip-validate`: skip health/network/exposure validation
+
+Standalone validation script:
+- `verify-infra-state.sh` rechecks the applied state after setup
+- default env path: `/srv/infra/production-infra.env`
+- default runtime dir: `/srv/infra`
+- useful flags:
+  - `--env-file <path>`
+  - `--runtime-dir <path>`
+  - `--network-name <name>`
+  - `--wait-seconds <n>`
 
 Port conflict check (before deploy/redeploy):
 

@@ -46,6 +46,7 @@ jobs:
           bash scripts/prepare-vps-coolify-init.sh --help >/dev/null
           bash scripts/recover-ssh-access.sh --help >/dev/null
           bash scripts/update-realtime-mode.sh --help >/dev/null
+          bash scripts/verify-infra-state.sh --help >/dev/null
 
       - name: Script behavior tests
         run: bash tests/run-tests.sh

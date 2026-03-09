@@ -105,6 +105,13 @@ sudo bash /opt/vps-coolify-bootstrap/scripts/setup-infra.sh \
   --env-file /tmp/production-infra.env
 ```
 
+Then run standalone validation:
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/verify-infra-state.sh \
+  --env-file /srv/infra/production-infra.env
+```
+
 What this command does on VPS:
 - reads the copied infra env (`production-infra.env`)
 - generates/refreshes missing infra secrets only when placeholders are still present
@@ -237,6 +244,12 @@ Then run server-side generation/render/deploy:
 
 ```bash
 sudo bash /opt/vps-coolify-bootstrap/scripts/setup-infra.sh --env-file /tmp/production-infra.env
+```
+
+Then validate resulting infra state:
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/verify-infra-state.sh --env-file /srv/infra/production-infra.env
 ```
 
 ### 4) Start internal services on `infra`
