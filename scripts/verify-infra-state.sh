@@ -45,6 +45,21 @@ run_root() {
   sudo "$@"
 }
 
+print_container_health_log_tail() {
+  local container="$1"
+  local health_log
+  local line
+
+  health_log="$(run_root docker inspect --format '{{if .State.Health}}{{range .State.Health.Log}}{{println .ExitCode "|" .Output}}{{end}}{{end}}' "$container" 2>/dev/null | tail -n 5 || true)"
+  [[ -n "$health_log" ]] || return 0
+
+  bootstrap_warn "Recent healthcheck log for $container:"
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    bootstrap_warn "  $line"
+  done <<< "$health_log"
+}
+
 wait_for_container_health() {
   local container="$1"
   local timeout_seconds="$2"
@@ -65,12 +80,14 @@ wait_for_container_health() {
         ;;
       *)
         bootstrap_error "Container health failed: $container ($health)"
+        print_container_health_log_tail "$container"
         return 1
         ;;
     esac
   done
 
   bootstrap_error "Timed out waiting for healthy container: $container"
+  print_container_health_log_tail "$container"
   return 1
 }
 

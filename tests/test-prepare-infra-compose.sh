@@ -26,6 +26,7 @@ test_prepare_infra_compose_generates_runtime_files() {
   assert_file_not_contains "$out_dir/docker-compose.yml" '_HERE' "compose output should not contain unresolved placeholders"
   assert_file_not_contains "$out_dir/valkey.conf" '_HERE' "valkey output should not contain unresolved placeholders"
   assert_file_not_contains "$out_dir/seaweedfs-s3-config.json" '_HERE' "seaweedfs output should not contain unresolved placeholders"
+  assert_file_contains "$out_dir/docker-compose.yml" 'redis-cli .*\\|\\| valkey-cli' "valkey healthcheck should support redis-cli and valkey-cli fallback"
 
   if command -v python3 >/dev/null 2>&1; then
     python3 - <<PY

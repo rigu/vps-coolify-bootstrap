@@ -38,7 +38,7 @@ services:
     ports:
       - "127.0.0.1:VALKEY_HOST_PORT_HERE:6379"
     healthcheck:
-      test: ["CMD-SHELL", "valkey-cli -a \"$(awk '/^requirepass /{print $2; exit}' /etc/valkey/valkey.conf)\" --no-auth-warning ping | grep -q PONG"]
+      test: ["CMD-SHELL", "redis-cli -a \"$(awk '/^requirepass /{print $2; exit}' /etc/valkey/valkey.conf)\" --no-auth-warning ping | grep -q PONG || valkey-cli -a \"$(awk '/^requirepass /{print $2; exit}' /etc/valkey/valkey.conf)\" --no-auth-warning ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
