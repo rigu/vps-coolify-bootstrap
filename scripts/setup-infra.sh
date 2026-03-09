@@ -308,7 +308,16 @@ run_root install -m 644 -o root -g root "$render_dir/docker-compose.yml" "$runti
 run_root install -m 644 -o root -g root "$render_dir/valkey.conf" "$runtime_dir/valkey.conf"
 run_root install -m 644 -o root -g root "$render_dir/seaweedfs-s3-config.json" "$runtime_dir/seaweedfs-s3-config.json"
 run_root install -m 755 -o root -g root "$render_dir/postgres-apps-init.sh" "$runtime_dir/postgres-apps-init.sh"
-run_root install -m 600 -o root -g root "$env_file" "$runtime_dir/production-infra.env"
+runtime_env_file="$runtime_dir/production-infra.env"
+env_source_real="$(readlink -f "$env_file" 2>/dev/null || printf '%s' "$env_file")"
+env_target_real="$(readlink -f "$runtime_env_file" 2>/dev/null || printf '%s' "$runtime_env_file")"
+if [[ "$env_source_real" == "$env_target_real" ]]; then
+  bootstrap_info "Env file already points to runtime target; enforcing owner/mode only."
+  run_root chown root:root "$runtime_env_file"
+  run_root chmod 600 "$runtime_env_file"
+else
+  run_root install -m 600 -o root -g root "$env_file" "$runtime_env_file"
+fi
 bootstrap_success "Runtime files synchronized to $runtime_dir"
 
 if (( skip_deploy == 0 )); then
