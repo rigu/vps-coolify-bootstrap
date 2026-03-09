@@ -786,34 +786,35 @@ PHP
 ensure_coolify_proxy_path_access() {
   local root_root="/data/coolify"
   local user="$COOLIFY_SUDO_NOPASSWD_USER"
-  local managed_roots=("/data/coolify/proxy" "/data/coolify/services")
   local path=""
+  local child=""
+  local verify_paths=()
 
   # Coolify executes remote operations for proxy/services using the configured
-  # localhost SSH user. That user must traverse and write these runtime paths.
-  if [[ -d "$root_root" ]]; then
-    chgrp coolify "$root_root" 2>/dev/null || true
-    chmod g+rx "$root_root" 2>/dev/null || true
+  # localhost SSH user. Grant complete group access to all Coolify runtime
+  # folders and keep setgid on directories so new files inherit group coolify.
+  if [[ ! -d "$root_root" ]]; then
+    bootstrap_warn "$root_root not found; skipping runtime path permission synchronization."
+    return 0
   fi
 
-  for path in "${managed_roots[@]}"; do
-    if [[ ! -d "$path" ]]; then
-      bootstrap_warn "$path not found; skipping permission synchronization."
-      continue
-    fi
-    chgrp -R coolify "$path" 2>/dev/null || true
-    chmod g+rwx "$path" 2>/dev/null || true
-    chmod g+s "$path" 2>/dev/null || true
-    chmod -R g+rwX "$path" 2>/dev/null || true
-  done
+  chgrp -R coolify "$root_root" 2>/dev/null || true
+  chmod g+rwx "$root_root" 2>/dev/null || true
+  chmod -R g+rwX "$root_root" 2>/dev/null || true
+  find "$root_root" -type d -exec chmod g+s {} + 2>/dev/null || true
 
   if ! id "$user" >/dev/null 2>&1; then
     bootstrap_error "coolify localhost user ${user} does not exist for runtime path access sync."
     return 1
   fi
 
-  for path in "${managed_roots[@]}"; do
-    [[ -d "$path" ]] || continue
+  verify_paths+=("$root_root")
+  for child in "$root_root"/*; do
+    [[ -d "$child" ]] || continue
+    verify_paths+=("$child")
+  done
+
+  for path in "${verify_paths[@]}"; do
     if ! sudo -u "$user" test -x "$path"; then
       bootstrap_error "coolify localhost user ${user} cannot traverse ${path} after permission sync."
       return 1
@@ -824,7 +825,7 @@ ensure_coolify_proxy_path_access() {
     fi
   done
 
-  bootstrap_success "Coolify runtime path access synchronized for ${user} (/data/coolify/{proxy,services})."
+  bootstrap_success "Coolify runtime path access synchronized for ${user} (${root_root} and child folders)."
   return 0
 }
 
