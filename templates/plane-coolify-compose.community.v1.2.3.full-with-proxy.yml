@@ -18,8 +18,11 @@
 # - Plane proxy v1.2.3 routes bucket traffic to `plane-minio:9000`.
 #   This compose adds a lightweight `plane-minio` TCP forwarder service
 #   that points to `seaweedfs-plane:8333` on the shared `infra` network.
-# - all Plane service images default to Docker Hub community tags (`makeplane/*`) and can be
-#   overridden with PLANE_*_IMAGE env variables when needed.
+# - Plane official setup.sh output commonly references
+#   `artifacts.plane.so/makeplane/*` for Community images.
+# - this repository intentionally defaults to Docker Hub community tags
+#   (`makeplane/*`) for pull reliability across environments.
+# - switch per service with PLANE_*_IMAGE env variables when needed.
 # - critical secrets/connection values use required `${VAR:?...}` expansion
 #   so deploy fails fast if env configuration is incomplete.
 

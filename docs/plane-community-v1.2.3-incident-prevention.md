@@ -15,7 +15,10 @@ The goal is to prevent the exact failures previously observed in production.
 Version policy used here:
 
 - use Plane Community tag track (`v1.2.3`)
-- use Docker Hub `makeplane/*` image repository defaults
+- acknowledge that Plane official `setup.sh` output commonly uses
+  `artifacts.plane.so/makeplane/*` for Community images
+- use Docker Hub `makeplane/*` image defaults in this repository baseline
+  for higher pull reliability in mixed environments
 - avoid commercial/enterprise-only image defaults in this baseline
 
 ## Incidents Observed
