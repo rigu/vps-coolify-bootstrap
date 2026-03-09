@@ -172,6 +172,21 @@ test_appends_missing_ssh_key_lines_when_detected() {
   rm -rf "$tmpdir"
 }
 
+test_appends_missing_keys_from_env_example() {
+  local tmpdir env_file
+  tmpdir="$(mktemp -d)"
+  env_file="$tmpdir/bootstrap.env"
+  cp "$repo_root/env/bootstrap.env.example" "$env_file"
+  sed -i '/^DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX=/d' "$env_file"
+
+  HOME="$tmpdir/home" USER="$(id -un)" SUDO_USER="" bash "$script" --env-file "$env_file" >/dev/null
+
+  assert_file_contains "$env_file" '^DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX=' "script should append missing keys from env/bootstrap.env.example"
+  assert_eq "true" "$(strip_env_quotes "$(env_value "$env_file" DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX)")" "appended key should preserve example default value"
+
+  rm -rf "$tmpdir"
+}
+
 run_test "generate-secrets creates env + detects key + generates secrets" test_creates_missing_env_and_generates_passwords_and_ssh_detection
 run_test "generate-secrets warns and keeps placeholders when no key" test_no_detected_key_keeps_placeholder_and_warns
 run_test "generate-secrets rotates password only with --force-password" test_force_password_rotates_only_when_requested
@@ -181,5 +196,6 @@ run_test "generate-secrets supports custom --env-file path creation" test_env_fi
 run_test "generate-secrets rejects --env-file directory" test_rejects_directory_env_path
 run_test "generate-secrets rejects missing --env-file value" test_rejects_missing_env_file_value
 run_test "generate-secrets appends missing SSH key vars" test_appends_missing_ssh_key_lines_when_detected
+run_test "generate-secrets appends missing keys from env example" test_appends_missing_keys_from_env_example
 
 report_and_exit

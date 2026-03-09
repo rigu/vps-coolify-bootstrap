@@ -31,6 +31,7 @@ other PowerShell examples.
 ## What `generate-secrets.*` does
 
 - creates `bootstrap-artifacts/bootstrap.env` from `env/bootstrap.env.example` when missing
+- appends missing key-value lines from `env/bootstrap.env.example` when local env is older/stale
 - fills placeholder/empty secrets (non-destructive by default)
 - auto-detects local SSH public key and fills both:
   - `SSH_PUBLIC_KEY`

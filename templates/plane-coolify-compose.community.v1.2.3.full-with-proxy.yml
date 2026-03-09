@@ -18,7 +18,7 @@
 # - Plane proxy v1.2.3 routes bucket traffic to `plane-minio:9000`.
 #   This compose adds a lightweight `plane-minio` TCP forwarder service
 #   that points to `seaweedfs-plane:8333` on the shared `infra` network.
-# - all Plane service images default to upstream `artifacts.plane.so/makeplane/*` community tags and can be
+# - all Plane service images default to Docker Hub community tags (`makeplane/*`) and can be
 #   overridden with PLANE_*_IMAGE env variables when needed.
 # - critical secrets/connection values use required `${VAR:?...}` expansion
 #   so deploy fails fast if env configuration is incomplete.
@@ -116,7 +116,7 @@ services:
   proxy:
     <<: *plane-service-defaults
     # Public entrypoint when you want Plane's own proxy in front of all roles.
-    image: "${PLANE_PROXY_IMAGE:-artifacts.plane.so/makeplane/plane-proxy:${PLANE_APP_VERSION:-v1.2.3}}"
+    image: "${PLANE_PROXY_IMAGE:-makeplane/plane-proxy:${PLANE_APP_VERSION:-v1.2.3}}"
     expose:
       - "80"
     environment:
@@ -137,7 +137,7 @@ services:
   web:
     <<: *plane-service-defaults
     # Frontend service (internal). In this topology, route public traffic to proxy:80.
-    image: "${PLANE_WEB_IMAGE:-artifacts.plane.so/makeplane/plane-frontend:${PLANE_APP_VERSION:-v1.2.3}}"
+    image: "${PLANE_WEB_IMAGE:-makeplane/plane-frontend:${PLANE_APP_VERSION:-v1.2.3}}"
     expose:
       - "3000"
     environment:
@@ -154,7 +154,7 @@ services:
   space:
     <<: *plane-service-defaults
     # Optional service aligned with Coolify Plane template topology.
-    image: "${PLANE_SPACE_IMAGE:-artifacts.plane.so/makeplane/plane-space:${PLANE_APP_VERSION:-v1.2.3}}"
+    image: "${PLANE_SPACE_IMAGE:-makeplane/plane-space:${PLANE_APP_VERSION:-v1.2.3}}"
     environment:
       <<: *plane-web-env
     depends_on:
@@ -173,7 +173,7 @@ services:
   admin:
     <<: *plane-service-defaults
     # Optional service aligned with Coolify Plane template topology.
-    image: "${PLANE_ADMIN_IMAGE:-artifacts.plane.so/makeplane/plane-admin:${PLANE_APP_VERSION:-v1.2.3}}"
+    image: "${PLANE_ADMIN_IMAGE:-makeplane/plane-admin:${PLANE_APP_VERSION:-v1.2.3}}"
     environment:
       <<: *plane-web-env
     depends_on:
@@ -191,7 +191,7 @@ services:
   live:
     <<: *plane-service-defaults
     # Optional service aligned with Coolify Plane template topology.
-    image: "${PLANE_LIVE_IMAGE:-artifacts.plane.so/makeplane/plane-live:${PLANE_APP_VERSION:-v1.2.3}}"
+    image: "${PLANE_LIVE_IMAGE:-makeplane/plane-live:${PLANE_APP_VERSION:-v1.2.3}}"
     environment:
       <<: [ *app-env, *live-env, *redis-env ]
     depends_on:
@@ -208,7 +208,7 @@ services:
 
   api:
     <<: *plane-service-defaults
-    image: "${PLANE_BACKEND_IMAGE:-artifacts.plane.so/makeplane/plane-backend:${PLANE_APP_VERSION:-v1.2.3}}"
+    image: "${PLANE_BACKEND_IMAGE:-makeplane/plane-backend:${PLANE_APP_VERSION:-v1.2.3}}"
     command: "${PLANE_API_COMMAND:-./bin/docker-entrypoint-api.sh}"
     expose:
       - "8000"
@@ -227,7 +227,7 @@ services:
 
   worker:
     <<: *plane-service-defaults
-    image: "${PLANE_BACKEND_IMAGE:-artifacts.plane.so/makeplane/plane-backend:${PLANE_APP_VERSION:-v1.2.3}}"
+    image: "${PLANE_BACKEND_IMAGE:-makeplane/plane-backend:${PLANE_APP_VERSION:-v1.2.3}}"
     command: "${PLANE_WORKER_COMMAND:-./bin/docker-entrypoint-worker.sh}"
     environment:
       <<: [ *app-env, *db-env, *redis-env, *aws-s3-env, *mq-env ]
@@ -243,7 +243,7 @@ services:
 
   beat-worker:
     <<: *plane-service-defaults
-    image: "${PLANE_BACKEND_IMAGE:-artifacts.plane.so/makeplane/plane-backend:${PLANE_APP_VERSION:-v1.2.3}}"
+    image: "${PLANE_BACKEND_IMAGE:-makeplane/plane-backend:${PLANE_APP_VERSION:-v1.2.3}}"
     command: "${PLANE_BEAT_COMMAND:-./bin/docker-entrypoint-beat.sh}"
     environment:
       <<: [ *app-env, *db-env, *redis-env, *aws-s3-env, *mq-env ]
@@ -259,7 +259,7 @@ services:
 
   migrator:
     <<: *plane-service-defaults
-    image: "${PLANE_BACKEND_IMAGE:-artifacts.plane.so/makeplane/plane-backend:${PLANE_APP_VERSION:-v1.2.3}}"
+    image: "${PLANE_BACKEND_IMAGE:-makeplane/plane-backend:${PLANE_APP_VERSION:-v1.2.3}}"
     restart: "no"
     command: "${PLANE_MIGRATOR_COMMAND:-./bin/docker-entrypoint-migrator.sh}"
     environment:

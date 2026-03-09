@@ -15,7 +15,7 @@ The goal is to prevent the exact failures previously observed in production.
 Version policy used here:
 
 - use Plane Community tag track (`v1.2.3`)
-- use upstream `artifacts.plane.so/makeplane/*` image repository defaults
+- use Docker Hub `makeplane/*` image repository defaults
 - avoid commercial/enterprise-only image defaults in this baseline
 
 ## Incidents Observed

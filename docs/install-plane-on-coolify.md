@@ -28,6 +28,9 @@ Important:
 - the provided compose profile is adapted from official Plane `v1.2.3` and
   intentionally disables bundled stateful services (`plane-db`, `plane-redis`,
   `plane-mq`, built-in `plane-minio`) to use shared infra services instead
+- default image registry in this profile is Docker Hub (`makeplane/*`)
+- if your environment requires another registry mirror, set explicit
+  `PLANE_*_IMAGE` overrides in Plane env values
 
 ## Files provided in this repository
 

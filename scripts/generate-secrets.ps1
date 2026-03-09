@@ -209,10 +209,34 @@ if (-not $sawSshPublicKeyPath -and $hasDetectedSshKey) {
     $newLines.Add("SSH_PUBLIC_KEY_PATH=$(Format-EnvValue -Value $detectedSshKeyPath)")
 }
 
+# Keep local env files forward-compatible when new keys are introduced
+# in env/bootstrap.env.example.
+$seenKeys = @{}
+foreach ($line in $newLines) {
+    if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)=') {
+        $seenKeys[$Matches[1]] = $true
+    }
+}
+
+$addedKeys = New-Object System.Collections.Generic.List[string]
+foreach ($line in Get-Content -LiteralPath $envExamplePath) {
+    if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)=') {
+        $key = $Matches[1]
+        if (-not $seenKeys.ContainsKey($key)) {
+            $newLines.Add($line)
+            $seenKeys[$key] = $true
+            $addedKeys.Add($key)
+        }
+    }
+}
+
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllLines($envPath, $newLines, $utf8NoBom)
 
 Write-Host "Updated: $envPath"
+if ($addedKeys.Count -gt 0) {
+    Write-Host ("Appended missing keys from env/bootstrap.env.example: " + ($addedKeys -join ", "))
+}
 Write-Host "WARNING: Env file contains secrets. On shared Windows systems, verify ACLs (for example with icacls)."
 if ($hasDetectedSshKey) {
     Write-Host "SSH_PUBLIC_KEY and SSH_PUBLIC_KEY_PATH auto-detected and applied when needed."

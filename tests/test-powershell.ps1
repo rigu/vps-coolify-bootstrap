@@ -202,6 +202,26 @@ Run-Test "generate-secrets.ps1 force-ssh-key replaces existing key/path" {
     }
 }
 
+Run-Test "generate-secrets.ps1 appends missing keys from env example" {
+    $tmp = New-TempDir
+    try {
+        $envFile = Join-Path $tmp "bootstrap.env"
+        Copy-Item -LiteralPath (Join-Path $RepoRoot "env/bootstrap.env.example") -Destination $envFile
+        $content = Get-Content -LiteralPath $envFile -Raw
+        $content = [System.Text.RegularExpressions.Regex]::Replace($content, '(?m)^DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX=.*\r?\n?', '')
+        Set-Content -LiteralPath $envFile -NoNewline -Value $content
+
+        Invoke-NativeCommand -Description "generate-secrets (append missing keys)" -Command {
+            & pwsh -NoLogo -NoProfile -File $GenerateScript -EnvFile $envFile
+        }
+
+        $parseAddrFix = Strip-Quotes (Env-Value -File $envFile -Key "DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX")
+        Assert-True ($parseAddrFix -eq "true") "Missing DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX should be appended with example default"
+    } finally {
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 Run-Test "generate-plane-secrets.ps1 creates env + generated values" {
     $tmp = New-TempDir
     try {

@@ -324,9 +324,35 @@ if [ "$saw_ssh_public_key_path" -eq 0 ] && [ "$has_detected_ssh_key" -eq 1 ]; th
   echo "SSH_PUBLIC_KEY_PATH=$(format_env_value "$detected_ssh_key_path")" >> "$tmp"
 fi
 
+# Keep local env files forward-compatible when new keys are introduced
+# in env/bootstrap.env.example.
+declare -A seen_keys=()
+while IFS= read -r line || [ -n "$line" ]; do
+  line="${line%$'\r'}"
+  if [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)= ]]; then
+    seen_keys["${BASH_REMATCH[1]}"]=1
+  fi
+done < "$tmp"
+
+added_keys=()
+while IFS= read -r line || [ -n "$line" ]; do
+  line="${line%$'\r'}"
+  if [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)= ]]; then
+    key="${BASH_REMATCH[1]}"
+    if [[ -z "${seen_keys[$key]+x}" ]]; then
+      echo "$line" >> "$tmp"
+      seen_keys["$key"]=1
+      added_keys+=("$key")
+    fi
+  fi
+done < "$env_example_file"
+
 mv "$tmp" "$env_file"
 chmod 600 "$env_file"
 echo "Updated: $env_file"
+if [ "${#added_keys[@]}" -gt 0 ]; then
+  echo "Appended missing keys from env/bootstrap.env.example: $(IFS=', '; echo "${added_keys[*]}")"
+fi
 if [ "$has_detected_ssh_key" -eq 1 ]; then
   echo "SSH_PUBLIC_KEY and SSH_PUBLIC_KEY_PATH auto-detected and applied when needed."
 else
