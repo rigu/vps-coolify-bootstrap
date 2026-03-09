@@ -118,6 +118,22 @@ try {
     $infraNetworkName = if ($cfg.ContainsKey("INFRA_NETWORK_NAME") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["INFRA_NETWORK_NAME"])) { [string]$cfg["INFRA_NETWORK_NAME"] } else { "infra" }
     $port = if ($cfg.ContainsKey("PORT") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["PORT"])) { [string]$cfg["PORT"] } else { "3000" }
     $storageDriver = if ($cfg.ContainsKey("STORAGE_DRIVER") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["STORAGE_DRIVER"])) { [string]$cfg["STORAGE_DRIVER"] } else { "local" }
+    $mailDriver = if ($cfg.ContainsKey("MAIL_DRIVER") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["MAIL_DRIVER"])) { [string]$cfg["MAIL_DRIVER"] } else { "smtp" }
+    $smtpHost = if ($cfg.ContainsKey("SMTP_HOST") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SMTP_HOST"])) { [string]$cfg["SMTP_HOST"] } else { "CHANGE_ME_smtp_host" }
+    $smtpPort = if ($cfg.ContainsKey("SMTP_PORT") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SMTP_PORT"])) { [string]$cfg["SMTP_PORT"] } else { "587" }
+    $smtpUsername = if ($cfg.ContainsKey("SMTP_USERNAME") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SMTP_USERNAME"])) { [string]$cfg["SMTP_USERNAME"] } else { "CHANGE_ME_smtp_username" }
+    $smtpPassword = if ($cfg.ContainsKey("SMTP_PASSWORD") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SMTP_PASSWORD"])) { [string]$cfg["SMTP_PASSWORD"] } else { "CHANGE_ME_smtp_password" }
+    $smtpSecure = if ($cfg.ContainsKey("SMTP_SECURE") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["SMTP_SECURE"])) { [string]$cfg["SMTP_SECURE"] } else { "false" }
+    $mailFromAddress = if ($cfg.ContainsKey("MAIL_FROM_ADDRESS") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["MAIL_FROM_ADDRESS"])) { [string]$cfg["MAIL_FROM_ADDRESS"] } else { "CHANGE_ME_mail_from_address" }
+    $mailFromName = if ($cfg.ContainsKey("MAIL_FROM_NAME") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["MAIL_FROM_NAME"])) { [string]$cfg["MAIL_FROM_NAME"] } else { "Docmost" }
+    $postmarkToken = if ($cfg.ContainsKey("POSTMARK_TOKEN") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["POSTMARK_TOKEN"])) { [string]$cfg["POSTMARK_TOKEN"] } else { "CHANGE_ME_postmark_token" }
+    $drawioUrl = if ($cfg.ContainsKey("DRAWIO_URL") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["DRAWIO_URL"])) { [string]$cfg["DRAWIO_URL"] } else { "https://embed.diagrams.net/?spin=1&proto=json&configure=1" }
+    $awsS3AccessKeyId = if ($cfg.ContainsKey("AWS_S3_ACCESS_KEY_ID") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["AWS_S3_ACCESS_KEY_ID"])) { [string]$cfg["AWS_S3_ACCESS_KEY_ID"] } else { "CHANGE_ME_plane_s3_access_key" }
+    $awsS3SecretAccessKey = if ($cfg.ContainsKey("AWS_S3_SECRET_ACCESS_KEY") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["AWS_S3_SECRET_ACCESS_KEY"])) { [string]$cfg["AWS_S3_SECRET_ACCESS_KEY"] } else { "CHANGE_ME_plane_s3_secret_key" }
+    $awsS3Region = if ($cfg.ContainsKey("AWS_S3_REGION") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["AWS_S3_REGION"])) { [string]$cfg["AWS_S3_REGION"] } else { "eu-central-1" }
+    $awsS3Bucket = if ($cfg.ContainsKey("AWS_S3_BUCKET") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["AWS_S3_BUCKET"])) { [string]$cfg["AWS_S3_BUCKET"] } else { "plane-uploads" }
+    $awsS3Endpoint = if ($cfg.ContainsKey("AWS_S3_ENDPOINT") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["AWS_S3_ENDPOINT"])) { [string]$cfg["AWS_S3_ENDPOINT"] } else { "http://seaweedfs-plane:8333" }
+    $awsS3ForcePathStyle = if ($cfg.ContainsKey("AWS_S3_FORCE_PATH_STYLE") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["AWS_S3_FORCE_PATH_STYLE"])) { [string]$cfg["AWS_S3_FORCE_PATH_STYLE"] } else { "true" }
 
     if ($ForceAll -or $ForceAppSecret -or (Test-EmptyOrPlaceholder -Value $appSecret)) {
         $appSecret = New-HexSecret -Bytes 32
@@ -131,6 +147,7 @@ try {
 
         $valkeyPass = [string]$infra["APPS_VALKEY_PASSWORD"]
         $valkeyHost = if (Test-UsableInfraValue -Value ([string]$infra["VALKEY_APPS_CONTAINER_NAME"])) { [string]$infra["VALKEY_APPS_CONTAINER_NAME"] } else { "valkey-apps" }
+        $seaweedfsHost = if (Test-UsableInfraValue -Value ([string]$infra["SEAWEEDFS_PLANE_CONTAINER_NAME"])) { [string]$infra["SEAWEEDFS_PLANE_CONTAINER_NAME"] } else { "seaweedfs-plane" }
 
         if (Test-UsableInfraValue -Value ([string]$infra["INFRA_NETWORK_NAME"])) {
             $infraNetworkName = [string]$infra["INFRA_NETWORK_NAME"]
@@ -146,9 +163,38 @@ try {
             $redisUrl = "redis://default:${valkeyPass}@${valkeyHost}:6379/1"
             $infraSyncApplied = $true
         }
+
+        if (Test-UsableInfraValue -Value ([string]$infra["MAIL_DRIVER"])) { $mailDriver = [string]$infra["MAIL_DRIVER"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["SMTP_HOST"])) { $smtpHost = [string]$infra["SMTP_HOST"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["SMTP_PORT"])) { $smtpPort = [string]$infra["SMTP_PORT"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["SMTP_USERNAME"])) { $smtpUsername = [string]$infra["SMTP_USERNAME"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["SMTP_PASSWORD"])) { $smtpPassword = [string]$infra["SMTP_PASSWORD"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["SMTP_SECURE"])) { $smtpSecure = [string]$infra["SMTP_SECURE"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["MAIL_FROM_ADDRESS"])) { $mailFromAddress = [string]$infra["MAIL_FROM_ADDRESS"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["MAIL_FROM_NAME"])) { $mailFromName = [string]$infra["MAIL_FROM_NAME"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["POSTMARK_TOKEN"])) { $postmarkToken = [string]$infra["POSTMARK_TOKEN"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["DRAWIO_URL"])) { $drawioUrl = [string]$infra["DRAWIO_URL"]; $infraSyncApplied = $true }
+
+        if (Test-UsableInfraValue -Value ([string]$infra["PLANE_S3_ACCESS_KEY"])) { $awsS3AccessKeyId = [string]$infra["PLANE_S3_ACCESS_KEY"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["PLANE_S3_SECRET_KEY"])) { $awsS3SecretAccessKey = [string]$infra["PLANE_S3_SECRET_KEY"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["PLANE_S3_BUCKET"])) { $awsS3Bucket = [string]$infra["PLANE_S3_BUCKET"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["AWS_S3_REGION"])) { $awsS3Region = [string]$infra["AWS_S3_REGION"]; $infraSyncApplied = $true }
+        if (Test-UsableInfraValue -Value ([string]$infra["AWS_S3_ENDPOINT"])) {
+            $awsS3Endpoint = [string]$infra["AWS_S3_ENDPOINT"]
+            $infraSyncApplied = $true
+        } elseif (Test-UsableInfraValue -Value $seaweedfsHost) {
+            $awsS3Endpoint = "http://${seaweedfsHost}:8333"
+            $infraSyncApplied = $true
+        }
+        if (Test-UsableInfraValue -Value ([string]$infra["AWS_S3_FORCE_PATH_STYLE"])) { $awsS3ForcePathStyle = [string]$infra["AWS_S3_FORCE_PATH_STYLE"]; $infraSyncApplied = $true }
     }
 
-    $managed = @("DOCMOST_IMAGE", "APP_URL", "APP_SECRET", "DATABASE_URL", "REDIS_URL", "INFRA_NETWORK_NAME", "PORT", "STORAGE_DRIVER")
+    $managed = @(
+        "DOCMOST_IMAGE", "APP_URL", "APP_SECRET", "DATABASE_URL", "REDIS_URL", "INFRA_NETWORK_NAME", "PORT", "STORAGE_DRIVER",
+        "MAIL_DRIVER", "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_SECURE", "MAIL_FROM_ADDRESS", "MAIL_FROM_NAME", "POSTMARK_TOKEN",
+        "DRAWIO_URL",
+        "AWS_S3_ACCESS_KEY_ID", "AWS_S3_SECRET_ACCESS_KEY", "AWS_S3_REGION", "AWS_S3_BUCKET", "AWS_S3_ENDPOINT", "AWS_S3_FORCE_PATH_STYLE"
+    )
     $values = @{
         "DOCMOST_IMAGE" = $docmostImage
         "APP_URL" = $appUrl
@@ -158,6 +204,22 @@ try {
         "INFRA_NETWORK_NAME" = $infraNetworkName
         "PORT" = $port
         "STORAGE_DRIVER" = $storageDriver
+        "MAIL_DRIVER" = $mailDriver
+        "SMTP_HOST" = $smtpHost
+        "SMTP_PORT" = $smtpPort
+        "SMTP_USERNAME" = $smtpUsername
+        "SMTP_PASSWORD" = $smtpPassword
+        "SMTP_SECURE" = $smtpSecure
+        "MAIL_FROM_ADDRESS" = $mailFromAddress
+        "MAIL_FROM_NAME" = $mailFromName
+        "POSTMARK_TOKEN" = $postmarkToken
+        "DRAWIO_URL" = $drawioUrl
+        "AWS_S3_ACCESS_KEY_ID" = $awsS3AccessKeyId
+        "AWS_S3_SECRET_ACCESS_KEY" = $awsS3SecretAccessKey
+        "AWS_S3_REGION" = $awsS3Region
+        "AWS_S3_BUCKET" = $awsS3Bucket
+        "AWS_S3_ENDPOINT" = $awsS3Endpoint
+        "AWS_S3_FORCE_PATH_STYLE" = $awsS3ForcePathStyle
     }
 
     $seen = @{}

@@ -438,7 +438,7 @@ Run-Test "generate-docmost-secrets.ps1 creates env + app secret" {
     }
 }
 
-Run-Test "generate-docmost-secrets.ps1 syncs DATABASE_URL and REDIS_URL from infra env" {
+Run-Test "generate-docmost-secrets.ps1 syncs infra-derived Docmost values from infra env" {
     $tmp = New-TempDir
     try {
         $envFile = Join-Path $tmp "docmost.env"
@@ -452,6 +452,18 @@ POSTGRES_DOCMOST_DB=docmost_main
 POSTGRES_APPS_CONTAINER_NAME=postgres-infra
 APPS_VALKEY_PASSWORD=InfraRedisPass-42
 VALKEY_APPS_CONTAINER_NAME=valkey-infra
+SMTP_HOST=smtp.infra.internal
+SMTP_PORT=465
+SMTP_USERNAME=infra-mail-user
+SMTP_PASSWORD=InfraMailPass-42
+SMTP_SECURE=true
+MAIL_FROM_ADDRESS=noreply@infra.example
+MAIL_FROM_NAME=Infra Docmost
+DRAWIO_URL=https://drawio.infra.example
+PLANE_S3_ACCESS_KEY=PLNINFRAKEY123456789
+PLANE_S3_SECRET_KEY=InfraS3SecretValue42
+PLANE_S3_BUCKET=docmost-assets
+SEAWEEDFS_PLANE_CONTAINER_NAME=seaweedfs-infra
 "@ | Set-Content -Path $infraFile -NoNewline
 
         Invoke-NativeCommand -Description "generate-docmost-secrets (infra sync)" -Command {
@@ -461,10 +473,24 @@ VALKEY_APPS_CONTAINER_NAME=valkey-infra
         $dbUrl = Strip-Quotes (Env-Value -File $envFile -Key "DATABASE_URL")
         $redisUrl = Strip-Quotes (Env-Value -File $envFile -Key "REDIS_URL")
         $network = Strip-Quotes (Env-Value -File $envFile -Key "INFRA_NETWORK_NAME")
+        $smtpHost = Strip-Quotes (Env-Value -File $envFile -Key "SMTP_HOST")
+        $mailFrom = Strip-Quotes (Env-Value -File $envFile -Key "MAIL_FROM_ADDRESS")
+        $drawio = Strip-Quotes (Env-Value -File $envFile -Key "DRAWIO_URL")
+        $s3Access = Strip-Quotes (Env-Value -File $envFile -Key "AWS_S3_ACCESS_KEY_ID")
+        $s3Secret = Strip-Quotes (Env-Value -File $envFile -Key "AWS_S3_SECRET_ACCESS_KEY")
+        $s3Bucket = Strip-Quotes (Env-Value -File $envFile -Key "AWS_S3_BUCKET")
+        $s3Endpoint = Strip-Quotes (Env-Value -File $envFile -Key "AWS_S3_ENDPOINT")
 
         Assert-True ($dbUrl -eq "postgresql://apps_admin:InfraPgPass-42@postgres-infra:5432/docmost_main?schema=public") "DATABASE_URL should be synchronized from infra values"
         Assert-True ($redisUrl -eq "redis://default:InfraRedisPass-42@valkey-infra:6379/1") "REDIS_URL should be synchronized from infra values"
         Assert-True ($network -eq "infra-shared") "INFRA_NETWORK_NAME should be synchronized from infra values"
+        Assert-True ($smtpHost -eq "smtp.infra.internal") "SMTP_HOST should be synchronized from infra values"
+        Assert-True ($mailFrom -eq "noreply@infra.example") "MAIL_FROM_ADDRESS should be synchronized from infra values"
+        Assert-True ($drawio -eq "https://drawio.infra.example") "DRAWIO_URL should be synchronized from infra values"
+        Assert-True ($s3Access -eq "PLNINFRAKEY123456789") "AWS_S3_ACCESS_KEY_ID should be synchronized from infra values"
+        Assert-True ($s3Secret -eq "InfraS3SecretValue42") "AWS_S3_SECRET_ACCESS_KEY should be synchronized from infra values"
+        Assert-True ($s3Bucket -eq "docmost-assets") "AWS_S3_BUCKET should be synchronized from infra values"
+        Assert-True ($s3Endpoint -eq "http://seaweedfs-infra:8333") "AWS_S3_ENDPOINT should be synchronized from infra values"
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }

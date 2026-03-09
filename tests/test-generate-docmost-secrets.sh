@@ -23,7 +23,8 @@ test_generate_docmost_creates_env_and_secret() {
 }
 
 test_generate_docmost_syncs_from_infra_env() {
-  local tmpdir env_file infra_file db_url redis_url infra_network
+  local tmpdir env_file infra_file db_url redis_url infra_network \
+    smtp_host mail_from_address drawio_url s3_key s3_secret s3_bucket s3_endpoint
   tmpdir="$(mktemp -d)"
   env_file="$tmpdir/docmost.env"
   infra_file="$tmpdir/production-infra.env"
@@ -36,6 +37,18 @@ POSTGRES_DOCMOST_DB=docmost_main
 POSTGRES_APPS_CONTAINER_NAME=postgres-infra
 APPS_VALKEY_PASSWORD=InfraRedisPass-42
 VALKEY_APPS_CONTAINER_NAME=valkey-infra
+SMTP_HOST=smtp.infra.internal
+SMTP_PORT=465
+SMTP_USERNAME=infra-mail-user
+SMTP_PASSWORD=InfraMailPass-42
+SMTP_SECURE=true
+MAIL_FROM_ADDRESS=noreply@infra.example
+MAIL_FROM_NAME=Infra Docmost
+DRAWIO_URL=https://drawio.infra.example
+PLANE_S3_ACCESS_KEY=PLNINFRAKEY123456789
+PLANE_S3_SECRET_KEY=InfraS3SecretValue42
+PLANE_S3_BUCKET=docmost-assets
+SEAWEEDFS_PLANE_CONTAINER_NAME=seaweedfs-infra
 INFRA
 
   bash "$script" --env-file "$env_file" --infra-env-file "$infra_file" >/dev/null
@@ -43,10 +56,24 @@ INFRA
   db_url="$(strip_env_quotes "$(env_value "$env_file" DATABASE_URL)")"
   redis_url="$(strip_env_quotes "$(env_value "$env_file" REDIS_URL)")"
   infra_network="$(strip_env_quotes "$(env_value "$env_file" INFRA_NETWORK_NAME)")"
+  smtp_host="$(strip_env_quotes "$(env_value "$env_file" SMTP_HOST)")"
+  mail_from_address="$(strip_env_quotes "$(env_value "$env_file" MAIL_FROM_ADDRESS)")"
+  drawio_url="$(strip_env_quotes "$(env_value "$env_file" DRAWIO_URL)")"
+  s3_key="$(strip_env_quotes "$(env_value "$env_file" AWS_S3_ACCESS_KEY_ID)")"
+  s3_secret="$(strip_env_quotes "$(env_value "$env_file" AWS_S3_SECRET_ACCESS_KEY)")"
+  s3_bucket="$(strip_env_quotes "$(env_value "$env_file" AWS_S3_BUCKET)")"
+  s3_endpoint="$(strip_env_quotes "$(env_value "$env_file" AWS_S3_ENDPOINT)")"
 
   assert_eq "postgresql://apps_admin:InfraPgPass-42@postgres-infra:5432/docmost_main?schema=public" "$db_url" "DATABASE_URL should be synchronized from infra" || return 1
   assert_eq "redis://default:InfraRedisPass-42@valkey-infra:6379/1" "$redis_url" "REDIS_URL should be synchronized from infra" || return 1
   assert_eq "infra-shared" "$infra_network" "INFRA_NETWORK_NAME should be synchronized from infra" || return 1
+  assert_eq "smtp.infra.internal" "$smtp_host" "SMTP_HOST should be synchronized from infra" || return 1
+  assert_eq "noreply@infra.example" "$mail_from_address" "MAIL_FROM_ADDRESS should be synchronized from infra" || return 1
+  assert_eq "https://drawio.infra.example" "$drawio_url" "DRAWIO_URL should be synchronized from infra" || return 1
+  assert_eq "PLNINFRAKEY123456789" "$s3_key" "AWS_S3_ACCESS_KEY_ID should be synchronized from infra" || return 1
+  assert_eq "InfraS3SecretValue42" "$s3_secret" "AWS_S3_SECRET_ACCESS_KEY should be synchronized from infra" || return 1
+  assert_eq "docmost-assets" "$s3_bucket" "AWS_S3_BUCKET should be synchronized from infra" || return 1
+  assert_eq "http://seaweedfs-infra:8333" "$s3_endpoint" "AWS_S3_ENDPOINT should be synchronized from infra" || return 1
 
   rm -rf "$tmpdir"
 }
@@ -79,7 +106,7 @@ test_generate_docmost_rejects_env_file_directory() {
 }
 
 run_test "generate-docmost-secrets creates env + app secret" test_generate_docmost_creates_env_and_secret
-run_test "generate-docmost-secrets syncs DATABASE_URL/REDIS_URL from infra env" test_generate_docmost_syncs_from_infra_env
+run_test "generate-docmost-secrets syncs infra-derived Docmost values from infra env" test_generate_docmost_syncs_from_infra_env
 run_test "generate-docmost-secrets rotates APP_SECRET only when forced" test_generate_docmost_force_app_secret
 run_test "generate-docmost-secrets rejects --env-file directory" test_generate_docmost_rejects_env_file_directory
 

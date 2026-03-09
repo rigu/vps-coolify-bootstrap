@@ -189,7 +189,23 @@ Local-first rule:
 - generate infra env locally first (`bootstrap-artifacts/production-infra.env`)
 - copy infra env to VPS and run infra setup there
 - generate Docmost env locally second (`bootstrap-artifacts/docmost.env`)
-- Docmost generator syncs infra-dependent URLs automatically
+- Docmost generator syncs infra-derived Docmost values automatically
+
+Infra -> Docmost sync mapping:
+- `POSTGRES_APPS_USER` -> `DATABASE_URL` user
+- `POSTGRES_APPS_PASSWORD` -> `DATABASE_URL` password
+- `POSTGRES_DOCMOST_DB` -> `DATABASE_URL` database
+- `POSTGRES_APPS_CONTAINER_NAME` -> `DATABASE_URL` host
+- `APPS_VALKEY_PASSWORD` -> `REDIS_URL` password
+- `VALKEY_APPS_CONTAINER_NAME` -> `REDIS_URL` host
+- `INFRA_NETWORK_NAME` -> `INFRA_NETWORK_NAME`
+- `MAIL_DRIVER`, `SMTP_*`, `MAIL_FROM_*`, `POSTMARK_TOKEN` -> same keys in Docmost env (when present)
+- `DRAWIO_URL` -> `DRAWIO_URL`
+- `PLANE_S3_ACCESS_KEY` -> `AWS_S3_ACCESS_KEY_ID`
+- `PLANE_S3_SECRET_KEY` -> `AWS_S3_SECRET_ACCESS_KEY`
+- `PLANE_S3_BUCKET` -> `AWS_S3_BUCKET`
+- `SEAWEEDFS_PLANE_CONTAINER_NAME` -> `AWS_S3_ENDPOINT` (`http://<container>:8333`)
+- `AWS_S3_REGION`, `AWS_S3_ENDPOINT`, `AWS_S3_FORCE_PATH_STYLE` -> same keys in Docmost env (when present)
 
 Default generation:
 
@@ -212,7 +228,7 @@ Default infra source:
 If `production-infra.env` is missing:
 - Docmost generator does not fail; it prints a warning and skips infra sync
 - script still generates local `APP_SECRET` and writes/keeps env values
-- rerun after infra env exists to sync `DATABASE_URL` and `REDIS_URL`
+- rerun after infra env exists to sync infra-derived Docmost values (`DATABASE_URL`, `REDIS_URL`, SMTP/MAIL, DRAWIO, AWS_S3_*)
 
 Optional flags:
 - custom env path:

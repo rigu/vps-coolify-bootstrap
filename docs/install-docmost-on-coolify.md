@@ -58,6 +58,13 @@ Infra -> Docmost synced keys (automatic in `generate-docmost-secrets.*`):
 - `APPS_VALKEY_PASSWORD` -> `REDIS_URL` password
 - `VALKEY_APPS_CONTAINER_NAME` -> `REDIS_URL` host
 - `INFRA_NETWORK_NAME` -> `INFRA_NETWORK_NAME`
+- `MAIL_DRIVER`, `SMTP_*`, `MAIL_FROM_*`, `POSTMARK_TOKEN` -> same keys in Docmost env (when present in infra env)
+- `DRAWIO_URL` -> `DRAWIO_URL`
+- `PLANE_S3_ACCESS_KEY` -> `AWS_S3_ACCESS_KEY_ID`
+- `PLANE_S3_SECRET_KEY` -> `AWS_S3_SECRET_ACCESS_KEY`
+- `PLANE_S3_BUCKET` -> `AWS_S3_BUCKET`
+- `SEAWEEDFS_PLANE_CONTAINER_NAME` -> `AWS_S3_ENDPOINT` (`http://<container>:8333`)
+- `AWS_S3_REGION`, `AWS_S3_ENDPOINT`, `AWS_S3_FORCE_PATH_STYLE` -> same keys in Docmost env (when present in infra env)
 
 ## 1) Generate Docmost env locally
 
@@ -82,7 +89,7 @@ Default infra source:
 If infra env does not exist yet:
 - `generate-docmost-secrets.*` still succeeds and creates `bootstrap-artifacts/docmost.env`
 - script warns that infra sync is skipped
-- after infra env is created, rerun the Docmost generator so `DATABASE_URL` and `REDIS_URL` are synchronized
+- after infra env is created, rerun the Docmost generator so infra-derived values are synchronized (`DATABASE_URL`, `REDIS_URL`, SMTP/MAIL, DRAWIO, AWS_S3_*)
 
 Rerun after infra env is ready:
 
