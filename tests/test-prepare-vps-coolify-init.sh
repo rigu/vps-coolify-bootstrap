@@ -175,6 +175,42 @@ test_env_file_plus_overwrite_combination_explicit() {
   rm -rf "$tmpdir"
 }
 
+test_external_env_path_uses_repo_fallback_paths() {
+  local tmpdir env_file key_file expected_out
+  tmpdir="$(mktemp -d)"
+  env_file="$tmpdir/bootstrap.env"
+  key_file="$tmpdir/keys/id_ed25519.pub"
+  make_key_file "$key_file"
+
+  # Keep TEMPLATE_FILE/OUTPUT_FILE defaults from env example to verify fallback behavior.
+  cp "$repo_root/env/bootstrap.env.example" "$env_file"
+  sed -i "s|^SSH_PUBLIC_KEY_PATH=.*|SSH_PUBLIC_KEY_PATH=$key_file|" "$env_file"
+  sed -i "s|^SSH_PUBLIC_KEY=.*|SSH_PUBLIC_KEY=CHANGE_ME_ssh_public_key|" "$env_file"
+  sed -i "s|^TIMEZONE=.*|TIMEZONE=UTC|" "$env_file"
+  sed -i "s|^SSH_PORT=.*|SSH_PORT=2278|" "$env_file"
+  sed -i "s|^DEVOPS_USER=.*|DEVOPS_USER=devops|" "$env_file"
+  sed -i "s|^COOLIFY_SUDO_NOPASSWD_USER=.*|COOLIFY_SUDO_NOPASSWD_USER=coolify|" "$env_file"
+  sed -i "s|^ADDITIONAL_SUDO_USERS=.*|ADDITIONAL_SUDO_USERS=ops|" "$env_file"
+  sed -i "s|^CLOSE_COOLIFY_REALTIME_PORTS=.*|CLOSE_COOLIFY_REALTIME_PORTS=false|" "$env_file"
+  sed -i "s|^DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX=.*|DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX=true|" "$env_file"
+  sed -i "s|^COOLIFY_REALTIME_DOMAIN=.*|COOLIFY_REALTIME_DOMAIN=|" "$env_file"
+  sed -i "s|^COOLIFY_PUBLIC_DOMAIN=.*|COOLIFY_PUBLIC_DOMAIN=hub.example.com|" "$env_file"
+  sed -i "s|^COOLIFY_ROOT_USERNAME=.*|COOLIFY_ROOT_USERNAME=admin_main|" "$env_file"
+  sed -i "s|^COOLIFY_ROOT_USER_EMAIL=.*|COOLIFY_ROOT_USER_EMAIL=admin@example.com|" "$env_file"
+  sed -i "s|^COOLIFY_ROOT_USER_PASSWORD=.*|COOLIFY_ROOT_USER_PASSWORD=Str0ng!Passw0rdAbC1|" "$env_file"
+  sed -i "s|^USER_PASSWORDS_ENCRYPTION_PASSWORD=.*|USER_PASSWORDS_ENCRYPTION_PASSWORD=0123456789abcdef0123456789abcdef|" "$env_file"
+  sed -i "s|^BOOTSTRAP_REPO_URL=.*|BOOTSTRAP_REPO_URL=https://github.com/rigu/vps-coolify-bootstrap.git|" "$env_file"
+  sed -i "s|^BOOTSTRAP_REPO_REF=.*|BOOTSTRAP_REPO_REF=main|" "$env_file"
+
+  bash "$script" --env-file "$env_file" --overwrite >/dev/null
+  expected_out="$repo_root/bootstrap-artifacts/vps-coolify-init.generated.yml"
+  [[ -f "$expected_out" ]] || { echo "expected fallback output not generated in repo: $expected_out" >&2; return 1; }
+  assert_yaml_valid "$expected_out" >/dev/null
+
+  rm -f "$expected_out"
+  rm -rf "$tmpdir"
+}
+
 test_rejects_invalid_additional_user() {
   local tmpdir env_file out_file key_file
   tmpdir="$(mktemp -d)"
@@ -287,6 +323,7 @@ run_test "prepare-vps-coolify-init rejects placeholder realtime domain in closed
 run_test "prepare-vps-coolify-init maps legacy ALLOW_PUBLIC_COOLIFY_REALTIME_PORTS" test_legacy_allow_public_mapping
 run_test "prepare-vps-coolify-init enforces --overwrite" test_requires_overwrite_when_output_exists
 run_test "prepare-vps-coolify-init supports --env-file + --overwrite together" test_env_file_plus_overwrite_combination_explicit
+run_test "prepare-vps-coolify-init supports external env path with default template/output fallback" test_external_env_path_uses_repo_fallback_paths
 run_test "prepare-vps-coolify-init rejects invalid additional users" test_rejects_invalid_additional_user
 run_test "prepare-vps-coolify-init rejects invalid ParseAddr workaround toggle" test_rejects_invalid_parseaddr_fix_toggle
 run_test "prepare-vps-coolify-init enforces output size limit" test_rejects_oversized_generated_file

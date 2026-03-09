@@ -96,6 +96,45 @@ pw_gen_password() {
   local symbol_pool='!@#$%^&*()-_=+'
   local symbol_index
 
+  rand_byte_dec() {
+    local hex
+    hex="$(openssl rand -hex 1)"
+    printf '%d' "0x$hex"
+  }
+
+  # Draw a uniform index in [0, max_exclusive) via rejection sampling.
+  rand_index_uniform() {
+    local max_exclusive="$1"
+    local threshold byte
+    threshold=$((256 - (256 % max_exclusive)))
+    while true; do
+      byte="$(rand_byte_dec)"
+      if (( byte < threshold )); then
+        printf '%d' "$((byte % max_exclusive))"
+        return 0
+      fi
+    done
+  }
+
+  shuffle_string_uniform() {
+    local value="$1"
+    local i j tmp
+    local -a chars=()
+
+    for ((i = 0; i < ${#value}; i++)); do
+      chars+=("${value:i:1}")
+    done
+
+    for ((i = ${#chars[@]} - 1; i > 0; i--)); do
+      j="$(rand_index_uniform $((i + 1)))"
+      tmp="${chars[i]}"
+      chars[i]="${chars[j]}"
+      chars[j]="$tmp"
+    done
+
+    printf '%s' "${chars[@]}"
+  }
+
   while true; do
     lower="$(openssl rand -base64 48 | tr -dc '[:lower:]' | head -c 1 || true)"
     upper="$(openssl rand -base64 48 | tr -dc '[:upper:]' | head -c 1 || true)"
@@ -104,10 +143,14 @@ pw_gen_password() {
     if [[ -z "$lower" || -z "$upper" || -z "$digit" || ${#rest} -lt 20 ]]; then
       continue
     fi
-    symbol_index=$(( 0x$(openssl rand -hex 1) % ${#symbol_pool} ))
+    symbol_index="$(rand_index_uniform "${#symbol_pool}")"
     symbol="${symbol_pool:$symbol_index:1}"
-    candidate="${lower}${upper}${digit}${symbol}${rest}"
-    if (( ${#candidate} == 24 )); then
+    candidate="$(shuffle_string_uniform "${lower}${upper}${digit}${symbol}${rest}")"
+    if (( ${#candidate} == 24 )) \
+      && [[ "$candidate" =~ [a-z] ]] \
+      && [[ "$candidate" =~ [A-Z] ]] \
+      && [[ "$candidate" =~ [0-9] ]] \
+      && [[ "$candidate" =~ [^[:alnum:]] ]]; then
       printf '%s' "$candidate"
       return 0
     fi

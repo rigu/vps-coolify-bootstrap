@@ -38,7 +38,7 @@ bash scripts/prepare-vps-coolify-init.sh --overwrite
 ```
 4. Provision VPS by pasting `bootstrap-artifacts/vps-coolify-init.generated.yml` into the provider user-data field (VPS init format) during server creation (first boot). If the UI has no user-data option, use provider API/CLI or follow the manual fallback in [docs/getting-started.md](docs/getting-started.md#3-provision-vps).
 
-Detailed script usage (including force flags, custom env paths, rerender workflow, and troubleshooting): [docs/getting-started.md](docs/getting-started.md#detailed-script-workflow).
+Detailed script usage (force flags, custom env paths, rerender workflow): [docs/scripts-workflow.md](docs/scripts-workflow.md).
 
 ## Documentation (GitHub Pages)
 
@@ -47,12 +47,24 @@ Canonical instructions were moved to GitHub Pages docs:
 - Site: `https://rigu.github.io/vps-coolify-bootstrap/`
 - Local source: [docs/index.md](docs/index.md)
 - Getting started: [docs/getting-started.md](docs/getting-started.md)
+- Script workflow: [docs/scripts-workflow.md](docs/scripts-workflow.md)
+- Bootstrap env reference: [docs/bootstrap-env-reference.md](docs/bootstrap-env-reference.md)
+- Onboarding troubleshooting: [docs/onboarding-troubleshooting.md](docs/onboarding-troubleshooting.md)
 - Bootstrap flow: [docs/bootstrap-flow.md](docs/bootstrap-flow.md)
+- Create Infra Network: [docs/create-infra-network.md](docs/create-infra-network.md)
+- Install Plane on Coolify: [docs/install-plane-on-coolify.md](docs/install-plane-on-coolify.md)
+- Plane incident prevention notes: [docs/plane-community-v1.2.3-incident-prevention.md](docs/plane-community-v1.2.3-incident-prevention.md)
 - VPS Coolify deployment modes: [docs/vps-coolify-deployment-modes.md](docs/vps-coolify-deployment-modes.md)
 - VPS Coolify realtime modes: [docs/vps-coolify-realtime-modes.md](docs/vps-coolify-realtime-modes.md)
 - Operations and security: [docs/operations-security.md](docs/operations-security.md)
 - Failure recovery: [docs/bootstrap-failure-recovery.md](docs/bootstrap-failure-recovery.md)
 - GitHub promotion checklist: [docs/github-promotion.md](docs/github-promotion.md)
+
+Recommended execution order:
+1. Bootstrap: [docs/getting-started.md](docs/getting-started.md)
+2. Coolify onboarding: [docs/onboarding-troubleshooting.md](docs/onboarding-troubleshooting.md)
+3. Internal service layer: [docs/create-infra-network.md](docs/create-infra-network.md)
+4. Plane deployment: [docs/install-plane-on-coolify.md](docs/install-plane-on-coolify.md)
 
 ## Ubuntu Target
 

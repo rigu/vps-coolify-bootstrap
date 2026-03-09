@@ -58,6 +58,16 @@ is_valid_unix_username() {
   [[ "$user" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]
 }
 
+is_valid_coolify_root_password() {
+  local password="$1"
+  (( ${#password} >= 16 )) || return 1
+  [[ "$password" =~ [a-z] ]] || return 1
+  [[ "$password" =~ [A-Z] ]] || return 1
+  [[ "$password" =~ [0-9] ]] || return 1
+  [[ "$password" =~ [^[:alnum:]] ]] || return 1
+  return 0
+}
+
 csv_contains_value() {
   local csv="$1"
   local needle="$2"

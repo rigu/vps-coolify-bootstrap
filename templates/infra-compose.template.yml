@@ -1,0 +1,95 @@
+name: infra
+
+# Internal Service Layer (shared app dependencies).
+# Keep this stack separate from Coolify internal containers.
+services:
+  postgres-apps:
+    image: POSTGRES_IMAGE_HERE
+    container_name: POSTGRES_APPS_CONTAINER_NAME_HERE
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: POSTGRES_APPS_USER_HERE
+      POSTGRES_PASSWORD: POSTGRES_APPS_PASSWORD_HERE
+      POSTGRES_DB: POSTGRES_APPS_DB_HERE
+      POSTGRES_DOCMOST_DB: POSTGRES_DOCMOST_DB_HERE
+      POSTGRES_PLANE_DB: POSTGRES_PLANE_DB_HERE
+    volumes:
+      - pg_apps_data:/var/lib/postgresql
+      - ./postgres-apps-init.sh:/docker-entrypoint-initdb.d/20-create-app-databases.sh:ro
+    networks: [infra]
+    ports:
+      - "127.0.0.1:POSTGRES_APPS_HOST_PORT_HERE:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U POSTGRES_APPS_USER_HERE -d POSTGRES_APPS_DB_HERE"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  valkey-apps:
+    image: VALKEY_IMAGE_HERE
+    container_name: VALKEY_APPS_CONTAINER_NAME_HERE
+    restart: unless-stopped
+    command: ["valkey-server", "/etc/valkey/valkey.conf"]
+    volumes:
+      - valkey_apps_data:/data
+      - ./valkey.conf:/etc/valkey/valkey.conf:ro
+    networks: [infra]
+    ports:
+      - "127.0.0.1:VALKEY_HOST_PORT_HERE:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$(awk '/^requirepass /{print $2; exit}' /etc/valkey/valkey.conf)\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq-plane:
+    image: RABBITMQ_IMAGE_HERE
+    container_name: RABBITMQ_PLANE_CONTAINER_NAME_HERE
+    hostname: RABBITMQ_PLANE_CONTAINER_NAME_HERE
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: PLANE_RABBITMQ_USER_HERE
+      RABBITMQ_DEFAULT_PASS: PLANE_RABBITMQ_PASSWORD_HERE
+      RABBITMQ_DEFAULT_VHOST: PLANE_RABBITMQ_VHOST_HERE
+    volumes:
+      - rabbitmq_plane_data:/var/lib/rabbitmq
+    networks: [infra]
+    ports:
+      - "127.0.0.1:RABBITMQ_AMQP_HOST_PORT_HERE:5672"
+      - "127.0.0.1:RABBITMQ_UI_HOST_PORT_HERE:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  seaweedfs-plane:
+    image: SEAWEEDFS_IMAGE_HERE
+    container_name: SEAWEEDFS_PLANE_CONTAINER_NAME_HERE
+    restart: unless-stopped
+    command: ["server", "-dir=/data", "-s3", "-s3.port=8333", "-s3.config=/etc/seaweedfs/s3.json"]
+    volumes:
+      - seaweedfs_plane_data:/data
+      - ./seaweedfs-s3-config.json:/etc/seaweedfs/s3.json:ro
+    networks: [infra]
+    ports:
+      - "127.0.0.1:SEAWEEDFS_S3_HOST_PORT_HERE:8333"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9333/cluster/status || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+networks:
+  infra:
+    external: true
+    name: INFRA_NETWORK_NAME_HERE
+
+volumes:
+  pg_apps_data:
+  valkey_apps_data:
+  rabbitmq_plane_data:
+  seaweedfs_plane_data:

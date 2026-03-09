@@ -20,8 +20,20 @@ Production-ready public bootstrap for **Coolify on Ubuntu 24.04 LTS**.
 
 ## Documentation Map
 
+- Recommended implementation order:
+  1. Bootstrap: [Getting Started](getting-started.md)
+  2. Coolify onboarding: [Onboarding Troubleshooting](onboarding-troubleshooting.md)
+  3. Internal service layer: [Create Infra Network](create-infra-network.md)
+  4. Workload deployment: [Install Plane on Coolify](install-plane-on-coolify.md)
+
 - [Getting Started](getting-started.md)
+- [Onboarding Troubleshooting](onboarding-troubleshooting.md)
+- [Create Infra Network](create-infra-network.md)
+- [Install Plane on Coolify](install-plane-on-coolify.md)
+- [Script Workflow](scripts-workflow.md)
+- [Bootstrap Env Reference](bootstrap-env-reference.md)
 - [Bootstrap Flow](bootstrap-flow.md)
+- [Plane Incident Prevention Notes](plane-community-v1.2.3-incident-prevention.md)
 - [VPS Coolify Deployment Modes](vps-coolify-deployment-modes.md)
 - [VPS Coolify Realtime Modes](vps-coolify-realtime-modes.md)
 - [Operations & Security](operations-security.md)
@@ -30,10 +42,10 @@ Production-ready public bootstrap for **Coolify on Ubuntu 24.04 LTS**.
 
 ## Repository Layout
 
-- `env/` env templates
+- `env/` env templates (`bootstrap.env.example`, `infra.env.example`, `plane-coolify.env.example`)
 - `bootstrap-artifacts/` local generated secrets and VPS-Coolify init output (not committed)
 - `scripts/` bootstrap + helper scripts (Bash + PowerShell)
-- `templates/` `vps-init.template.yml`
+- `templates/` `vps-init.template.yml` + infra/Plane compose templates
 - `docs/` operational runbooks and documentation
 
 ## Primary Sources

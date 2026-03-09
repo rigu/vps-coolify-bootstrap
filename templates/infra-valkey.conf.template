@@ -1,0 +1,10 @@
+# Valkey configuration for internal shared app cache.
+# Keep this service internal-only; host mapping stays on 127.0.0.1 in compose.
+bind 0.0.0.0
+port 6379
+protected-mode yes
+
+appendonly yes
+maxmemory-policy noeviction
+
+requirepass APPS_VALKEY_PASSWORD_HERE

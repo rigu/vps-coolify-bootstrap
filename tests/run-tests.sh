@@ -7,7 +7,11 @@ bash "$repo_root/tests/test-common.sh"
 bash "$repo_root/tests/test-harden-coolify-compose-ports.sh"
 bash "$repo_root/tests/test-recover-ssh-access.sh"
 bash "$repo_root/tests/test-update-realtime-mode.sh"
+bash "$repo_root/tests/test-setup-infra.sh"
 bash "$repo_root/tests/test-generate-secrets.sh"
+bash "$repo_root/tests/test-generate-infra-secrets.sh"
+bash "$repo_root/tests/test-prepare-infra-compose.sh"
+bash "$repo_root/tests/test-generate-plane-secrets.sh"
 bash "$repo_root/tests/test-prepare-vps-coolify-init.sh"
 
 if command -v pwsh >/dev/null 2>&1; then

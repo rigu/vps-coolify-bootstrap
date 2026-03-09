@@ -39,6 +39,10 @@ jobs:
       - name: Script help checks
         run: |
           bash scripts/generate-secrets.sh --help >/dev/null
+          bash scripts/generate-infra-secrets.sh --help >/dev/null
+          bash scripts/prepare-infra-compose.sh --help >/dev/null
+          bash scripts/setup-infra.sh --help >/dev/null
+          bash scripts/generate-plane-secrets.sh --help >/dev/null
           bash scripts/prepare-vps-coolify-init.sh --help >/dev/null
           bash scripts/recover-ssh-access.sh --help >/dev/null
           bash scripts/update-realtime-mode.sh --help >/dev/null
@@ -66,7 +70,13 @@ jobs:
         run: |
           test -f docs/index.md
           test -f docs/getting-started.md
+          test -f docs/scripts-workflow.md
+          test -f docs/bootstrap-env-reference.md
+          test -f docs/onboarding-troubleshooting.md
           test -f docs/bootstrap-flow.md
+          test -f docs/install-plane-on-coolify.md
+          test -f docs/create-infra-network.md
+          test -f docs/plane-community-v1.2.3-incident-prevention.md
           test -f docs/vps-coolify-deployment-modes.md
           test -f docs/vps-coolify-realtime-modes.md
           test -f docs/operations-security.md

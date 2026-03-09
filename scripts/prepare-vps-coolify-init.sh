@@ -13,6 +13,11 @@ Behavior:
 USAGE
 }
 
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "$script_dir/.." && pwd)"
+# shellcheck disable=SC1091
+source "$script_dir/common.sh"
+
 trim() {
   local value="$1"
   value="${value#"${value%%[![:space:]]*}"}"
@@ -46,8 +51,6 @@ resolve_path() {
 
 env_file="bootstrap-artifacts/bootstrap.env"
 overwrite=0
-script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd -- "$script_dir/.." && pwd)"
 env_example_file="$repo_root/env/bootstrap.env.example"
 
 require_value_arg() {
@@ -154,21 +157,6 @@ csv_append_unique() {
   else
     printf '%s,%s\n' "$csv" "$value"
   fi
-}
-
-is_valid_unix_username() {
-  local user="$1"
-  [[ "$user" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]
-}
-
-is_valid_coolify_root_password() {
-  local password="$1"
-  (( ${#password} >= 16 )) || return 1
-  [[ "$password" =~ [a-z] ]] || return 1
-  [[ "$password" =~ [A-Z] ]] || return 1
-  [[ "$password" =~ [0-9] ]] || return 1
-  [[ "$password" =~ [^[:alnum:]] ]] || return 1
-  return 0
 }
 
 for k in TIMEZONE SSH_PORT COOLIFY_PUBLIC_DOMAIN COOLIFY_ROOT_USERNAME COOLIFY_ROOT_USER_EMAIL COOLIFY_ROOT_USER_PASSWORD USER_PASSWORDS_ENCRYPTION_PASSWORD BOOTSTRAP_REPO_URL BOOTSTRAP_REPO_REF; do
@@ -317,6 +305,19 @@ template_file="${cfg[TEMPLATE_FILE]:-../templates/vps-init.template.yml}"
 output_file="${cfg[OUTPUT_FILE]:-../bootstrap-artifacts/vps-coolify-init.generated.yml}"
 template_path="$(resolve_path "$template_file" "$env_dir")"
 output_path="$(resolve_path "$output_file" "$env_dir")"
+
+if [[ "$template_file" != /* && ! -f "$template_path" ]]; then
+  # If env file is outside the repo, fallback to default env base in repo.
+  fallback_template_path="$(resolve_path "$template_file" "$repo_root/bootstrap-artifacts")"
+  if [[ -f "$fallback_template_path" ]]; then
+    template_path="$fallback_template_path"
+  fi
+fi
+
+if [[ "$output_file" != /* && "$env_dir" != "$repo_root"* ]]; then
+  # For external env paths, keep relative output in repo workspace using default env base.
+  output_path="$(resolve_path "$output_file" "$repo_root/bootstrap-artifacts")"
+fi
 
 if [[ ! -f "$template_path" ]]; then
   echo "ERROR: Template file not found: $template_path" >&2

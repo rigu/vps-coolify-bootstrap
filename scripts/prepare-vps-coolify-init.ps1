@@ -122,8 +122,24 @@ function Resolve-PathFromEnv {
 $envBaseDir = Split-Path -Parent $envPath
 $templatePath = if ($cfg.ContainsKey("TEMPLATE_FILE") -and $cfg["TEMPLATE_FILE"]) { $cfg["TEMPLATE_FILE"] } else { "../templates/vps-init.template.yml" }
 $outputPath = if ($cfg.ContainsKey("OUTPUT_FILE") -and $cfg["OUTPUT_FILE"]) { $cfg["OUTPUT_FILE"] } else { "../bootstrap-artifacts/vps-coolify-init.generated.yml" }
-$templatePath = Resolve-PathFromEnv -PathValue $templatePath -BaseDir $envBaseDir
-$outputPath = Resolve-PathFromEnv -PathValue $outputPath -BaseDir $envBaseDir
+$templatePathRaw = $templatePath
+$outputPathRaw = $outputPath
+$templatePath = Resolve-PathFromEnv -PathValue $templatePathRaw -BaseDir $envBaseDir
+$outputPath = Resolve-PathFromEnv -PathValue $outputPathRaw -BaseDir $envBaseDir
+
+if (-not [System.IO.Path]::IsPathRooted($templatePathRaw) -and -not (Test-Path -LiteralPath $templatePath -PathType Leaf)) {
+    # If env file is outside the repo, fallback to default env base in repo.
+    $fallbackTemplatePath = Resolve-PathFromEnv -PathValue $templatePathRaw -BaseDir (Join-Path $repoRoot "bootstrap-artifacts")
+    if (Test-Path -LiteralPath $fallbackTemplatePath -PathType Leaf) {
+        $templatePath = $fallbackTemplatePath
+    }
+}
+
+if (-not [System.IO.Path]::IsPathRooted($outputPathRaw) -and -not $envBaseDir.StartsWith($repoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    # For external env paths, keep relative output in repo workspace using default env base.
+    $outputPath = Resolve-PathFromEnv -PathValue $outputPathRaw -BaseDir (Join-Path $repoRoot "bootstrap-artifacts")
+}
+
 if (-not (Test-Path -LiteralPath $templatePath -PathType Leaf)) { throw "Template file not found: $templatePath" }
 
 $ssh = ""

@@ -28,16 +28,6 @@ for v in SSH_PORT COOLIFY_PUBLIC_DOMAIN COOLIFY_ROOT_USERNAME COOLIFY_ROOT_USER_
   require_var "$v"
 done
 
-is_valid_coolify_root_password() {
-  local password="$1"
-  (( ${#password} >= 16 )) || return 1
-  [[ "$password" =~ [a-z] ]] || return 1
-  [[ "$password" =~ [A-Z] ]] || return 1
-  [[ "$password" =~ [0-9] ]] || return 1
-  [[ "$password" =~ [^[:alnum:]] ]] || return 1
-  return 0
-}
-
 if [[ ! "$SSH_PORT" =~ ^[0-9]+$ ]]; then
   bootstrap_error "SSH_PORT must be numeric (1-65535)"
   exit 1

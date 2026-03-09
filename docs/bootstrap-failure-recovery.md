@@ -304,8 +304,8 @@ sudo visudo -c
 
 If logs show `ParseAddr(".../64")`, validate both layers:
 - Coolify host/IP field format:
-  - valid host example: `2a01:4f8:1c1c:ad5f::1`
-  - invalid host format: `2a01:4f8:1c1c:ad5f::1/64`
+  - valid host example: `2001:db8:1c1c:ad5f::1`
+  - invalid host format: `2001:db8:1c1c:ad5f::1/64`
 - Docker IPv6 gateway parsing path (known upstream issue in vulnerable Docker behavior)
 
 Bootstrap mitigation:

@@ -24,7 +24,25 @@ defaults:
       type: "pages"
     values:
       title: Getting Started
-      description: End-to-end setup steps for preparing env values, rendering VPS-Coolify init, and provisioning the VPS.
+      description: Fast path for clone, secret generation, VPS init rendering, provisioning, and first-boot checks.
+  - scope:
+      path: "scripts-workflow.md"
+      type: "pages"
+    values:
+      title: Script Workflow
+      description: Detailed usage for bootstrap, infra, and Plane helper scripts (Bash and PowerShell).
+  - scope:
+      path: "bootstrap-env-reference.md"
+      type: "pages"
+    values:
+      title: Bootstrap Env Reference
+      description: Complete variable reference for bootstrap.env values, defaults, required flags, and validation rules.
+  - scope:
+      path: "onboarding-troubleshooting.md"
+      type: "pages"
+    values:
+      title: Onboarding Troubleshooting
+      description: Targeted fixes for Coolify onboarding and local server validation issues.
   - scope:
       path: "bootstrap-flow.md"
       type: "pages"
@@ -56,6 +74,24 @@ defaults:
       title: Bootstrap Failure Recovery
       description: Step-by-step runbook to recover failed first-boot VPS init/bootstrap execution.
   - scope:
+      path: "create-infra-network.md"
+      type: "pages"
+    values:
+      title: Create Infra Network
+      description: How to create and validate the shared external Docker network used by app workloads and shared services.
+  - scope:
+      path: "install-plane-on-coolify.md"
+      type: "pages"
+    values:
+      title: Install Plane on Coolify
+      description: Practical deployment guide for Plane workload on top of this VPS bootstrap.
+  - scope:
+      path: "plane-community-v1.2.3-incident-prevention.md"
+      type: "pages"
+    values:
+      title: Plane Incident Prevention
+      description: Incident-prevention rationale for the provided Plane Community v1.2.3 compose profile.
+  - scope:
       path: "github-promotion.md"
       type: "pages"
     values:
@@ -64,6 +100,11 @@ defaults:
 header_pages:
   - index.md
   - getting-started.md
+  - onboarding-troubleshooting.md
+  - create-infra-network.md
+  - install-plane-on-coolify.md
+  - scripts-workflow.md
+  - bootstrap-env-reference.md
   - bootstrap-flow.md
   - vps-coolify-deployment-modes.md
   - vps-coolify-realtime-modes.md
