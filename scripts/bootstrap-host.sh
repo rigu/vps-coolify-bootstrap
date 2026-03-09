@@ -15,6 +15,7 @@ fi
 
 load_env_file_strict "$ENV_FILE"
 bootstrap_success "Loaded bootstrap env from $ENV_FILE."
+bootstrap_info "Starting bootstrap-host workflow."
 
 require_var() {
   local name="$1"
@@ -120,6 +121,7 @@ for user in $(split_csv_to_lines "${ADDITIONAL_SUDO_USERS:-}"); do
   fi
   MANAGED_USERS_CSV="$(csv_append_unique "$MANAGED_USERS_CSV" "$user")"
 done
+bootstrap_info "Managed users resolved: $(split_csv_to_lines "$MANAGED_USERS_CSV" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
 
 SSH_KEY_ROTATE="${SSH_KEY_ROTATE:-0}"
 
@@ -182,6 +184,9 @@ ensure_user_exists() {
   local user="$1"
   if ! id "$user" >/dev/null 2>&1; then
     useradd -m -s /bin/bash "$user"
+    bootstrap_success "Created missing user: $user"
+  else
+    bootstrap_info "User already exists: $user"
   fi
 }
 
@@ -567,9 +572,11 @@ apply_sudo_policy() {
 
   # Prevent VPS init sudoers defaults from overriding long-term policy.
   rm -f /etc/sudoers.d/90-cloud-init-users /etc/sudoers.d/cloud-init-users 2>/dev/null || true
+  bootstrap_success "Sudo policy file synchronized: $policy_file"
 }
 
 # Ensure all declared users exist.
+bootstrap_info "Ensuring managed users and SSH keys."
 for user in $(split_csv_to_lines "$MANAGED_USERS_CSV"); do
   ensure_user_exists "$user"
   if [[ "$user" != "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
@@ -581,6 +588,7 @@ done
 remove_ssh_key_exact_line "$COOLIFY_SUDO_NOPASSWD_USER" "$SSH_PUBLIC_KEY"
 bootstrap_success "Managed users ensured and SSH keys synchronized."
 
+bootstrap_info "Running managed password/vault synchronization."
 bash "$script_dir/ensure-user-passwords.sh" "$ENV_FILE"
 bootstrap_success "Managed user password/vault synchronization completed."
 sync_sshd_allowusers
@@ -617,6 +625,7 @@ bootstrap_success "ssh.socket disabled; ssh.service validated/restarted on confi
 
 # Firewall hardening.
 # This intentionally resets UFW to the bootstrap baseline.
+bootstrap_info "Applying UFW baseline policy and rules."
 ufw --force reset
 ufw default deny incoming
 ufw default deny routed
@@ -641,6 +650,7 @@ ufw logging low
 ufw --force enable
 bootstrap_success "UFW baseline rules applied (private-allow + limited public SSH,80,443)."
 
+bootstrap_info "Enabling fail2ban and unattended-upgrades services."
 systemctl enable --now fail2ban
 systemctl enable --now unattended-upgrades
 bootstrap_success "fail2ban and unattended-upgrades enabled."
@@ -1025,6 +1035,7 @@ ensure_coolify_root_user_seeded() {
 
 if ! is_coolify_running; then
   export DEBIAN_FRONTEND=noninteractive
+  bootstrap_info "Coolify not detected; running official installer."
   # Official Coolify installer path. Trade-off: remote script execution via curl|bash.
   # Detection assumes container name `coolify` or compose project label `coolify`.
   env \
@@ -1036,8 +1047,10 @@ if ! is_coolify_running; then
 else
   bootstrap_success "Coolify already running; install step skipped."
 fi
+bootstrap_info "Applying Docker ParseAddr mitigation policy if needed."
 apply_docker_parseaddr_ipv6_fix
 bootstrap_success "Docker ParseAddr workaround synchronization completed."
+bootstrap_info "Ensuring Coolify root user exists."
 ensure_coolify_root_user_seeded
 bootstrap_success "Coolify root user seeding/verification completed."
 
@@ -1047,6 +1060,7 @@ if command -v docker >/dev/null 2>&1; then
 fi
 bootstrap_success "Required groups ensured (coolify, docker when available)."
 
+bootstrap_info "Applying sudo policy and group membership for managed users."
 for user in $(split_csv_to_lines "$MANAGED_USERS_CSV"); do
   ensure_user_exists "$user"
   usermod -aG sudo "$user"
@@ -1067,8 +1081,10 @@ if getent group docker >/dev/null 2>&1; then
 fi
 bootstrap_success "Managed users synchronized to sudo/docker/coolify groups."
 
+bootstrap_info "Synchronizing Coolify localhost SSH configuration."
 sync_coolify_localhost_ssh_user
 bootstrap_success "Coolify localhost SSH user synchronization completed."
+bootstrap_info "Synchronizing Coolify proxy path access and realtime policy."
 ensure_coolify_proxy_path_access
 configure_coolify_realtime_domain
 sync_coolify_realtime_port_guards

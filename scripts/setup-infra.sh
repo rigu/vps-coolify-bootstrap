@@ -231,6 +231,8 @@ if [[ "$runtime_dir" != /* ]]; then
   runtime_dir="$repo_root/$runtime_dir"
 fi
 
+bootstrap_info "setup-infra parameters: env_file=${env_file}, render_dir=${render_dir}, runtime_dir=${runtime_dir}, wait_seconds=${wait_seconds}, skip_generate=${skip_generate}, skip_render=${skip_render}, skip_deploy=${skip_deploy}, skip_validate=${skip_validate}"
+
 if ! command -v docker >/dev/null 2>&1; then
   bootstrap_error "docker command not found."
   exit 1

@@ -117,6 +117,7 @@ case "$MODE" in
     ;;
 esac
 
+bootstrap_info "Starting realtime policy update (mode=${MODE}, env=${ENV_FILE})."
 load_env_file_strict "$ENV_FILE"
 
 current_domain="${COOLIFY_REALTIME_DOMAIN:-}"

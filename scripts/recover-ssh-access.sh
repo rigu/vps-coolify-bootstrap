@@ -90,6 +90,10 @@ if [[ ! "$SSH_PORT" =~ ^[0-9]+$ ]] || ((10#$SSH_PORT < 1 || 10#$SSH_PORT > 65535
 fi
 
 bootstrap_success "Starting SSH recovery workflow (SSH_PORT=${SSH_PORT}, CLOSE_22=${CLOSE_22})."
+bootstrap_info "Recovery env file: $ENV_FILE"
+if [[ -n "$UNBAN_IP" ]]; then
+  bootstrap_info "Fail2ban unban target: $UNBAN_IP"
+fi
 
 if (( CLOSE_22 == 0 )); then
   {
@@ -133,6 +137,7 @@ systemctl restart ssh.service
 bootstrap_success "ssh.service enabled and restarted."
 
 if command -v ufw >/dev/null 2>&1; then
+  bootstrap_info "Applying UFW recovery rules."
   if (( CLOSE_22 == 0 )); then
     ufw allow 22/tcp >/dev/null 2>&1 || true
     if [[ "$SSH_PORT" != "22" ]]; then

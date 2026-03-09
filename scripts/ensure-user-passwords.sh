@@ -16,6 +16,7 @@ fi
 
 load_env_file_strict "$ENV_FILE"
 bootstrap_success "Loaded bootstrap env from $ENV_FILE."
+bootstrap_info "Starting managed password/vault workflow."
 
 require_var() {
   local name="$1"
@@ -76,6 +77,7 @@ for user in $(split_csv_to_lines "${ADDITIONAL_SUDO_USERS:-}"); do
   managed_users_csv="$(csv_append_unique "$managed_users_csv" "$user")"
 done
 bootstrap_success "Input validation completed for managed user password workflow."
+bootstrap_info "Managed users in scope: $(split_csv_to_lines "$managed_users_csv" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
 
 if ! command -v openssl >/dev/null 2>&1; then
   bootstrap_error "openssl is required to encrypt generated password file"
@@ -107,6 +109,7 @@ trap 'rm -f "$plaintext_file" "$existing_plaintext_file"' EXIT
 declare -A user_passwords=()
 
 if [[ -f "$ENCRYPTED_PASSWORD_FILE" ]]; then
+  bootstrap_info "Existing vault found, decrypting: $ENCRYPTED_PASSWORD_FILE"
   if ! USER_PASSWORDS_ENCRYPTION_PASSWORD="$USER_PASSWORDS_ENCRYPTION_PASSWORD" \
     openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
     -in "$ENCRYPTED_PASSWORD_FILE" \
@@ -157,6 +160,9 @@ for user in $(split_csv_to_lines "$managed_users_csv"); do
     printf '%s:%s\n' "$user" "$password" | chpasswd
     user_passwords["$user"]="$password"
     changed_count=$((changed_count + 1))
+    bootstrap_info "Password generated/updated for user: $user"
+  else
+    bootstrap_info "Existing password kept for user: $user"
   fi
 done
 

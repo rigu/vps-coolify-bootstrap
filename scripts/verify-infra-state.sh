@@ -190,6 +190,8 @@ if [[ "$runtime_dir" != /* ]]; then
   runtime_dir="$(pwd)/$runtime_dir"
 fi
 
+bootstrap_info "verify-infra-state parameters: env_file=${env_file}, runtime_dir=${runtime_dir}, wait_seconds=${wait_seconds}, network_override=${network_name_override:-<none>}"
+
 if [[ ! -f "$env_file" ]]; then
   bootstrap_error "infra env file not found: $env_file"
   exit 1
@@ -212,6 +214,8 @@ SEAWEEDFS_PLANE_CONTAINER_NAME="${SEAWEEDFS_PLANE_CONTAINER_NAME:-seaweedfs-plan
 for pvar in POSTGRES_APPS_HOST_PORT VALKEY_HOST_PORT RABBITMQ_AMQP_HOST_PORT RABBITMQ_UI_HOST_PORT SEAWEEDFS_S3_HOST_PORT; do
   assert_numeric_port_var "$pvar"
 done
+bootstrap_info "Expected infra containers: ${POSTGRES_APPS_CONTAINER_NAME}, ${VALKEY_APPS_CONTAINER_NAME}, ${RABBITMQ_PLANE_CONTAINER_NAME}, ${SEAWEEDFS_PLANE_CONTAINER_NAME}"
+bootstrap_info "Expected localhost ports: ${POSTGRES_APPS_HOST_PORT}, ${VALKEY_HOST_PORT}, ${RABBITMQ_AMQP_HOST_PORT}, ${RABBITMQ_UI_HOST_PORT}, ${SEAWEEDFS_S3_HOST_PORT}"
 
 bootstrap_info "Validating runtime file set in $runtime_dir"
 assert_file_exists "$runtime_dir/docker-compose.yml"
