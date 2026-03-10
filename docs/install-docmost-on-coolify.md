@@ -1,4 +1,6 @@
 ---
+title: Install Docmost on Coolify
+nav_order: 5
 ---
 
 # Install Docmost on Coolify

@@ -1,4 +1,6 @@
 ---
+title: GitHub Promotion Checklist
+nav_order: 16
 ---
 
 # GitHub Promotion Checklist

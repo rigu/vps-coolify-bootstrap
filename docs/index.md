@@ -1,4 +1,6 @@
 ---
+title: Home
+nav_order: 1
 ---
 
 # VPS Coolify Bootstrap
@@ -32,6 +34,8 @@ Production-ready public bootstrap for **Coolify on Ubuntu 24.04 LTS**.
 - [Create Infra Network](create-infra-network.md)
 - [Install Docmost on Coolify](install-docmost-on-coolify.md)
 - [Install Plane on Coolify](install-plane-on-coolify.md)
+- [Backup Strategy](backup-strategy.md)
+- [Maintenance Runbook](maintenance-runbook.md)
 - [Script Workflow](scripts-workflow.md)
 - [Bootstrap Env Reference](bootstrap-env-reference.md)
 - [Bootstrap Flow](bootstrap-flow.md)

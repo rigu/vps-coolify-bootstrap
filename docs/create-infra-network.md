@@ -1,4 +1,6 @@
 ---
+title: Create Infra Network
+nav_order: 4
 ---
 
 # Create Infra Network

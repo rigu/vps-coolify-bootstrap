@@ -1,4 +1,6 @@
 ---
+title: Install Plane on Coolify
+nav_order: 6
 ---
 
 # Install Plane on Coolify

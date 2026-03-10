@@ -1,4 +1,6 @@
 ---
+title: Script Workflow
+nav_order: 9
 ---
 
 # Script Workflow

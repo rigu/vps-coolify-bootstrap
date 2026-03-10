@@ -1,4 +1,6 @@
 ---
+title: Bootstrap Env Reference
+nav_order: 10
 ---
 
 # Bootstrap Env Reference

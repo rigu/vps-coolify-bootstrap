@@ -1,4 +1,6 @@
 ---
+title: VPS Coolify Deployment Modes
+nav_order: 12
 ---
 
 # VPS Coolify Deployment Modes

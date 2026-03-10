@@ -60,6 +60,8 @@ Canonical instructions were moved to GitHub Pages docs:
 - VPS Coolify deployment modes: [docs/vps-coolify-deployment-modes.md](docs/vps-coolify-deployment-modes.md)
 - VPS Coolify realtime modes: [docs/vps-coolify-realtime-modes.md](docs/vps-coolify-realtime-modes.md)
 - Operations and security: [docs/operations-security.md](docs/operations-security.md)
+- Backup strategy: [docs/backup-strategy.md](docs/backup-strategy.md)
+- Maintenance runbook: [docs/maintenance-runbook.md](docs/maintenance-runbook.md)
 - Failure recovery: [docs/bootstrap-failure-recovery.md](docs/bootstrap-failure-recovery.md)
 - GitHub promotion checklist: [docs/github-promotion.md](docs/github-promotion.md)
 

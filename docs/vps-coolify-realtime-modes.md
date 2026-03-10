@@ -1,4 +1,6 @@
 ---
+title: VPS Coolify Realtime Modes
+nav_order: 13
 ---
 
 # VPS Coolify Realtime Modes

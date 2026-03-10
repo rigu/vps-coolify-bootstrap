@@ -1,4 +1,6 @@
 ---
+title: Onboarding Troubleshooting
+nav_order: 3
 ---
 
 # Onboarding Troubleshooting

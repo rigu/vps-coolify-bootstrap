@@ -1,4 +1,6 @@
 ---
+title: Bootstrap Failure Recovery
+nav_order: 15
 ---
 
 # Bootstrap Failure Recovery

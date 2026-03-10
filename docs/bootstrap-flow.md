@@ -1,4 +1,6 @@
 ---
+title: Bootstrap Flow
+nav_order: 11
 ---
 
 # Bootstrap Flow

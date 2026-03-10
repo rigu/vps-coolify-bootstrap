@@ -2,119 +2,19 @@ title: VPS Coolify Bootstrap
 description: Production-ready VPS bootstrap for Coolify on Ubuntu 24.04 with VPS init user-data, security hardening, and recovery runbooks.
 url: https://rigu.github.io
 baseurl: /vps-coolify-bootstrap
-theme: minima
+remote_theme: just-the-docs/just-the-docs@v0.10.1
+color_scheme: dark
 markdown: kramdown
 plugins:
   - jekyll-seo-tag
   - jekyll-sitemap
+  - jekyll-remote-theme
 defaults:
   - scope:
       path: ""
       type: "pages"
     values:
-      layout: page
-  - scope:
-      path: "index.md"
-      type: "pages"
-    values:
-      title: VPS Coolify Bootstrap Docs
-      description: Canonical documentation for production VPS bootstrapping with Coolify on Ubuntu 24.04.
-  - scope:
-      path: "getting-started.md"
-      type: "pages"
-    values:
-      title: Getting Started
-      description: Fast path for clone, secret generation, VPS init rendering, provisioning, and first-boot checks.
-  - scope:
-      path: "scripts-workflow.md"
-      type: "pages"
-    values:
-      title: Script Workflow
-      description: Detailed usage for bootstrap, infra, Docmost, and Plane helper scripts (Bash and PowerShell).
-  - scope:
-      path: "bootstrap-env-reference.md"
-      type: "pages"
-    values:
-      title: Bootstrap Env Reference
-      description: Complete variable reference for bootstrap.env values, defaults, required flags, and validation rules.
-  - scope:
-      path: "onboarding-troubleshooting.md"
-      type: "pages"
-    values:
-      title: Onboarding Troubleshooting
-      description: Targeted fixes for Coolify onboarding and local server validation issues.
-  - scope:
-      path: "bootstrap-flow.md"
-      type: "pages"
-    values:
-      title: Bootstrap Flow
-      description: Detailed first-boot execution order, VPS init behavior, and bootstrap flow for Coolify provisioning.
-  - scope:
-      path: "vps-coolify-deployment-modes.md"
-      type: "pages"
-    values:
-      title: VPS Coolify Deployment Modes
-      description: Complete reference for all VPS deployment modes supported by this bootstrap.
-  - scope:
-      path: "vps-coolify-realtime-modes.md"
-      type: "pages"
-    values:
-      title: VPS Coolify Realtime Modes
-      description: Detailed realtime behavior for CLOSE_COOLIFY_REALTIME_PORTS true/false, risks, and update procedures.
-  - scope:
-      path: "operations-security.md"
-      type: "pages"
-    values:
-      title: Operations and Security
-      description: Production operations guidance for post-bootstrap hardening, monitoring, and Coolify-safe server operation.
-  - scope:
-      path: "bootstrap-failure-recovery.md"
-      type: "pages"
-    values:
-      title: Bootstrap Failure Recovery
-      description: Step-by-step runbook to recover failed first-boot VPS init/bootstrap execution.
-  - scope:
-      path: "create-infra-network.md"
-      type: "pages"
-    values:
-      title: Create Infra Network
-      description: How to create and validate the shared external Docker network used by app workloads and shared services.
-  - scope:
-      path: "install-docmost-on-coolify.md"
-      type: "pages"
-    values:
-      title: Install Docmost on Coolify
-      description: Practical deployment guide for Docmost workload on top of this VPS bootstrap.
-  - scope:
-      path: "install-plane-on-coolify.md"
-      type: "pages"
-    values:
-      title: Install Plane on Coolify
-      description: Practical deployment guide for Plane workload on top of this VPS bootstrap.
-  - scope:
-      path: "plane-community-v1.2.3-incident-prevention.md"
-      type: "pages"
-    values:
-      title: Plane Incident Prevention
-      description: Incident-prevention rationale for the provided Plane Community v1.2.3 compose profile.
-  - scope:
-      path: "github-promotion.md"
-      type: "pages"
-    values:
-      title: GitHub Promotion Checklist
-      description: Practical checklist to improve repository discoverability on GitHub and search engines.
-header_pages:
-  - index.md
-  - getting-started.md
-  - onboarding-troubleshooting.md
-  - create-infra-network.md
-  - install-docmost-on-coolify.md
-  - install-plane-on-coolify.md
-  - scripts-workflow.md
-  - bootstrap-env-reference.md
-  - bootstrap-flow.md
-  - vps-coolify-deployment-modes.md
-  - vps-coolify-realtime-modes.md
-  - operations-security.md
-  - bootstrap-failure-recovery.md
-  - github-promotion.md
+      layout: default
+aux_links:
+  "GitHub":
+    - "https://github.com/rigu/vps-coolify-bootstrap"

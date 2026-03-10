@@ -1,3 +1,8 @@
+---
+title: Plane Incident Prevention
+nav_order: 17
+---
+
 # Plane v1.2.3 for Coolify: Incident Prevention Notes
 
 ## Scope
