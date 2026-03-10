@@ -146,6 +146,7 @@ apps_valkey_password="${current[APPS_VALKEY_PASSWORD]:-}"
 plane_rabbitmq_password="${current[PLANE_RABBITMQ_PASSWORD]:-}"
 plane_s3_access_key="${current[PLANE_S3_ACCESS_KEY]:-}"
 plane_s3_secret_key="${current[PLANE_S3_SECRET_KEY]:-}"
+postgres_replication_password="${current[POSTGRES_REPLICATION_PASSWORD]:-}"
 
 passwords_changed=0
 secrets_changed=0
@@ -162,6 +163,11 @@ fi
 
 if (( force_passwords == 1 )) || is_empty_or_placeholder "$plane_rabbitmq_password"; then
   plane_rabbitmq_password="$(gen_hex 16)"
+  passwords_changed=1
+fi
+
+if (( force_passwords == 1 )) || is_empty_or_placeholder "$postgres_replication_password"; then
+  postgres_replication_password="$(gen_hex 16)"
   passwords_changed=1
 fi
 
@@ -189,12 +195,14 @@ saw_apps_valkey_password=0
 saw_plane_rabbitmq_password=0
 saw_plane_s3_access_key=0
 saw_plane_s3_secret_key=0
+saw_postgres_replication_password=0
 
 while IFS= read -r line || [[ -n "$line" ]]; do
   case "$line" in
     POSTGRES_APPS_PASSWORD=*) saw_postgres_apps_password=1; sync_kv "POSTGRES_APPS_PASSWORD" "$postgres_apps_password" >> "$tmp" ;;
     APPS_VALKEY_PASSWORD=*) saw_apps_valkey_password=1; sync_kv "APPS_VALKEY_PASSWORD" "$apps_valkey_password" >> "$tmp" ;;
     PLANE_RABBITMQ_PASSWORD=*) saw_plane_rabbitmq_password=1; sync_kv "PLANE_RABBITMQ_PASSWORD" "$plane_rabbitmq_password" >> "$tmp" ;;
+    POSTGRES_REPLICATION_PASSWORD=*) saw_postgres_replication_password=1; sync_kv "POSTGRES_REPLICATION_PASSWORD" "$postgres_replication_password" >> "$tmp" ;;
     PLANE_S3_ACCESS_KEY=*) saw_plane_s3_access_key=1; sync_kv "PLANE_S3_ACCESS_KEY" "$plane_s3_access_key" >> "$tmp" ;;
     PLANE_S3_SECRET_KEY=*) saw_plane_s3_secret_key=1; sync_kv "PLANE_S3_SECRET_KEY" "$plane_s3_secret_key" >> "$tmp" ;;
     *) printf '%s\n' "$line" >> "$tmp" ;;
@@ -204,6 +212,7 @@ done < "$env_file"
 (( saw_postgres_apps_password == 1 )) || sync_kv "POSTGRES_APPS_PASSWORD" "$postgres_apps_password" >> "$tmp"
 (( saw_apps_valkey_password == 1 )) || sync_kv "APPS_VALKEY_PASSWORD" "$apps_valkey_password" >> "$tmp"
 (( saw_plane_rabbitmq_password == 1 )) || sync_kv "PLANE_RABBITMQ_PASSWORD" "$plane_rabbitmq_password" >> "$tmp"
+(( saw_postgres_replication_password == 1 )) || sync_kv "POSTGRES_REPLICATION_PASSWORD" "$postgres_replication_password" >> "$tmp"
 (( saw_plane_s3_access_key == 1 )) || sync_kv "PLANE_S3_ACCESS_KEY" "$plane_s3_access_key" >> "$tmp"
 (( saw_plane_s3_secret_key == 1 )) || sync_kv "PLANE_S3_SECRET_KEY" "$plane_s3_secret_key" >> "$tmp"
 
@@ -212,7 +221,7 @@ chmod 600 "$env_file" 2>/dev/null || true
 
 printf 'Updated: %s\n' "$env_file"
 if (( passwords_changed == 1 )); then
-  echo "Infra passwords generated/refreshed (POSTGRES_APPS_PASSWORD, APPS_VALKEY_PASSWORD, PLANE_RABBITMQ_PASSWORD)."
+  echo "Infra passwords generated/refreshed (POSTGRES_APPS_PASSWORD, APPS_VALKEY_PASSWORD, PLANE_RABBITMQ_PASSWORD, POSTGRES_REPLICATION_PASSWORD)."
 else
   echo "Infra passwords kept (use --force-passwords to rotate)."
 fi

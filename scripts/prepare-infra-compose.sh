@@ -11,6 +11,7 @@ Usage:
 Behavior:
   - If env file is missing, script creates parent directory and copies env/infra.env.example.
   - Renders output files: docker-compose.yml, valkey.conf, seaweedfs-s3-config.json, postgres-apps-init.sh
+  - Ensures output helper dir: postgres-wal-archive/
 USAGE
 }
 
@@ -107,6 +108,7 @@ for v in \
   INFRA_NETWORK_NAME \
   POSTGRES_IMAGE VALKEY_IMAGE RABBITMQ_IMAGE SEAWEEDFS_IMAGE \
   POSTGRES_APPS_USER POSTGRES_APPS_PASSWORD POSTGRES_APPS_DB POSTGRES_PLANE_DB POSTGRES_DOCMOST_DB POSTGRES_APPS_HOST_PORT \
+  POSTGRES_ENABLE_WAL_ARCHIVE POSTGRES_WAL_ARCHIVE_TIMEOUT_SECONDS POSTGRES_MAX_WAL_SENDERS POSTGRES_REPLICATION_USER POSTGRES_REPLICATION_PASSWORD \
   APPS_VALKEY_PASSWORD VALKEY_HOST_PORT \
   PLANE_RABBITMQ_USER PLANE_RABBITMQ_PASSWORD PLANE_RABBITMQ_VHOST RABBITMQ_AMQP_HOST_PORT RABBITMQ_UI_HOST_PORT \
   PLANE_S3_ACCESS_KEY PLANE_S3_SECRET_KEY PLANE_S3_BUCKET SEAWEEDFS_S3_HOST_PORT; do
@@ -118,7 +120,7 @@ VALKEY_APPS_CONTAINER_NAME="${VALKEY_APPS_CONTAINER_NAME:-valkey-apps}"
 RABBITMQ_PLANE_CONTAINER_NAME="${RABBITMQ_PLANE_CONTAINER_NAME:-rabbitmq-plane}"
 SEAWEEDFS_PLANE_CONTAINER_NAME="${SEAWEEDFS_PLANE_CONTAINER_NAME:-seaweedfs-plane}"
 
-for user_var in POSTGRES_APPS_USER PLANE_RABBITMQ_USER; do
+for user_var in POSTGRES_APPS_USER POSTGRES_REPLICATION_USER PLANE_RABBITMQ_USER; do
   value="${!user_var}"
   if [[ ! "$value" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*$ ]]; then
     echo "ERROR: $user_var has invalid format: $value" >&2
@@ -135,7 +137,7 @@ for name_var in INFRA_NETWORK_NAME POSTGRES_APPS_DB POSTGRES_PLANE_DB POSTGRES_D
   fi
 done
 
-for secret_var in POSTGRES_APPS_PASSWORD APPS_VALKEY_PASSWORD PLANE_RABBITMQ_PASSWORD PLANE_S3_ACCESS_KEY PLANE_S3_SECRET_KEY; do
+for secret_var in POSTGRES_APPS_PASSWORD POSTGRES_REPLICATION_PASSWORD APPS_VALKEY_PASSWORD PLANE_RABBITMQ_PASSWORD PLANE_S3_ACCESS_KEY PLANE_S3_SECRET_KEY; do
   value="${!secret_var}"
   if [[ "$value" == *"CHANGE_ME"* ]]; then
     echo "ERROR: $secret_var still contains CHANGE_ME placeholder." >&2
@@ -164,11 +166,36 @@ validate_port RABBITMQ_AMQP_HOST_PORT "$RABBITMQ_AMQP_HOST_PORT"
 validate_port RABBITMQ_UI_HOST_PORT "$RABBITMQ_UI_HOST_PORT"
 validate_port SEAWEEDFS_S3_HOST_PORT "$SEAWEEDFS_S3_HOST_PORT"
 
+case "${POSTGRES_ENABLE_WAL_ARCHIVE,,}" in
+  true|1|yes|on) postgres_archive_mode="on" ;;
+  false|0|no|off) postgres_archive_mode="off" ;;
+  *)
+    echo "ERROR: POSTGRES_ENABLE_WAL_ARCHIVE must be true/false." >&2
+    exit 1
+    ;;
+esac
+
+if [[ ! "$POSTGRES_WAL_ARCHIVE_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || (( POSTGRES_WAL_ARCHIVE_TIMEOUT_SECONDS < 1 )); then
+  echo "ERROR: POSTGRES_WAL_ARCHIVE_TIMEOUT_SECONDS must be a positive integer." >&2
+  exit 1
+fi
+
+if [[ ! "$POSTGRES_MAX_WAL_SENDERS" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: POSTGRES_MAX_WAL_SENDERS must be a non-negative integer." >&2
+  exit 1
+fi
+
+if [[ "$postgres_archive_mode" == "on" ]] && (( POSTGRES_MAX_WAL_SENDERS < 1 )); then
+  echo "ERROR: POSTGRES_MAX_WAL_SENDERS must be >= 1 when POSTGRES_ENABLE_WAL_ARCHIVE=true." >&2
+  exit 1
+fi
+
 compose_output="$output_dir/docker-compose.yml"
 valkey_output="$output_dir/valkey.conf"
 seaweedfs_output="$output_dir/seaweedfs-s3-config.json"
 postgres_init_output="$output_dir/postgres-apps-init.sh"
 output_env="$output_dir/production-infra.env"
+postgres_wal_archive_dir="$output_dir/postgres-wal-archive"
 
 if (( overwrite == 0 )); then
   for path in "$compose_output" "$valkey_output" "$seaweedfs_output" "$postgres_init_output" "$output_env"; do
@@ -180,6 +207,8 @@ if (( overwrite == 0 )); then
 fi
 
 mkdir -p "$output_dir"
+mkdir -p "$postgres_wal_archive_dir"
+chmod 700 "$postgres_wal_archive_dir"
 
 render_template() {
   local src="$1"
@@ -207,6 +236,11 @@ render_template "$compose_template" \
   POSTGRES_APPS_DB_HERE "$POSTGRES_APPS_DB" \
   POSTGRES_PLANE_DB_HERE "$POSTGRES_PLANE_DB" \
   POSTGRES_DOCMOST_DB_HERE "$POSTGRES_DOCMOST_DB" \
+  POSTGRES_REPLICATION_USER_HERE "$POSTGRES_REPLICATION_USER" \
+  POSTGRES_REPLICATION_PASSWORD_HERE "$POSTGRES_REPLICATION_PASSWORD" \
+  POSTGRES_ARCHIVE_MODE_HERE "$postgres_archive_mode" \
+  POSTGRES_WAL_ARCHIVE_TIMEOUT_HERE "${POSTGRES_WAL_ARCHIVE_TIMEOUT_SECONDS}s" \
+  POSTGRES_MAX_WAL_SENDERS_HERE "$POSTGRES_MAX_WAL_SENDERS" \
   POSTGRES_APPS_HOST_PORT_HERE "$POSTGRES_APPS_HOST_PORT" \
   VALKEY_APPS_CONTAINER_NAME_HERE "$VALKEY_APPS_CONTAINER_NAME" \
   VALKEY_HOST_PORT_HERE "$VALKEY_HOST_PORT" \
@@ -251,6 +285,7 @@ Generated internal service layer files:
 - $seaweedfs_output
 - $postgres_init_output
 - $output_env
+- $postgres_wal_archive_dir/
 
 Deploy on server example:
 1) sudo install -d -m 750 -o root -g root /srv/infra

@@ -22,11 +22,13 @@ test_prepare_infra_compose_generates_runtime_files() {
   [[ -f "$out_dir/seaweedfs-s3-config.json" ]] || { echo "missing seaweedfs-s3-config.json" >&2; return 1; }
   [[ -f "$out_dir/postgres-apps-init.sh" ]] || { echo "missing postgres-apps-init.sh" >&2; return 1; }
   [[ -f "$out_dir/production-infra.env" ]] || { echo "missing production-infra.env" >&2; return 1; }
+  [[ -d "$out_dir/postgres-wal-archive" ]] || { echo "missing postgres-wal-archive dir" >&2; return 1; }
 
   assert_file_not_contains "$out_dir/docker-compose.yml" '_HERE' "compose output should not contain unresolved placeholders"
   assert_file_not_contains "$out_dir/valkey.conf" '_HERE' "valkey output should not contain unresolved placeholders"
   assert_file_not_contains "$out_dir/seaweedfs-s3-config.json" '_HERE' "seaweedfs output should not contain unresolved placeholders"
   assert_file_contains "$out_dir/docker-compose.yml" 'redis-cli .*\\|\\| valkey-cli' "valkey healthcheck should support redis-cli and valkey-cli fallback"
+  assert_file_contains "$out_dir/docker-compose.yml" 'archive_mode=' "compose output should configure Postgres archive mode"
 
   if command -v python3 >/dev/null 2>&1; then
     python3 - <<PY

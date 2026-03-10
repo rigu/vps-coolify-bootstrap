@@ -164,6 +164,32 @@ ensure_seaweedfs_s3_bucket() {
   return 1
 }
 
+ensure_postgres_replication_role() {
+  local container="$1"
+  local db_user="$2"
+  local db_password="$3"
+  local admin_db="$4"
+  local repl_user="$5"
+  local repl_password="$6"
+
+  bootstrap_info "Ensuring PostgreSQL replication role exists: ${repl_user}"
+  run_root docker exec -e PGPASSWORD="$db_password" "$container" \
+    psql -U "$db_user" -d "$admin_db" \
+      -v ON_ERROR_STOP=1 \
+      -v repl_user="$repl_user" \
+      -v repl_password="$repl_password" <<'EOSQL'
+SELECT format(
+  'DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = %L) THEN CREATE ROLE %I WITH LOGIN REPLICATION PASSWORD %L; ELSE ALTER ROLE %I WITH LOGIN REPLICATION PASSWORD %L REPLICATION; END IF; END $$;',
+  :'repl_user',
+  :'repl_user',
+  :'repl_password',
+  :'repl_user',
+  :'repl_password'
+)\gexec
+EOSQL
+  bootstrap_success "PostgreSQL replication role ensured: ${repl_user}"
+}
+
 env_file="bootstrap-artifacts/production-infra.env"
 render_dir="bootstrap-artifacts/infra"
 runtime_dir="/srv/infra"
@@ -315,6 +341,8 @@ VALKEY_APPS_CONTAINER_NAME="${VALKEY_APPS_CONTAINER_NAME:-valkey-apps}"
 RABBITMQ_PLANE_CONTAINER_NAME="${RABBITMQ_PLANE_CONTAINER_NAME:-rabbitmq-plane}"
 SEAWEEDFS_PLANE_CONTAINER_NAME="${SEAWEEDFS_PLANE_CONTAINER_NAME:-seaweedfs-plane}"
 PLANE_S3_BUCKET="${PLANE_S3_BUCKET:-plane-uploads}"
+POSTGRES_ENABLE_WAL_ARCHIVE="${POSTGRES_ENABLE_WAL_ARCHIVE:-false}"
+POSTGRES_REPLICATION_USER="${POSTGRES_REPLICATION_USER:-replicator}"
 
 for pvar in POSTGRES_APPS_HOST_PORT VALKEY_HOST_PORT RABBITMQ_AMQP_HOST_PORT RABBITMQ_UI_HOST_PORT SEAWEEDFS_S3_HOST_PORT; do
   if [[ -z "${!pvar:-}" ]]; then
@@ -332,6 +360,8 @@ fi
 
 bootstrap_info "Synchronizing runtime files to $runtime_dir"
 run_root install -d -m 750 -o root -g root "$runtime_dir"
+# The official postgres image runs as uid/gid 999 and needs write access here.
+run_root install -d -m 700 -o 999 -g 999 "$runtime_dir/postgres-wal-archive"
 run_root install -m 644 -o root -g root "$render_dir/docker-compose.yml" "$runtime_dir/docker-compose.yml"
 # Keep runtime service configs readable by non-root container users.
 # Parent directory remains root-owned (750), so host-side exposure stays constrained.
@@ -357,6 +387,22 @@ if (( skip_deploy == 0 )); then
 else
   bootstrap_warn "Skipping deploy (--skip-deploy)."
 fi
+
+case "${POSTGRES_ENABLE_WAL_ARCHIVE,,}" in
+  true|1|yes|on)
+    if run_root docker ps --format '{{.Names}}' | grep -Fxq "$POSTGRES_APPS_CONTAINER_NAME"; then
+      ensure_postgres_replication_role \
+        "$POSTGRES_APPS_CONTAINER_NAME" \
+        "$POSTGRES_APPS_USER" \
+        "$POSTGRES_APPS_PASSWORD" \
+        "$POSTGRES_APPS_DB" \
+        "$POSTGRES_REPLICATION_USER" \
+        "$POSTGRES_REPLICATION_PASSWORD"
+    else
+      bootstrap_warn "Skipping replication role ensure because Postgres container is not running: $POSTGRES_APPS_CONTAINER_NAME"
+    fi
+    ;;
+esac
 
 if run_root docker ps --format '{{.Names}}' | grep -Fxq "$SEAWEEDFS_PLANE_CONTAINER_NAME"; then
   ensure_seaweedfs_s3_bucket "$SEAWEEDFS_PLANE_CONTAINER_NAME" "$PLANE_S3_BUCKET"

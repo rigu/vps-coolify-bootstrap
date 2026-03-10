@@ -8,7 +8,7 @@ source "$repo_root/tests/testlib.sh"
 script="$repo_root/scripts/generate-infra-secrets.sh"
 
 test_creates_missing_env_and_generates_secrets() {
-  local tmpdir env_file pg valkey rabbit s3ak s3sk
+  local tmpdir env_file pg valkey rabbit repl s3ak s3sk
   tmpdir="$(mktemp -d)"
   env_file="$tmpdir/infra/production-infra.env"
 
@@ -17,18 +17,21 @@ test_creates_missing_env_and_generates_secrets() {
   assert_file_contains "$env_file" '^POSTGRES_APPS_PASSWORD=' "env should contain POSTGRES_APPS_PASSWORD"
   assert_file_contains "$env_file" '^APPS_VALKEY_PASSWORD=' "env should contain APPS_VALKEY_PASSWORD"
   assert_file_contains "$env_file" '^PLANE_RABBITMQ_PASSWORD=' "env should contain PLANE_RABBITMQ_PASSWORD"
+  assert_file_contains "$env_file" '^POSTGRES_REPLICATION_PASSWORD=' "env should contain POSTGRES_REPLICATION_PASSWORD"
   assert_file_contains "$env_file" '^PLANE_S3_ACCESS_KEY=' "env should contain PLANE_S3_ACCESS_KEY"
   assert_file_contains "$env_file" '^PLANE_S3_SECRET_KEY=' "env should contain PLANE_S3_SECRET_KEY"
 
   pg="$(strip_env_quotes "$(env_value "$env_file" POSTGRES_APPS_PASSWORD)")"
   valkey="$(strip_env_quotes "$(env_value "$env_file" APPS_VALKEY_PASSWORD)")"
   rabbit="$(strip_env_quotes "$(env_value "$env_file" PLANE_RABBITMQ_PASSWORD)")"
+  repl="$(strip_env_quotes "$(env_value "$env_file" POSTGRES_REPLICATION_PASSWORD)")"
   s3ak="$(strip_env_quotes "$(env_value "$env_file" PLANE_S3_ACCESS_KEY)")"
   s3sk="$(strip_env_quotes "$(env_value "$env_file" PLANE_S3_SECRET_KEY)")"
 
   [[ "$pg" =~ ^[0-9a-f]{32}$ ]] || { echo "Invalid POSTGRES_APPS_PASSWORD: $pg" >&2; return 1; }
   [[ "$valkey" =~ ^[0-9a-f]{32}$ ]] || { echo "Invalid APPS_VALKEY_PASSWORD: $valkey" >&2; return 1; }
   [[ "$rabbit" =~ ^[0-9a-f]{32}$ ]] || { echo "Invalid PLANE_RABBITMQ_PASSWORD: $rabbit" >&2; return 1; }
+  [[ "$repl" =~ ^[0-9a-f]{32}$ ]] || { echo "Invalid POSTGRES_REPLICATION_PASSWORD: $repl" >&2; return 1; }
   [[ "$s3ak" =~ ^PLN[0-9A-F]{18}$ ]] || { echo "Invalid PLANE_S3_ACCESS_KEY: $s3ak" >&2; return 1; }
   [[ "$s3sk" =~ ^[0-9a-f]{64}$ ]] || { echo "Invalid PLANE_S3_SECRET_KEY: $s3sk" >&2; return 1; }
 

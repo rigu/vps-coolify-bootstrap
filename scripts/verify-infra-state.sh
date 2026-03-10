@@ -142,6 +142,48 @@ assert_file_exists() {
   bootstrap_success "File exists: $file"
 }
 
+assert_directory_exists() {
+  local dir="$1"
+  if [[ ! -d "$dir" ]]; then
+    bootstrap_error "required directory missing: $dir"
+    return 1
+  fi
+  bootstrap_success "Directory exists: $dir"
+}
+
+assert_postgres_setting() {
+  local container="$1"
+  local setting="$2"
+  local expected="$3"
+  local actual
+
+  actual="$(run_root docker exec -e PGPASSWORD="$POSTGRES_APPS_PASSWORD" "$container" \
+    psql -U "$POSTGRES_APPS_USER" -d "$POSTGRES_APPS_DB" -Atqc "SHOW ${setting};" 2>/dev/null || true)"
+
+  if [[ "$actual" != "$expected" ]]; then
+    bootstrap_error "Postgres setting mismatch for ${setting}: expected '${expected}', got '${actual:-<empty>}'"
+    return 1
+  fi
+
+  bootstrap_success "Postgres setting verified: ${setting}=${expected}"
+}
+
+assert_postgres_role_exists() {
+  local container="$1"
+  local role_name="$2"
+  local exists
+
+  exists="$(run_root docker exec -e PGPASSWORD="$POSTGRES_APPS_PASSWORD" "$container" \
+    psql -U "$POSTGRES_APPS_USER" -d "$POSTGRES_APPS_DB" -Atqc "SELECT 1 FROM pg_roles WHERE rolname='${role_name}';" 2>/dev/null || true)"
+
+  if [[ "$exists" != "1" ]]; then
+    bootstrap_error "Postgres role missing: ${role_name}"
+    return 1
+  fi
+
+  bootstrap_success "Postgres role exists: ${role_name}"
+}
+
 assert_numeric_port_var() {
   local var_name="$1"
   local value="${!var_name:-}"
@@ -231,6 +273,8 @@ VALKEY_APPS_CONTAINER_NAME="${VALKEY_APPS_CONTAINER_NAME:-valkey-apps}"
 RABBITMQ_PLANE_CONTAINER_NAME="${RABBITMQ_PLANE_CONTAINER_NAME:-rabbitmq-plane}"
 SEAWEEDFS_PLANE_CONTAINER_NAME="${SEAWEEDFS_PLANE_CONTAINER_NAME:-seaweedfs-plane}"
 PLANE_S3_BUCKET="${PLANE_S3_BUCKET:-plane-uploads}"
+POSTGRES_ENABLE_WAL_ARCHIVE="${POSTGRES_ENABLE_WAL_ARCHIVE:-false}"
+POSTGRES_REPLICATION_USER="${POSTGRES_REPLICATION_USER:-replicator}"
 
 for pvar in POSTGRES_APPS_HOST_PORT VALKEY_HOST_PORT RABBITMQ_AMQP_HOST_PORT RABBITMQ_UI_HOST_PORT SEAWEEDFS_S3_HOST_PORT; do
   assert_numeric_port_var "$pvar"
@@ -244,6 +288,7 @@ assert_file_exists "$runtime_dir/production-infra.env"
 assert_file_exists "$runtime_dir/valkey.conf"
 assert_file_exists "$runtime_dir/seaweedfs-s3-config.json"
 assert_file_exists "$runtime_dir/postgres-apps-init.sh"
+assert_directory_exists "$runtime_dir/postgres-wal-archive"
 
 if ! run_root docker network inspect "$INFRA_NETWORK_NAME" >/dev/null 2>&1; then
   bootstrap_error "infra network missing: $INFRA_NETWORK_NAME"
@@ -273,6 +318,14 @@ for cn in "${managed_containers[@]}"; do
     exit 1
   fi
 done
+
+case "${POSTGRES_ENABLE_WAL_ARCHIVE:-false}" in
+  true|1|yes|on)
+    assert_postgres_setting "$POSTGRES_APPS_CONTAINER_NAME" "archive_mode" "on"
+    assert_postgres_setting "$POSTGRES_APPS_CONTAINER_NAME" "wal_level" "replica"
+    assert_postgres_role_exists "$POSTGRES_APPS_CONTAINER_NAME" "$POSTGRES_REPLICATION_USER"
+    ;;
+esac
 bootstrap_success "Container network attachment validation passed."
 assert_seaweedfs_s3_bucket_exists "$SEAWEEDFS_PLANE_CONTAINER_NAME" "$PLANE_S3_BUCKET"
 

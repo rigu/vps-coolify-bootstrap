@@ -7,14 +7,29 @@ services:
     image: POSTGRES_IMAGE_HERE
     container_name: POSTGRES_APPS_CONTAINER_NAME_HERE
     restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=POSTGRES_ARCHIVE_MODE_HERE
+      - -c
+      - archive_timeout=POSTGRES_WAL_ARCHIVE_TIMEOUT_HERE
+      - -c
+      - max_wal_senders=POSTGRES_MAX_WAL_SENDERS_HERE
+      - -c
+      - archive_command=test ! -f /srv/postgres-wal-archive/%f && cp %p /srv/postgres-wal-archive/%f
     environment:
       POSTGRES_USER: POSTGRES_APPS_USER_HERE
       POSTGRES_PASSWORD: POSTGRES_APPS_PASSWORD_HERE
       POSTGRES_DB: POSTGRES_APPS_DB_HERE
       POSTGRES_DOCMOST_DB: POSTGRES_DOCMOST_DB_HERE
       POSTGRES_PLANE_DB: POSTGRES_PLANE_DB_HERE
+      POSTGRES_REPLICATION_USER: POSTGRES_REPLICATION_USER_HERE
+      POSTGRES_REPLICATION_PASSWORD: POSTGRES_REPLICATION_PASSWORD_HERE
     volumes:
       - pg_apps_data:/var/lib/postgresql
+      - ./postgres-wal-archive:/srv/postgres-wal-archive
       - ./postgres-apps-init.sh:/docker-entrypoint-initdb.d/20-create-app-databases.sh:ro
     networks: [infra]
     ports:
