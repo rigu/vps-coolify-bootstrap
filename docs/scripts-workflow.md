@@ -424,6 +424,16 @@ sudo bash /opt/vps-coolify-bootstrap/scripts/verify-infra-state.sh --env-file /s
 `setup-infra.sh` now also ensures the SeaweedFS S3 bucket defined by
 `PLANE_S3_BUCKET` (default `plane-uploads`) exists.
 
+Optional PITR/WAL baseline:
+- `env/infra.env.example` includes `POSTGRES_ENABLE_WAL_ARCHIVE`,
+  `POSTGRES_WAL_ARCHIVE_TIMEOUT_SECONDS`,
+  `POSTGRES_MAX_WAL_SENDERS`, `POSTGRES_REPLICATION_USER`, and
+  `POSTGRES_REPLICATION_PASSWORD`
+- keep WAL archiving disabled unless you also run `pg_basebackup` and
+  replicate `/srv/infra/postgres-wal-archive/` off-site
+- when enabled, `setup-infra.sh` prepares the runtime archive directory
+  and `verify-infra-state.sh` checks the required PostgreSQL settings
+
 Use your actual server admin account for `<DEVOPS_USER>` (default: `devops`).
 
 After first successful apply, use runtime env directly on reruns:
@@ -436,6 +446,7 @@ What happens server-side:
 - optional fill of unresolved placeholders in copied env
 - compose/config render on VPS
 - network ensure + deploy + validation
+- optional WAL archive directory prepare + PostgreSQL PITR setting validation
 
 All-in-one server run is also available:
 

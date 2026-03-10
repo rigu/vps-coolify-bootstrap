@@ -95,6 +95,13 @@ For a typical single-VPS Coolify deployment:
 If you need low RPO for PostgreSQL, add WAL archiving and periodic base
 backups on top of the daily logical dumps.
 
+Repository note:
+- this public repo now includes optional PostgreSQL WAL/PITR scaffolding
+  in `env/infra.env.example`, `setup-infra.sh`, and
+  `verify-infra-state.sh`
+- that scaffolding only prepares the infra layer; operators still need a
+  private/basebackup job, retention policy, and off-site WAL replication
+
 ## 3) Retention
 
 Pick a retention policy intentionally.

@@ -134,6 +134,15 @@ What this command does on VPS:
 - runs `docker compose up -d`
 - validates container health, network attachment, and localhost-only port exposure
 
+Optional PostgreSQL PITR note:
+- `env/infra.env.example` includes optional WAL/PITR toggles for
+  `postgres-apps`
+- keep `POSTGRES_ENABLE_WAL_ARCHIVE=false` unless you also operate base
+  backups and off-site WAL retention
+- when WAL archiving is enabled, `setup-infra.sh` also prepares the
+  runtime WAL archive directory and `verify-infra-state.sh` validates the
+  required PostgreSQL settings
+
 ### Automatic setup outputs and runtime state
 
 After a successful `setup-infra.sh` run, this is the expected result.
@@ -152,6 +161,7 @@ Files created/synced on VPS runtime path:
 - `/srv/infra/valkey.conf`
 - `/srv/infra/seaweedfs-s3-config.json`
 - `/srv/infra/postgres-apps-init.sh`
+- `/srv/infra/postgres-wal-archive/` (directory, when WAL archiving is enabled)
 
 Runtime objects created/ensured:
 - Docker network: `infra` (or custom value from `INFRA_NETWORK_NAME`)
@@ -169,6 +179,8 @@ Validation executed by `setup-infra.sh`:
 - network exists and containers are attached to it
 - each infra container is running and reaches healthy/ready state
 - expected host ports are listening and not publicly bound
+- when WAL archiving is enabled: `archive_mode=on`, `wal_level=replica`,
+  and the replication role exists
 
 ## Manual mode (advanced/custom)
 
