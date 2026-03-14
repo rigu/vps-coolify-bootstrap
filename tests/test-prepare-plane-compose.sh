@@ -31,11 +31,17 @@ test_prepare_plane_compose_renders_from_plane_env() {
 
   secret="$(strip_env_quotes "$(env_value "$env_file" SECRET_KEY)")"
   assert_file_contains "$out_file" "SECRET_KEY: \\\${SECRET_KEY:-${secret}}" "SECRET_KEY default should come from plane env" || return 1
+  assert_file_contains "$out_file" "http://127.0.0.1:3000/god-mode/" "admin healthcheck should probe HTTP without requiring node" || return 1
+  assert_file_contains "$out_file" "nc -z 127.0.0.1 9000" "plane-minio healthcheck should probe the local forwarder port" || return 1
 
   if command -v python3 >/dev/null 2>&1; then
     python3 - <<PY
 import yaml
-yaml.safe_load(open('$out_file', encoding='utf-8').read())
+compose = yaml.safe_load(open('$out_file', encoding='utf-8').read())
+assert compose["services"]["proxy"]["networks"] == ["default"], compose["services"]["proxy"]["networks"]
+assert compose["services"]["admin"]["networks"] == ["default"], compose["services"]["admin"]["networks"]
+assert compose["services"]["api"]["networks"] == ["default", "infra"], compose["services"]["api"]["networks"]
+assert compose["services"]["plane-minio"]["networks"] == ["default", "infra"], compose["services"]["plane-minio"]["networks"]
 PY
   fi
 

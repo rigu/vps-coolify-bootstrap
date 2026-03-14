@@ -225,10 +225,31 @@ Keep these services internal-only (no direct public domain):
 
 ## 5) Attach Plane services to `infra` network
 
-If UI exposes predefined network setting:
-- enable predefined network
-- set network name to `infra`
-- redeploy
+Only Plane services that must reach shared dependencies should join
+`infra`:
+- `plane-minio`
+- `api`
+- `worker`
+- `beat-worker`
+- `live`
+- `migrator`
+
+Keep these services on the stack-local default network only:
+- `proxy`
+- `web`
+- `space`
+- `admin`
+
+Reason:
+- `proxy` is the public ingress target and should not need direct access to
+  shared infra services
+- attaching the public entrypoint to extra shared networks can make
+  ingress routing less deterministic on multi-network Coolify installs
+
+If UI exposes a service-level predefined network setting, do not use it
+to attach the entire Plane resource to `infra` unless your Coolify build
+supports per-container scoping. Prefer the compose-defined selective
+attachment from the template.
 
 If UI does not expose it, keep compose network block as provided:
 
@@ -238,6 +259,9 @@ networks:
     external: true
     name: infra
 ```
+
+The recommended template already declares `infra` only on the services
+that need shared dependencies.
 
 ## 6) Deploy and verify
 

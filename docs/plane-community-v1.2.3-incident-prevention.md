@@ -36,6 +36,10 @@ Version policy used here:
    - `Host(\`\`) && PathPrefix(...)`
 5. Intermittent `connect: connection refused` from Plane proxy to API
 6. Frontend runtime error after redeploy (`Minified React error #418`)
+7. Coolify resource showed `Running (unhealthy)` even though Plane was serving traffic
+   - `plane-admin` healthcheck failed with `/bin/sh: node: not found`
+8. Coolify resource showed `Running (unknown)` for the Plane stack
+   - `plane-minio` had no healthcheck, so Coolify could not confirm readiness
 
 ## Root Causes and Applied Solutions
 
@@ -78,15 +82,20 @@ Why this works:
 Root cause:
 - Public domain/routing was not consistently terminated at Plane `proxy` service.
 - In some attempts, web/api direct routing caused auth/API/storage path mismatches.
+- Attaching the public entrypoint and other frontend-only services to the shared
+  `infra` network increased multi-network ingress ambiguity.
 
 Applied solution:
 - Keep internal Plane `proxy` service in compose.
 - Public Coolify domain must target only Plane `proxy` on port `80`.
 - Keep other Plane services internal-only.
+- Keep `proxy`, `web`, `space`, and `admin` on the stack-local default
+  network only.
 
 Why this works:
 - Plane's own route map for `/api`, `/auth`, and `/<bucket>` stays authoritative.
-- Reduces path-based routing mistakes in Coolify.
+- Reduces path-based routing mistakes and avoids ambiguous ingress paths on
+  multi-network Coolify installs.
 
 ### 4) Traefik rule `Host(\`\`)` parse errors
 Root cause:
@@ -102,17 +111,36 @@ Why this works:
 
 ### 5) Service discovery failures to shared dependencies
 Root cause:
-- Containers not consistently attached to shared external network `infra`.
+- Services that require shared dependencies must reach the external `infra`
+  network, but not every Plane service needs that attachment.
+- Over-attaching frontend/public services to `infra` widened the network surface
+  without providing any dependency benefit.
 
 Applied solution:
-- All Plane services in compose are attached to:
+- Keep only infra-dependent services attached to:
   - `default`
   - `infra`
+- Keep frontend/public services attached to:
+  - `default`
+- Infra-dependent services in this template:
+  - `plane-minio`
+  - `api`
+  - `worker`
+  - `beat-worker`
+  - `live`
+  - `migrator`
+- Default-only services in this template:
+  - `proxy`
+  - `web`
+  - `space`
+  - `admin`
 - `networks.infra` is declared as external network.
 
 Why this works:
 - Guarantees name resolution/reachability for `postgres-apps`, `valkey-apps`,
   `rabbitmq-plane`, and `seaweedfs-plane`.
+- Keeps the public ingress path deterministic while still exposing shared
+  infra only to the services that need it.
 
 ### 6) AMQP credential mismatch risk
 Root cause:
@@ -129,6 +157,35 @@ Applied solution:
 Why this works:
 - Avoids hidden interpolation failures and queue-connection regressions.
 
+### 7) False `unhealthy` state on `plane-admin`
+Root cause:
+- The original `plane-admin` healthcheck executed `node -e ...`.
+- The deployed `makeplane/plane-admin:v1.2.3` image did not include `node`.
+
+Applied solution:
+- Replace the healthcheck with an HTTP probe against the local admin UI
+  (`/god-mode/`) and a simple process fallback when HTTP tooling is absent.
+
+Why this works:
+- Health status now reflects actual admin container readiness instead of a
+  missing binary in the image.
+- Prevents Coolify from blocking routing or showing a false red state for an
+  otherwise functional stack.
+
+### 8) `plane-minio` showed `Running (unknown)` in Coolify
+Root cause:
+- The TCP forwarder service was running, but it had no explicit healthcheck.
+- Coolify could not classify the service as healthy, so the overall resource
+  state could remain `unknown`.
+
+Applied solution:
+- Add a TCP healthcheck using `nc -z 127.0.0.1 9000`.
+
+Why this works:
+- Confirms the local forwarder socket is accepting connections before Coolify
+  marks the service healthy.
+- Improves deployment visibility without changing Plane's upload topology.
+
 ## What Changed for v1.2.3
 
 The new file is a controlled evolution of the known-good incident-prevention
@@ -140,6 +197,8 @@ compose topology:
   - `plane-minio` forwarder retained
   - shared infra dependencies retained
   - storage-proxy hardening retained
+  - selective `infra` attachment retained
+  - compatible healthchecks for `plane-admin` and `plane-minio` added
 
 This was chosen over a topology redesign because the redesign paths were the
 main source of prior incidents.
@@ -156,6 +215,7 @@ main source of prior incidents.
    - API route health
    - auth preflight
    - one upload test through `/plane-uploads`
+   - `plane-admin` and `plane-minio` report healthy state in Coolify/Docker
 4. Keep rollback simple:
    - revert only `PLANE_APP_VERSION` / explicit image pins
    - redeploy

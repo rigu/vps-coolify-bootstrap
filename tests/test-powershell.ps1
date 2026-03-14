@@ -558,6 +558,8 @@ Run-Test "prepare-plane-compose.ps1 renders compose from plane env" {
         Assert-Match $content 'SECRET_KEY:\s*\$\{SECRET_KEY:-' "Rendered compose should preserve env variable syntax with defaults"
         Assert-Match $content 'image:\s*"\$\{PLANE_PROXY_IMAGE:-makeplane/plane-proxy:v1\.2\.3\}"' "Rendered compose should keep proxy image variable with default"
         Assert-Match $content ("SECRET_KEY:\s*\$\{SECRET_KEY:-" + [regex]::Escape($secret) + "\}") "SECRET_KEY default should come from plane env"
+        Assert-Match $content 'http://127\.0\.0\.1:3000/god-mode/' "Rendered compose should use an HTTP-based admin healthcheck"
+        Assert-Match $content 'nc -z 127\.0\.0\.1 9000' "Rendered compose should use a TCP healthcheck for plane-minio"
 
         foreach ($line in (Get-Content -LiteralPath $outFile)) {
             if ($line.TrimStart().StartsWith("#")) { continue }

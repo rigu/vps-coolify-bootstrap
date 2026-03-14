@@ -98,9 +98,6 @@ x-app-env: &app-env
 
 x-plane-service-defaults: &plane-service-defaults
   restart: unless-stopped
-  networks:
-    - default
-    - infra
 
 x-proxy-env: &proxy-env
   SITE_ADDRESS: :80
@@ -112,14 +109,26 @@ services:
     <<: *plane-service-defaults
     # Keep v1.2.3 proxy compatible while using SeaweedFS as object storage.
     image: "${PLANE_MINIO_FORWARDER_IMAGE:-alpine/socat}"
+    networks:
+      - default
+      - infra
     command:
       - "TCP-LISTEN:9000,fork,reuseaddr"
       - "TCP:seaweedfs-plane:8333"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "nc -z 127.0.0.1 9000"
+      interval: 15s
+      timeout: 5s
+      retries: 10
 
   proxy:
     <<: *plane-service-defaults
     # Public entrypoint when you want Plane's own proxy in front of all roles.
     image: "${PLANE_PROXY_IMAGE:-makeplane/plane-proxy:${PLANE_APP_VERSION:-v1.2.3}}"
+    networks:
+      - default
     expose:
       - "80"
     environment:
@@ -141,6 +150,8 @@ services:
     <<: *plane-service-defaults
     # Frontend service (internal). In this topology, route public traffic to proxy:80.
     image: "${PLANE_WEB_IMAGE:-makeplane/plane-frontend:${PLANE_APP_VERSION:-v1.2.3}}"
+    networks:
+      - default
     expose:
       - "3000"
     environment:
@@ -158,6 +169,8 @@ services:
     <<: *plane-service-defaults
     # Optional service aligned with Coolify Plane template topology.
     image: "${PLANE_SPACE_IMAGE:-makeplane/plane-space:${PLANE_APP_VERSION:-v1.2.3}}"
+    networks:
+      - default
     environment:
       <<: *plane-web-env
     depends_on:
@@ -177,6 +190,8 @@ services:
     <<: *plane-service-defaults
     # Optional service aligned with Coolify Plane template topology.
     image: "${PLANE_ADMIN_IMAGE:-makeplane/plane-admin:${PLANE_APP_VERSION:-v1.2.3}}"
+    networks:
+      - default
     environment:
       <<: *plane-web-env
     depends_on:
@@ -186,7 +201,13 @@ services:
       test:
         - CMD-SHELL
         - >
-          node -e "const net=require('net');const s=net.connect(3000,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),2000);"
+          if command -v wget >/dev/null 2>&1; then
+            wget -qO- http://127.0.0.1:3000/god-mode/ >/dev/null 2>&1 || wget -qO- http://127.0.0.1:3000 >/dev/null 2>&1;
+          elif command -v curl >/dev/null 2>&1; then
+            curl -fsS http://127.0.0.1:3000/god-mode/ >/dev/null 2>&1 || curl -fsS http://127.0.0.1:3000 >/dev/null 2>&1;
+          else
+            ps -ef | grep -Eq '[n]ginx: master process|[n]ginx: worker process';
+          fi
       interval: 15s
       timeout: 10s
       retries: 10
@@ -195,6 +216,9 @@ services:
     <<: *plane-service-defaults
     # Optional service aligned with Coolify Plane template topology.
     image: "${PLANE_LIVE_IMAGE:-makeplane/plane-live:${PLANE_APP_VERSION:-v1.2.3}}"
+    networks:
+      - default
+      - infra
     environment:
       <<: [ *app-env, *live-env, *redis-env ]
     depends_on:
@@ -212,6 +236,9 @@ services:
   api:
     <<: *plane-service-defaults
     image: "${PLANE_BACKEND_IMAGE:-makeplane/plane-backend:${PLANE_APP_VERSION:-v1.2.3}}"
+    networks:
+      - default
+      - infra
     command: "${PLANE_API_COMMAND:-./bin/docker-entrypoint-api.sh}"
     expose:
       - "8000"
@@ -231,6 +258,9 @@ services:
   worker:
     <<: *plane-service-defaults
     image: "${PLANE_BACKEND_IMAGE:-makeplane/plane-backend:${PLANE_APP_VERSION:-v1.2.3}}"
+    networks:
+      - default
+      - infra
     command: "${PLANE_WORKER_COMMAND:-./bin/docker-entrypoint-worker.sh}"
     environment:
       <<: [ *app-env, *db-env, *redis-env, *aws-s3-env, *mq-env ]
@@ -247,6 +277,9 @@ services:
   beat-worker:
     <<: *plane-service-defaults
     image: "${PLANE_BACKEND_IMAGE:-makeplane/plane-backend:${PLANE_APP_VERSION:-v1.2.3}}"
+    networks:
+      - default
+      - infra
     command: "${PLANE_BEAT_COMMAND:-./bin/docker-entrypoint-beat.sh}"
     environment:
       <<: [ *app-env, *db-env, *redis-env, *aws-s3-env, *mq-env ]
@@ -263,6 +296,9 @@ services:
   migrator:
     <<: *plane-service-defaults
     image: "${PLANE_BACKEND_IMAGE:-makeplane/plane-backend:${PLANE_APP_VERSION:-v1.2.3}}"
+    networks:
+      - default
+      - infra
     restart: "no"
     command: "${PLANE_MIGRATOR_COMMAND:-./bin/docker-entrypoint-migrator.sh}"
     environment:
