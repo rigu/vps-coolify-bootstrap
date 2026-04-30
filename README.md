@@ -41,6 +41,8 @@ bash scripts/prepare-vps-coolify-init.sh --overwrite
 ```
 4. Provision VPS by pasting `bootstrap-artifacts/vps-coolify-init.generated.yml` into the provider user-data field (VPS init format) during server creation (first boot). If the UI has no user-data option, use provider API/CLI or follow the manual fallback in [docs/getting-started.md](docs/getting-started.md#3-provision-vps).
 
+**Existing server** (no cloud-init): see [docs/getting-started.md — Alternative: Bootstrap on an existing server](docs/getting-started.md#alternative-bootstrap-on-an-existing-server-no-cloud-init).
+
 Detailed script usage (bootstrap + workload scripts, force flags, custom env paths, rerender workflow): [docs/scripts-workflow.md](docs/scripts-workflow.md).
 
 ## Documentation (GitHub Pages)

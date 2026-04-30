@@ -8,6 +8,7 @@ nav_order: 9
 This page documents the detailed local workflow for:
 - `scripts/generate-secrets.sh` / `scripts/generate-secrets.ps1`
 - `scripts/prepare-vps-coolify-init.sh` / `scripts/prepare-vps-coolify-init.ps1`
+- `scripts/prepare-existing-server.sh`
 - `scripts/generate-infra-secrets.sh` / `scripts/generate-infra-secrets.ps1`
 - `scripts/prepare-infra-compose.sh` / `scripts/prepare-infra-compose.ps1`
 - `scripts/setup-infra.sh`
@@ -185,6 +186,58 @@ Then return to default append mode:
 
 ```env
 SSH_KEY_ROTATE=0
+```
+
+## Existing server preparation (`prepare-existing-server.sh`)
+
+Use this script on servers that were NOT provisioned via cloud-init/user-data.
+It installs the packages and applies the kernel/fail2ban config that cloud-init
+would normally handle at first boot.
+
+Run once before `bootstrap-host.sh`:
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/prepare-existing-server.sh /etc/vps-coolify-bootstrap/bootstrap.env
+```
+
+What it does:
+- waits for apt lock release (max 60s)
+- detects Ubuntu version and warns if not 24.04 LTS (noble)
+- installs: `ca-certificates`, `curl`, `git`, `openssl`, `python3`, `ufw`, `fail2ban`, `unattended-upgrades`
+- writes `/etc/sysctl.d/99-hardening.conf` (rp_filter, no redirects, syncookies, ip_forward)
+- applies sysctl settings
+- writes `/etc/fail2ban/jail.d/10-bootstrap-sshd.local` with `SSH_PORT` from env
+
+What it does not do:
+- does not configure SSH hardening (that is `bootstrap-host.sh`)
+- does not install Docker or Coolify (that is `bootstrap-host.sh`)
+- does not create users (that is `bootstrap-host.sh`)
+- does not configure UFW rules (that is `bootstrap-host.sh`)
+
+Arguments:
+- `$1` (optional): path to `bootstrap.env` (default: `/etc/vps-coolify-bootstrap/bootstrap.env`)
+  - used only to read `SSH_PORT` for the fail2ban jail config
+  - if file is missing, defaults to `SSH_PORT=2222`
+
+Typical flow on an existing server:
+
+```bash
+# 1. Clone repo
+sudo git clone https://github.com/rigu/vps-coolify-bootstrap.git /opt/vps-coolify-bootstrap
+
+# 2. Place env file
+sudo mkdir -p /etc/vps-coolify-bootstrap
+sudo cp /tmp/bootstrap.env /etc/vps-coolify-bootstrap/bootstrap.env
+sudo chmod 600 /etc/vps-coolify-bootstrap/bootstrap.env
+
+# 3. Prepare (packages + sysctl + fail2ban)
+sudo bash /opt/vps-coolify-bootstrap/scripts/prepare-existing-server.sh /etc/vps-coolify-bootstrap/bootstrap.env
+
+# 4. Bootstrap (SSH, UFW, users, Coolify)
+sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env
+
+# 5. Verify
+sudo bash /opt/vps-coolify-bootstrap/scripts/verify-bootstrap-state.sh /etc/vps-coolify-bootstrap/bootstrap.env
 ```
 
 ## Docmost env secret workflow (for Docmost deployment)

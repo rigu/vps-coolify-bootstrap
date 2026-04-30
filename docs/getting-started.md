@@ -74,11 +74,66 @@ Important:
 
 If your provider has no user-data field:
 1. check API/CLI support first (many providers support user-data there)
-2. if no user-data support exists, run manual bootstrap from provider console:
+2. if no user-data support exists, use the existing server workflow below
+
+### Alternative: Bootstrap on an existing server (no cloud-init)
+
+Use this path when:
+- your provider does not support user-data (e.g., OVH VPS reinstall)
+- the server was already provisioned without this bootstrap
+- you want to apply bootstrap hardening to a running server
+
+Prerequisites:
+- Ubuntu 24.04 LTS (recommended) or 22.04 LTS
+- root or sudo access (provider console or SSH)
+- `bootstrap-artifacts/bootstrap.env` prepared locally (steps 1-2 above)
+
+#### On the server (as root or via provider console):
 
 ```bash
+# Clone the bootstrap repository
+git clone https://github.com/rigu/vps-coolify-bootstrap.git /opt/vps-coolify-bootstrap
+
+# Create env directory
+mkdir -p /etc/vps-coolify-bootstrap
+```
+
+#### Copy env from local machine to server:
+
+```bash
+scp bootstrap-artifacts/bootstrap.env root@<SERVER_IP>:/etc/vps-coolify-bootstrap/bootstrap.env
+```
+
+Or create/edit directly on server:
+
+```bash
+nano /etc/vps-coolify-bootstrap/bootstrap.env
+chmod 600 /etc/vps-coolify-bootstrap/bootstrap.env
+```
+
+#### Run preparation + bootstrap:
+
+```bash
+# Install packages, sysctl hardening, fail2ban jail
+sudo bash /opt/vps-coolify-bootstrap/scripts/prepare-existing-server.sh /etc/vps-coolify-bootstrap/bootstrap.env
+
+# Run full bootstrap (SSH hardening, UFW, users, Coolify install)
 sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env
 ```
+
+What `prepare-existing-server.sh` does:
+- waits for apt lock release (max 60s)
+- detects Ubuntu version and warns if not 24.04 LTS
+- installs required packages: `ca-certificates`, `curl`, `git`, `openssl`, `python3`, `ufw`, `fail2ban`, `unattended-upgrades`
+- writes kernel hardening sysctl config (`/etc/sysctl.d/99-hardening.conf`)
+- writes fail2ban SSH jail config with your configured `SSH_PORT`
+
+After both scripts complete, the server is at full parity with a cloud-init provisioned server.
+
+Important notes:
+- keep provider console open during first run (SSH port changes)
+- after bootstrap, connect via: `ssh -p <SSH_PORT> <DEVOPS_USER>@<SERVER_IP>`
+- set local password on first login: `sudo passwd <DEVOPS_USER>`
 
 ## 4) After first boot checklist
 
