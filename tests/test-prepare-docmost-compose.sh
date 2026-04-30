@@ -24,6 +24,7 @@ test_prepare_docmost_compose_renders_from_env() {
   fi
   assert_file_contains "$out_file" "APP_SECRET: \\\${APP_SECRET:-" "compose should preserve env variable syntax with defaults" || return 1
   assert_file_contains "$out_file" "image: \"\\\${DOCMOST_IMAGE:-docmost/docmost:latest}\"" "image should keep variable with resolved default" || return 1
+  assert_file_contains "$out_file" "traefik\\.docker\\.network=\\\${COOLIFY_RESOURCE_UUID}" "compose should preserve Coolify runtime ingress network label" || return 1
   if awk '!/^[[:space:]]*#/' "$out_file" | grep -Eq '\$\{[A-Za-z_][A-Za-z0-9_]*:\?'; then
     echo "required interpolation should be converted to default interpolation on active lines" >&2
     return 1

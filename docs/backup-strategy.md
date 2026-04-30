@@ -11,11 +11,19 @@ Use this page to design a production backup plan for a VPS that runs:
 - an internal service layer (`infra`)
 - application workloads such as Plane or Docmost
 
-This repository does not ship a one-size-fits-all production backup
-implementation, because real retention, destinations, encryption, and
-compliance rules are environment-specific. It does define the backup
-layers you should cover and the minimum restore capabilities you should
-validate.
+This repository ships a reusable backup installer for the shared infra
+layer (`scripts/setup-backup-infra.sh`) plus generic backup scripts,
+systemd units, and an off-site sync example. Real retention,
+destinations, encryption, compliance rules, and restore ownership are
+still environment-specific.
+
+Operational model:
+
+- local backup and off-site replication are separate jobs with separate
+  timers
+- install/configure off-site sync only when the destination and rclone
+  credentials are ready
+- verify timer state and fresh artifacts after every backup setup change
 
 ## 1) Backup layers
 
@@ -36,7 +44,7 @@ Why both:
 For single-VPS stacks, logical dumps are the minimum acceptable baseline.
 If the VPS stores active business data, add WAL archiving.
 
-## Layer B: Object and file storage
+### Layer B: Object and file storage
 
 Back up application file/object data separately from PostgreSQL.
 
@@ -99,8 +107,45 @@ Repository note:
 - this public repo now includes optional PostgreSQL WAL/PITR scaffolding
   in `env/infra.env.example`, `setup-infra.sh`, and
   `verify-infra-state.sh`
-- that scaffolding only prepares the infra layer; operators still need a
-  private/basebackup job, retention policy, and off-site WAL replication
+- this public repo also includes `scripts/setup-backup-infra.sh`,
+  `scripts/pg-backup-infra.sh`, `scripts/pg-basebackup-infra.sh`,
+  `scripts/offsite-backup-sync.example.sh`, and matching `systemd/`
+  units for the shared infra model
+- operators still need to choose the real off-site destination,
+  encryption model, retention policy, and restore/testing cadence
+
+Reusable installer example on the server:
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/setup-backup-infra.sh \
+  --env-file /srv/infra/production-infra.env
+```
+
+If off-site replication is ready:
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/setup-backup-infra.sh \
+  --env-file /srv/infra/production-infra.env \
+  --install-offsite-example \
+  --offsite-remote-dest 'YOUR_RCLONE_REMOTE:vps-backups' \
+  --enable-offsite-timer
+```
+
+Post-install verification on the server:
+
+```bash
+sudo systemctl list-timers --all | grep -E 'pg-backup-infra|pg-basebackup-infra|offsite-backup-sync'
+sudo systemctl status pg-backup-infra.service --no-pager
+sudo systemctl status pg-basebackup-infra.service --no-pager || true
+sudo systemctl status offsite-backup-sync.service --no-pager || true
+sudo find /srv/backups -maxdepth 2 -type f | sort | tail -n 20
+sudo test -f /var/lib/backup-sync/offsite-last-success.txt && sudo cat /var/lib/backup-sync/offsite-last-success.txt
+```
+
+The off-site sync job is intentionally scheduled separately instead of
+being chained directly from the local backup service. That keeps the
+local backup result clear even when off-site credentials or remote
+configuration are not ready yet.
 
 ## 3) Retention
 
@@ -168,7 +213,7 @@ Keep the split clean:
 - public repo:
   - generic backup strategy
   - generic maintenance guidance
-  - reusable helper scripts or examples
+  - reusable helper scripts, systemd units, and examples
 - private repo:
   - real destinations
   - retention values

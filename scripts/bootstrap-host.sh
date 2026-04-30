@@ -284,9 +284,10 @@ sync_sshd_allowusers() {
   allow_users="$(split_csv_to_lines "$MANAGED_USERS_CSV" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
   [[ -n "$allow_users" ]] || return 0
 
+  install -d -m 755 /etc/ssh/sshd_config.d
   if [[ ! -f "$sshd_cfg" ]]; then
-    bootstrap_error "SSH hardening config not found: $sshd_cfg"
-    return 1
+    bootstrap_info "SSH hardening config not found; creating: $sshd_cfg"
+    install -o root -g root -m 644 /dev/null "$sshd_cfg"
   fi
 
   tmp_cfg="$(mktemp)"

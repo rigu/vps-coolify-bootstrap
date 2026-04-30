@@ -527,6 +527,7 @@ Run-Test "prepare-docmost-compose.ps1 renders compose from docmost env" {
         $content = Get-Content -LiteralPath $outFile -Raw
         Assert-Match $content 'APP_SECRET:\s*\$\{APP_SECRET:-' "Rendered compose should preserve env variable syntax with defaults"
         Assert-Match $content 'image:\s*"\$\{DOCMOST_IMAGE:-docmost/docmost:latest\}"' "Rendered compose should keep image variable with default"
+        Assert-Match $content 'traefik\.docker\.network=\$\{COOLIFY_RESOURCE_UUID\}' "Rendered compose should preserve the Coolify runtime ingress network label"
 
         foreach ($line in (Get-Content -LiteralPath $outFile)) {
             if ($line.TrimStart().StartsWith("#")) { continue }

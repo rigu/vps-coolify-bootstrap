@@ -1,0 +1,25 @@
+[Unit]
+Description=Off-site replication for backup archives
+After=network-online.target pg-backup-infra.service
+Wants=network-online.target
+ConditionPathExists=/usr/local/bin/offsite-backup-sync.sh
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/install -d -m 700 /var/lib/backup-sync /var/lib/backup-sync/rclone-cache
+ExecStartPre=/bin/sh -c 'while /usr/bin/systemctl is-active --quiet pg-backup-infra.service; do sleep 30; done'
+Environment=RCLONE_CACHE_DIR=/var/lib/backup-sync/rclone-cache
+ExecStart=/usr/local/bin/offsite-backup-sync.sh
+User=root
+Group=root
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=30m
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadOnlyPaths=/srv/backups /srv/infra/postgres-wal-archive
+ReadWritePaths=/var/lib/backup-sync

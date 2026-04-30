@@ -24,6 +24,7 @@ Typical checks:
 sudo docker ps --format 'table {{.Names}}\t{{.Status}}'
 df -h /
 sudo docker system df
+sudo systemctl list-timers --all | grep -E 'pg-backup-infra|pg-basebackup-infra|offsite-backup-sync'
 ```
 
 ## Weekly checks
@@ -34,6 +35,14 @@ Verify:
 - no unexpected public listeners exist
 - TLS/domain routing still matches intended public entry points
 - recent changes did not bypass the firewall model
+
+Useful backup checks:
+
+```bash
+sudo systemctl status pg-backup-infra.service --no-pager
+sudo systemctl status offsite-backup-sync.service --no-pager || true
+sudo test -f /var/lib/backup-sync/offsite-last-success.txt && sudo cat /var/lib/backup-sync/offsite-last-success.txt
+```
 
 ## Monthly checks
 
@@ -65,6 +74,8 @@ Post-update validation should cover:
 - prefer deterministic replay/automation over ad hoc manual fixes
 - avoid uncontrolled auto-updates in production
 - close legacy/bootstrap ports when onboarding is complete
+- if shared infra backup automation is missing, install it with
+  `scripts/setup-backup-infra.sh` before relying on manual one-off dumps
 
 ## What should be documented privately
 

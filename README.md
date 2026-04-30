@@ -18,6 +18,7 @@ Production-ready **VPS bootstrap for Coolify on Ubuntu 24.04 LTS** with VPS-Cool
 - explicit recovery runbook for failed first boot
 - includes a Docmost deployment profile (env + compose guidance)
 - includes a Plane Community deployment profile (infra + env + compose guidance)
+- includes a reusable backup job installer for the shared infra layer (`scripts/setup-backup-infra.sh`)
 - emergency provider-console SSH recovery helper (`scripts/recover-ssh-access.sh`)
 - public/generic templates with no private data
 

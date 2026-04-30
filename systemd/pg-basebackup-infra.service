@@ -1,0 +1,17 @@
+[Unit]
+Description=Periodic PostgreSQL base backup for PITR
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/default/pg-basebackup-infra
+ExecStart=/usr/local/bin/pg-basebackup-infra.sh
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/srv/backups /run/docker.sock /var/run/docker.sock

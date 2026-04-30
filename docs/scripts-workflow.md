@@ -12,6 +12,10 @@ This page documents the detailed local workflow for:
 - `scripts/prepare-infra-compose.sh` / `scripts/prepare-infra-compose.ps1`
 - `scripts/setup-infra.sh`
 - `scripts/verify-infra-state.sh`
+- `scripts/setup-backup-infra.sh`
+- `scripts/pg-backup-infra.sh`
+- `scripts/pg-basebackup-infra.sh`
+- `scripts/offsite-backup-sync.example.sh`
 - `scripts/generate-docmost-secrets.sh` / `scripts/generate-docmost-secrets.ps1`
 - `scripts/prepare-docmost-compose.sh` / `scripts/prepare-docmost-compose.ps1`
 - `scripts/generate-plane-secrets.sh` / `scripts/generate-plane-secrets.ps1`
@@ -442,11 +446,58 @@ After first successful apply, use runtime env directly on reruns:
 sudo bash /opt/vps-coolify-bootstrap/scripts/setup-infra.sh --env-file /srv/infra/production-infra.env
 ```
 
+## Backup automation workflow
+
+Use this after `setup-infra.sh` is already applied successfully and the
+runtime env exists on the VPS.
+
+Local backup baseline:
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/setup-backup-infra.sh \
+  --env-file /srv/infra/production-infra.env
+```
+
+Optional off-site bootstrap after `rclone` and `/root/.config/rclone/rclone.conf`
+are already prepared:
+
+```bash
+sudo bash /opt/vps-coolify-bootstrap/scripts/setup-backup-infra.sh \
+  --env-file /srv/infra/production-infra.env \
+  --install-offsite-example \
+  --offsite-remote-dest 'YOUR_RCLONE_REMOTE:vps-backups' \
+  --enable-offsite-timer
+```
+
 What happens server-side:
+- installs `/usr/local/lib/vps-coolify-bootstrap/common.sh` for strict env loading
+- installs backup scripts and matching `systemd` units
+- writes `/etc/default/pg-backup-infra` and, when WAL is enabled,
+  `/etc/default/pg-basebackup-infra`
+- enables only the timers that are actually ready
+- runs the first local backup immediately unless `--skip-manual-run` is used
+- runs the first off-site sync only when the off-site script is fully configured
+
+Post-install verification:
+
+```bash
+sudo systemctl list-timers --all | grep -E 'pg-backup-infra|pg-basebackup-infra|offsite-backup-sync'
+sudo systemctl status pg-backup-infra.service --no-pager
+sudo systemctl status pg-basebackup-infra.service --no-pager || true
+sudo systemctl status offsite-backup-sync.service --no-pager || true
+sudo find /srv/backups -maxdepth 2 -type f | sort | tail -n 20
+```
+
+Design note:
+- off-site replication is intentionally scheduled as a separate job
+  instead of being chained implicitly from the local backup service
+
+What happens server-side for `setup-infra.sh`:
 - optional fill of unresolved placeholders in copied env
 - compose/config render on VPS
 - network ensure + deploy + validation
 - optional WAL archive directory prepare + PostgreSQL PITR setting validation
+- optional backup script + timer install for the shared infra layer
 
 All-in-one server run is also available:
 

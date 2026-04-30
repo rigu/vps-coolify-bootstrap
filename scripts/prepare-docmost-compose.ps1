@@ -64,12 +64,16 @@ function Resolve-ComposeExpr {
     $arg = $m.Groups["arg"].Value
     $isSet = $EnvMap.ContainsKey($name)
     $value = if ($isSet) { [string]$EnvMap[$name] } else { "" }
+    $preserveRuntimeToken = (-not $isSet) -and [string]::IsNullOrEmpty($op) -and $name.StartsWith("COOLIFY_")
 
     if (-not [string]::IsNullOrEmpty($arg) -and $arg.Contains('${')) {
         $arg = Process-ComposeText -Text $arg -EnvMap $EnvMap -PreserveTokens:$false
     }
 
     if ($PreserveToken) {
+        if ($preserveRuntimeToken) {
+            return ('${' + $name + '}')
+        }
         $defaultValue = ""
         switch ($op) {
             ":?" {

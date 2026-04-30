@@ -173,6 +173,7 @@ def load_env_map(path: str) -> dict[str, str]:
 
 
 env_map = load_env_map(env_path)
+runtime_token_prefixes = ("COOLIFY_",)
 
 
 def parse_token(text: str, start: int) -> tuple[str, int]:
@@ -210,6 +211,8 @@ def resolve_expr(expr: str, preserve_token: bool) -> str:
         return ValueError(arg if arg else f"{name} is required")
 
     if preserve_token:
+        if not is_set and op == "" and any(name.startswith(prefix) for prefix in runtime_token_prefixes):
+            return f"${{{name}}}"
         if op in (":?", "?"):
             if (op == ":?" and is_set and value != "") or (op == "?" and is_set):
                 default_value = value

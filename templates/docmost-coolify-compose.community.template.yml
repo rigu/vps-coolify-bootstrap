@@ -15,6 +15,11 @@
 #   because they are external services from another compose project.
 # - required `${VAR:?...}` checks are used on critical values so deploy fails
 #   fast when env setup is incomplete.
+# - if Coolify attaches this container to multiple Docker networks, verify
+#   after deploy that the live container has
+#   `traefik.docker.network=<coolify-project-network>`; without it,
+#   public Docmost routes can fail with `504` even when `/api/health`
+#   succeeds from inside the proxy network.
 
 services:
   docmost:
@@ -22,6 +27,11 @@ services:
     restart: unless-stopped
     expose:
       - "3000"
+    labels:
+      # Coolify injects COOLIFY_RESOURCE_UUID at deploy time; keep Traefik
+      # pinned to that ingress network so multi-network Docmost deployments
+      # do not drift into 504/503 routing failures.
+      - "traefik.docker.network=${COOLIFY_RESOURCE_UUID}"
     environment:
       APP_URL: ${APP_URL:?Missing APP_URL}
       APP_SECRET: ${APP_SECRET:?Missing APP_SECRET}

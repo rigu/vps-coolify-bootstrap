@@ -155,6 +155,16 @@ Rendered behavior:
 5. Save compose.
 6. Keep the built-in healthcheck enabled (`/api/health`) for reliable restarts in production.
 
+If Coolify attaches the Docmost container to more than one Docker
+network, confirm after first deploy that the live container also has an
+explicit Traefik ingress-network label:
+
+- `traefik.docker.network=<coolify-project-network>`
+
+Without that label, Traefik can pick the wrong backend network and the
+public route may fail with `504 Gateway Timeout` even though the
+container itself is healthy.
+
 ## 4) Configure Docmost env values in Coolify
 
 1. Open env variables for the Docmost resource.
@@ -183,6 +193,7 @@ Deploy resource in Coolify, then verify:
 
 ```bash
 curl -sSI https://docs.example.com/
+curl -sSI https://docs.example.com/api/health
 curl -sSI https://docs.example.com/login
 ```
 
@@ -192,7 +203,41 @@ Container-level checks on VPS:
 docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -i docmost
 docker logs --tail 120 <docmost-container-name>
 docker inspect --format '{{json .State.Health}}' <docmost-container-name>
+docker inspect --format '{{json .Config.Labels}}' <docmost-container-name>
+docker inspect --format '{{json .NetworkSettings.Networks}}' <docmost-container-name>
 ```
+
+### Troubleshooting `504` or `503` on the public Docmost route
+
+If `https://docs.example.com/` or `/api/health` returns `504` while the
+container healthcheck is green, check whether Traefik is pinned to the
+correct ingress network.
+
+Typical symptom pattern:
+
+- public domain returns `504 Gateway Timeout`
+- the Docmost container is `healthy`
+- direct access from `coolify-proxy` to the Docmost container IP on port
+  `3000` returns `200`
+- the live Docmost container is attached to more than one Docker network
+- the live Docmost container is missing `traefik.docker.network`
+
+Compare the live labels and networks:
+
+```bash
+docker inspect --format '{{json .Config.Labels}}' <docmost-container-name>
+docker inspect --format '{{json .NetworkSettings.Networks}}' <docmost-container-name>
+```
+
+Required fix:
+
+- set `traefik.docker.network=<coolify-project-network>` on the live
+  Docmost service
+- recreate or redeploy the Docmost container
+
+After recreate, a short `503 Service Unavailable` window is normal while
+the new container is still in `health: starting`. The route should
+return to `200` once the healthcheck passes.
 
 ## 7) Upgrade and rollback
 

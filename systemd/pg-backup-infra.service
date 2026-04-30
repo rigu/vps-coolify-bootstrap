@@ -1,0 +1,17 @@
+[Unit]
+Description=Daily infra backups (Postgres, SeaweedFS, optional Docmost local storage)
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/default/pg-backup-infra
+ExecStart=/usr/local/bin/pg-backup-infra.sh
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/srv/backups /run/docker.sock /var/run/docker.sock
