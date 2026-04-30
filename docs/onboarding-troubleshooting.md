@@ -109,7 +109,52 @@ sudo find /data/coolify -type f -name 'ssh_key@*' -exec chmod 600 {} + 2>/dev/nu
 
 Then retry the action in Coolify UI.
 
-## 8) `UNPROTECTED PRIVATE KEY FILE` for Coolify localhost key
+## 8) Port 22 still listening after bootstrap (existing server)
+
+Symptom:
+- `bootstrap-host.sh` fails with: `port 22 is still listening after stale-listener cleanup`
+- `bootstrap expects only SSH_PORT=<custom_port>; inspect ssh.socket and SSH config fragments`
+
+Cause:
+- On Ubuntu 24.04, the default SSH service uses `ssh.socket` (systemd socket activation)
+  which listens on port 22.
+- Bootstrap disables `ssh.socket` and restarts `ssh.service` on the custom port, but the
+  original sshd process (spawned by socket activation before bootstrap ran) keeps its
+  file descriptors open on port 22.
+- This is most common on existing servers where SSH was already active before bootstrap.
+
+Fix:
+
+```bash
+# Identify the stale sshd process on :22
+sudo ss -lntp | grep ':22 '
+# Output shows pid=XXXXX
+
+# Kill the stale listener
+sudo kill <PID>
+
+# Verify only custom port remains
+sudo ss -lntp | grep ssh
+# Should show only :2278 (or your SSH_PORT)
+
+# Re-run bootstrap
+sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env
+```
+
+Prevention:
+- On a fresh server, stop the default SSH before running bootstrap:
+
+```bash
+sudo systemctl disable --now ssh.socket
+sudo systemctl stop ssh.service
+sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env
+```
+
+Important: keep provider console access open when killing SSH processes.
+Do not disconnect your current session until you confirm access on the new port
+from a separate terminal.
+
+## 9) `UNPROTECTED PRIVATE KEY FILE` for Coolify localhost key
 
 Example error:
 - `Permissions 0660 for '/var/www/html/storage/app/ssh/keys/ssh_key@...' are too open`
