@@ -84,6 +84,7 @@ $appsValkeyPassword = [string]($kv["APPS_VALKEY_PASSWORD"])
 $planeRabbitmqPassword = [string]($kv["PLANE_RABBITMQ_PASSWORD"])
 $planeS3AccessKey = [string]($kv["PLANE_S3_ACCESS_KEY"])
 $planeS3SecretKey = [string]($kv["PLANE_S3_SECRET_KEY"])
+$postgresReplicationPassword = [string]($kv["POSTGRES_REPLICATION_PASSWORD"])
 
 $passwordsChanged = $false
 $secretsChanged = $false
@@ -98,6 +99,10 @@ if ($ForcePasswords -or (Test-EmptyOrPlaceholder -Value $appsValkeyPassword)) {
 }
 if ($ForcePasswords -or (Test-EmptyOrPlaceholder -Value $planeRabbitmqPassword)) {
     $planeRabbitmqPassword = New-HexSecret -HexLength 32
+    $passwordsChanged = $true
+}
+if ($ForcePasswords -or (Test-EmptyOrPlaceholder -Value $postgresReplicationPassword)) {
+    $postgresReplicationPassword = New-HexSecret -HexLength 32
     $passwordsChanged = $true
 }
 if ($ForceSecrets -or (Test-EmptyOrPlaceholder -Value $planeS3AccessKey)) {
@@ -116,6 +121,7 @@ $saw = @{
     "PLANE_RABBITMQ_PASSWORD" = $false
     "PLANE_S3_ACCESS_KEY" = $false
     "PLANE_S3_SECRET_KEY" = $false
+    "POSTGRES_REPLICATION_PASSWORD" = $false
 }
 
 $updated = @{
@@ -124,6 +130,7 @@ $updated = @{
     "PLANE_RABBITMQ_PASSWORD" = $planeRabbitmqPassword
     "PLANE_S3_ACCESS_KEY" = $planeS3AccessKey
     "PLANE_S3_SECRET_KEY" = $planeS3SecretKey
+    "POSTGRES_REPLICATION_PASSWORD" = $postgresReplicationPassword
 }
 
 foreach ($line in Get-Content -LiteralPath $envPath) {
@@ -152,7 +159,7 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 Write-Host "Updated: $envPath"
 if ($passwordsChanged) {
-    Write-Host "Infra passwords generated/refreshed (POSTGRES_APPS_PASSWORD, APPS_VALKEY_PASSWORD, PLANE_RABBITMQ_PASSWORD)."
+    Write-Host "Infra passwords generated/refreshed (POSTGRES_APPS_PASSWORD, APPS_VALKEY_PASSWORD, PLANE_RABBITMQ_PASSWORD, POSTGRES_REPLICATION_PASSWORD)."
 } else {
     Write-Host "Infra passwords kept (use -ForcePasswords to rotate)."
 }
