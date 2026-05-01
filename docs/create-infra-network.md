@@ -364,4 +364,4 @@ sudo docker network inspect infra --format '{{range .Containers}}{{.Name}} {{end
 sudo ufw status
 ```
 
-Back to [Install Plane on Coolify](install-plane-on-coolify.md)
+Back to [Docs Home](index.md)

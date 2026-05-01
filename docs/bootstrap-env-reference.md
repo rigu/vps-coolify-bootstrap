@@ -112,4 +112,4 @@ Notes:
 Detailed mode behavior:
 - [VPS Coolify Realtime Modes](vps-coolify-realtime-modes.md)
 
-Back to [Getting Started](getting-started.md)
+Back to [Docs Home](index.md)

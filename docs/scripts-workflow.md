@@ -584,4 +584,4 @@ sudo ss -lntp | grep -E ':(5434|6379|5672|15672|8333)\b' || true
 If a port is already occupied by another service, update the corresponding
 `*_HOST_PORT` in `production-infra.env` and rerun `setup-infra.sh`.
 
-Back to [Getting Started](getting-started.md)
+Back to [Docs Home](index.md)

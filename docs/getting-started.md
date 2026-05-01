@@ -212,13 +212,11 @@ Recommended next sequence for workloads:
 
 ## 5) Advanced operations
 
-- Replay bootstrap policy: [Operations and Security](operations-security.md#replay-bootstrap-policy-idempotent)
-- Coolify update runbook: [Operations and Security](operations-security.md#coolify-update-runbook-recommended)
-- Failed first boot recovery: [Bootstrap Failure Recovery](bootstrap-failure-recovery.md)
-- VPS deployment lifecycle modes: [VPS Coolify Deployment Modes](vps-coolify-deployment-modes.md)
-- Realtime exposure modes and update procedure: [VPS Coolify Realtime Modes](vps-coolify-realtime-modes.md)
-- Create infra for workloads: [Create Infra Network](create-infra-network.md)
-- Docmost install guide (Coolify): [Install Docmost on Coolify](install-docmost-on-coolify.md)
-- Plane install guide (Coolify): [Install Plane on Coolify](install-plane-on-coolify.md)
+After the server is running and Coolify onboarding is complete:
+
+- **Policy changes**: replay bootstrap after editing server-side `bootstrap.env` — see [Operations and Security](operations-security.md#replay-bootstrap-policy-idempotent)
+- **Coolify upgrades**: follow the update runbook — see [Operations and Security](operations-security.md#coolify-update-runbook-recommended)
+- **Failed first boot**: step-by-step recovery — see [Bootstrap Failure Recovery](bootstrap-failure-recovery.md)
+- **Realtime modes**: switch between public/closed — see [VPS Coolify Realtime Modes](vps-coolify-realtime-modes.md)
 
 Back to [Docs Home](index.md)

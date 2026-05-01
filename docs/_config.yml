@@ -3,7 +3,7 @@ description: Production-ready VPS bootstrap for Coolify on Ubuntu 24.04 with VPS
 url: https://rigu.github.io
 baseurl: /vps-coolify-bootstrap
 remote_theme: just-the-docs/just-the-docs@v0.10.1
-color_scheme: dark
+color_scheme: light
 markdown: kramdown
 plugins:
   - jekyll-seo-tag
@@ -18,3 +18,5 @@ defaults:
 aux_links:
   "GitHub":
     - "https://github.com/rigu/vps-coolify-bootstrap"
+nav_sort: case_insensitive
+heading_anchors: true

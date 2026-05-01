@@ -251,3 +251,5 @@ Default repository baseline uses:
 - `DOCMOST_IMAGE=docmost/docmost:latest`
 
 Pin to a fixed tag in production if you need deterministic upgrades.
+
+Back to [Docs Home](index.md)

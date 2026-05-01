@@ -219,3 +219,5 @@ main source of prior incidents.
 4. Keep rollback simple:
    - revert only `PLANE_APP_VERSION` / explicit image pins
    - redeploy
+
+Back to [Docs Home](index.md)

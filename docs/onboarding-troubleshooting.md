@@ -173,4 +173,4 @@ Then replay bootstrap so the policy is reapplied consistently:
 sudo bash /opt/vps-coolify-bootstrap/scripts/bootstrap-host.sh /etc/vps-coolify-bootstrap/bootstrap.env
 ```
 
-Back to [Getting Started](getting-started.md)
+Back to [Docs Home](index.md)

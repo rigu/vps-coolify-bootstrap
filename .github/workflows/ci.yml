@@ -87,6 +87,8 @@ jobs:
           test -f docs/operations-security.md
           test -f docs/bootstrap-failure-recovery.md
           test -f docs/github-promotion.md
+          test -f docs/backup-strategy.md
+          test -f docs/maintenance-runbook.md
           test -f docs/assets/bootstrap-overview.svg
 
       - name: Ensure license exists
