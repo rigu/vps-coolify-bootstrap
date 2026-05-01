@@ -1,5 +1,6 @@
 # Generated local output
 bootstrap-artifacts/
+wiki/
 *.env
 !*.env.example
 *.enc
