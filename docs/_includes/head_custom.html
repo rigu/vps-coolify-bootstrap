@@ -1,52 +1,35 @@
 <style>
-  /* ===== Sidebar — dark tech, high contrast ===== */
+  /* ===== Sidebar — light with clear active state ===== */
   .side-bar {
-    background-color: #161b22;
+    background-color: #f8f9fa;
+    border-right: 1px solid #e1e4e8;
   }
 
   .site-title {
-    color: #79c0ff !important;
+    color: #24292f !important;
     font-weight: 700;
   }
 
   .nav-list .nav-list-item .nav-list-link {
-    color: #f0f6fc;
-    font-size: 0.88rem;
-    padding: 6px 16px;
-    border-radius: 4px;
+    color: #24292f;
+    font-size: 0.9rem;
+    padding: 6px 12px;
   }
 
   .nav-list .nav-list-item .nav-list-link:hover {
-    background-color: #21262d;
-    color: #79c0ff;
+    background-color: #ebeef1;
+    color: #0969da;
   }
 
   .nav-list .nav-list-item .nav-list-link.active {
-    background-color: #0d1117;
-    color: #79c0ff;
+    background-color: #ddf4ff;
+    color: #0969da;
     font-weight: 600;
-    border-left: 3px solid #79c0ff;
+    border-left: 3px solid #0969da;
+    padding-left: 9px;
   }
 
-  /* Aux links (GitHub link) */
-  .aux-nav .aux-nav-list-item a {
-    color: #b1bac4;
-  }
-  .aux-nav .aux-nav-list-item a:hover {
-    color: #79c0ff;
-  }
-
-  /* Search input */
-  .search-input {
-    background-color: #0d1117;
-    border: 1px solid #30363d;
-    color: #f0f6fc;
-  }
-  .search-input::placeholder {
-    color: #6e7681;
-  }
-
-  /* ===== Main content — clean light ===== */
+  /* ===== Main content ===== */
   .highlight pre, pre.highlight {
     border-radius: 6px;
     border: 1px solid #e1e4e8;
