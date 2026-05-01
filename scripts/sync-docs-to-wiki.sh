@@ -82,9 +82,9 @@ for src_file in "$docs_dir"/*.md; do
   for doc_name in "${!page_map[@]}"; do
     wiki_target="${page_map[$doc_name]}"
     # [text](filename.md#anchor) -> [text](wiki-page-name#anchor)
-    content="$(echo "$content" | sed "s|]($doc_name#|]($wiki_target#|g")"
+    content="${content//]($doc_name#/]($wiki_target#}"
     # [text](filename.md) -> [text](wiki-page-name)
-    content="$(echo "$content" | sed "s|]($doc_name)|]($wiki_target)|g")"
+    content="${content//]($doc_name)/]($wiki_target)}"
   done
 
   # Write final content, strip leading blank lines
