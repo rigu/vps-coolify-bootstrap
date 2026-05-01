@@ -62,8 +62,18 @@ bootstrap_success "apt lock is free."
 # ---------------------------------------------------------------------------
 # Detect Ubuntu codename and validate
 # ---------------------------------------------------------------------------
-CODENAME="$(. /etc/os-release 2>/dev/null && echo "${UBUNTU_CODENAME:-}" || true)"
-VERSION_ID="$(. /etc/os-release 2>/dev/null && echo "${VERSION_ID:-}" || true)"
+# shellcheck source=/dev/null
+if CODENAME="$(. /etc/os-release 2>/dev/null && echo "${UBUNTU_CODENAME:-}")"; then
+  : # sourced successfully
+else
+  CODENAME=""
+fi
+# shellcheck source=/dev/null
+if VERSION_ID="$(. /etc/os-release 2>/dev/null && echo "${VERSION_ID:-}")"; then
+  : # sourced successfully
+else
+  VERSION_ID=""
+fi
 bootstrap_info "Detected Ubuntu: codename=$CODENAME version=$VERSION_ID"
 
 if [[ "$CODENAME" != "noble" ]]; then
