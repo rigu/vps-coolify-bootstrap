@@ -1,11 +1,64 @@
 <style>
-  /* Improve code block readability */
+  /* ===== Sidebar — tech/dark accent ===== */
+  .side-bar {
+    background-color: #1b1f23;
+    border-right: 1px solid #30363d;
+  }
+
+  .site-title {
+    color: #58a6ff !important;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  .nav-list .nav-list-item .nav-list-link {
+    color: #c9d1d9;
+    font-size: 0.85rem;
+    padding: 4px 16px;
+    border-radius: 4px;
+    transition: background-color 0.15s, color 0.15s;
+  }
+
+  .nav-list .nav-list-item .nav-list-link:hover {
+    background-color: #21262d;
+    color: #58a6ff;
+  }
+
+  .nav-list .nav-list-item .nav-list-link.active {
+    background-color: #0d1117;
+    color: #58a6ff;
+    font-weight: 600;
+    border-left: 3px solid #58a6ff;
+  }
+
+  .side-bar .site-header {
+    border-bottom: 1px solid #30363d;
+  }
+
+  /* Aux links (GitHub link in sidebar header) */
+  .aux-nav .aux-nav-list-item a {
+    color: #8b949e;
+  }
+  .aux-nav .aux-nav-list-item a:hover {
+    color: #58a6ff;
+  }
+
+  /* Search input in sidebar */
+  .search-input {
+    background-color: #0d1117;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+  }
+  .search-input::placeholder {
+    color: #484f58;
+  }
+
+  /* ===== Main content — clean light ===== */
   .highlight pre, pre.highlight {
     border-radius: 6px;
     border: 1px solid #e1e4e8;
   }
 
-  /* Better table styling */
   table th {
     background-color: #f6f8fa;
     font-weight: 600;
@@ -15,12 +68,10 @@
     padding: 8px 12px;
   }
 
-  /* Better spacing for main content */
   .main-content {
     max-width: 920px;
   }
 
-  /* Subtle link underline */
   .main-content a:not(.btn):not(.site-title) {
     text-underline-offset: 2px;
   }
