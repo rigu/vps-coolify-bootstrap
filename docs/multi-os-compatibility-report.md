@@ -1,119 +1,156 @@
 # Multi-OS Compatibility & Security Audit Report
 
-**Document Version:** 2.1  
-**Analysis Date:** September 9, 2026  
-**Last Updated:** September 9, 2026  
+**Document Version:** 3.0  
+**Audit Date:** September 9, 2026  
+**Repository Commit:** `fa5732148f51822679e8d3c65c90cd56fc03cc3d`  
 **Analyst:** Kiro AI + External Security Review  
 **Target Operating Systems:** Ubuntu 24.04 LTS, Ubuntu 26.04 LTS, Debian 13 (Trixie)
 
 ---
 
-## Executive Summary
+## Priority Definitions
 
-This report provides a comprehensive analysis of the `public-vps-coolify-bootstrap` project's compatibility and security posture. **Version 2.0** integrates findings from an external security audit that identified critical risks beyond OS compatibility.
-
-### Overall Assessment
-
-| Category | Score | Notes |
-|----------|:-----:|-------|
-| Security Baseline | 8/10 | Strong foundation, critical gaps remain |
-| Operational Robustness | 8.5/10 | Excellent verification tooling |
-| Debian 13 Compatibility | 7/10 | OS detection broken, rest works |
-| Supply-Chain Hardening | 5.5/10 | **Critical gap** - mutable refs |
-
-### Key Findings (Priority Order)
-
-| Priority | Finding | Impact |
-|:--------:|---------|--------|
-| **P0** | Bootstrap executed from mutable Git ref | Supply-chain compromise risk |
-| **P0/P1** | SSH accessible publicly, rate-limited only | Management plane exposure |
-| **P1** | `DEVOPS_USER` has `NOPASSWD:ALL` | Compromised SSH key = instant root |
-| **P1** | All managed users in `docker` group | Docker = root-equivalent |
-| **P1** | UFW reset on replay | Custom rules lost |
-| **P1** | Coolify ports `6001/6002/8000` not hardened by default | Direct Internet exposure |
-| **P1** | Debian 13 OS detection broken | `UBUNTU_CODENAME` doesn't exist |
-| **P2** | Vault + encryption key on same host | Limited protection if host compromised |
-| **P2** | Coolify localhost key allows all RFC1918 | Should restrict to actual Docker subnet |
-| **P2** | `sysctl rp_filter=1` may cause issues | Docker/WireGuard routing conflicts |
-| **P2** | `80/443` always allowed on management VPS | Consider VPN-only for admin services |
-| **P3** | Docker IPv6 workaround has no expiry | May persist indefinitely |
-| **P3** | Ubuntu-specific comments in code | Should be generalized |
-
-### What's Already Good
-
-The repository has several excellent security practices:
-
-1. ✅ **Strict env parser** - `load_env_file_strict()` manually parses env files and rejects:
-   - `$(...)`
-   - `${...}`
-   - Backticks
-   
-   Instead of dangerous `source bootstrap.env`. This eliminates a class of command injection vulnerabilities. **One of the best security choices in the repo.**
-
-2. ✅ **SSH socket handling** - Correctly disables `ssh.socket` on all OSes (lines 609-625)
-
-3. ✅ **Comprehensive verifier** - `verify-bootstrap-state.sh` checks 20+ security properties including:
-   - SSH socket/service state
-   - Port bindings
-   - UFW status
-   - Users/groups
-   - Sudo configuration
-   - Docker version
-   - Coolify container
-   - SSH key restrictions
-
-4. ✅ **Coolify SSH key restrictions** - The localhost key is placed in `authorized_keys` with:
-   ```
-   from="<private ranges>",no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-user-rc
-   ```
-   And operator key is removed from Coolify user. **Good design.**
-
-5. ✅ **Docker/UFW bypass documented** - DOCKER-USER chain properly managed with explicit documentation about the bypass
-
-6. ✅ **UFW already in packages list** - Works on Debian 13 *(corrected from v1.x)*
+| Priority | Name | Definition | Examples |
+|:--------:|------|------------|----------|
+| **P0** | Critical | Production blocker. Direct exploitation with critical impact. Immediate fix required. | Remote code execution, authentication bypass |
+| **P1** | High | Significant security or operational risk. Fix before production use. | Privilege escalation path, supply-chain risk, data exposure |
+| **P2** | Medium | Hardening recommendation. Defense-in-depth. Should fix but not blocker. | Broader-than-needed permissions, missing validation |
+| **P3** | Low | Quality/documentation. Nice-to-have improvements. | Code comments, formatting, technical debt |
 
 ---
 
-## Critical Security Findings
+## Executive Summary
 
-### 1. Supply-Chain Risk: Mutable Git Ref (P0)
+This report provides a comprehensive security audit of the `public-vps-coolify-bootstrap` project. Version 3.0 integrates findings from multiple review iterations and external security analysis.
+
+### Overall Assessment
+
+| Category | Status | Notes |
+|----------|:------:|-------|
+| Security Baseline | **PARTIAL** | Strong foundation, critical gaps in SSH persistence and group permissions |
+| Operational Robustness | **VERIFIED** | Excellent verification tooling |
+| Debian 13 Compatibility | **PARTIAL** | OS detection broken, core functionality works |
+| Ubuntu 26.04 Compatibility | **UNTESTED** | Not validated by Coolify or this project |
+| Supply-Chain Hardening | **GAP** | Mutable refs, external installers not audited |
+
+### Key Findings Summary
+
+| Priority | Count | Most Critical |
+|:--------:|:-----:|---------------|
+| **P1** | 12 | SSH socket generator not masked, `/data/coolify` group permissions, supply-chain boundaries |
+| **P2** | 10 | RFC1918 SSH trust, Coolify auto-update, Docker preinstall recommendation |
+| **P3** | 5 | Documentation, comments, technical debt |
+
+---
+
+## What's Already Good
+
+The repository demonstrates several excellent security practices:
+
+### 1. ✅ Strict Environment Parser
+`load_env_file_strict()` manually parses env files and **rejects dangerous patterns**:
+- `$(...)`
+- `${...}`
+- Backticks
+
+Instead of dangerous `source bootstrap.env`. **This eliminates command injection vulnerabilities.**
+
+### 2. ✅ Comprehensive Verifier
+`verify-bootstrap-state.sh` checks 20+ security properties including SSH state, ports, users, groups, sudo, Docker, Coolify container, and SSH key restrictions.
+
+### 3. ✅ Coolify SSH Key Restrictions
+The localhost key uses `authorized_keys` restrictions:
+```
+from="<private ranges>",no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-user-rc
+```
+Operator key is removed from Coolify user.
+
+### 4. ✅ Docker/UFW Bypass Documented
+DOCKER-USER chain properly managed with explicit documentation about the UFW bypass.
+
+### 5. ✅ Registration Race Mitigation
+Bootstrap sets root account credentials and seeds root user, reducing the risk of instance takeover via open registration. ([Coolify docs][1])
+
+### 6. ✅ UFW in Packages List
+Works on Debian 13 (not pre-installed there).
+
+---
+
+## P1 Findings (High Priority)
+
+### 1. SSH Socket Generator Not Masked (P1) ⚠️ NEW
 
 **Current Behavior:**
+```bash
+# bootstrap-host.sh
+systemctl disable --now ssh.socket 2>/dev/null || true
+```
 
-Cloud-init executes:
+**Problem:** On Ubuntu 24.04, `sshd-socket-generator` exists. Simply disabling `ssh.socket` is **not sufficient for persistent deactivation**. The generator can re-enable socket activation on boot.
+
+**Evidence:** [Launchpad Ubuntu Noble openssh changelog][2]
+
+**Required Fix:**
+```bash
+# Mask the generator to prevent re-activation
+ln -sf /dev/null /etc/systemd/system-generators/sshd-socket-generator
+systemctl daemon-reload
+systemctl disable --now ssh.socket
+systemctl enable --now ssh.service
+```
+
+**Required Test:**
+```
+bootstrap → reboot → ssh.socket inactive → ssh.service active → only SSH_PORT listening
+```
+
+**Impact:** Without masking, SSH socket may be re-enabled after reboot, causing `systemctl reload ssh` failures.
+
+---
+
+### 2. `/data/coolify` Group Permissions Too Broad (P1) ⚠️ NEW
+
+**Current Behavior:**
+```bash
+chgrp -R coolify /data/coolify
+chmod -R g+rwX /data/coolify
+# + all managed users added to coolify group
+```
+
+**Problem:** Combined with automatic `coolify` group membership for all managed users, a compromised SSH key grants **write access to Coolify runtime/config without sudo**.
+
+**Required Fix:**
+```bash
+# Separate group roles
+SUDO_USERS="..."
+DOCKER_USERS="..."           # Explicit, default empty
+COOLIFY_RUNTIME_USERS="..."  # Explicit, only Coolify user
+
+# /data/coolify permissions
+chown -R coolify:coolify /data/coolify
+chmod -R o-rwx /data/coolify
+# Sensitive files: owner-only (0600/0700)
+```
+
+---
+
+### 3. Supply-Chain: Mutable Git Ref (P1)
+
+**Current Behavior:**
 ```bash
 git clone --depth 1 --branch "$repo_ref" "$repo_url" "$repo_dir"
 bash "$repo_dir/scripts/bootstrap-host.sh" ...
 ```
 
-If `BOOTSTRAP_REPO_REF=main`, bootstrap executes **whatever `main` means at that moment**.
+If `BOOTSTRAP_REPO_REF=main`, bootstrap executes whatever `main` means at that moment.
 
-**Attack Scenario:**
-```
-GitHub account compromised
-        ↓
-Malicious commit pushed to main
-        ↓
-New VPS boots
-        ↓
-cloud-init clones main
-        ↓
-Malicious script executes as root
-```
+**Note:** A Git tag can also be moved. Only commit SHA is truly immutable.
 
-**Same Problem with Updates:**
+**Required Fix:**
 ```bash
-# docs/operations-security.md recommends:
-sudo git pull --ff-only origin main
-sudo bash scripts/bootstrap-host.sh ...
-```
-
-**Recommended Fix:**
-
-```bash
-# Production bootstrap MUST use immutable ref
-BOOTSTRAP_REPO_REF=v1.3.0  # signed tag
-BOOTSTRAP_EXPECTED_SHA=7b4f33e712...  # exact commit
+# Production MUST use exact SHA
+BOOTSTRAP_REPO_REF=fa5732148f51822679e8d3c65c90cd56fc03cc3d
+BOOTSTRAP_EXPECTED_SHA=fa5732148f51822679e8d3c65c90cd56fc03cc3d
 
 # Verify after clone
 actual_sha=$(git rev-parse HEAD)
@@ -123,347 +160,165 @@ if [[ "$actual_sha" != "$BOOTSTRAP_EXPECTED_SHA" ]]; then
 fi
 ```
 
-**Priority:** 🔴 **P0 - CRITICAL**
-
 ---
 
-### 2. SSH Public Access (P0/P1)
+### 4. Supply-Chain: External Coolify Installer (P1) ⚠️ NEW
 
 **Current Behavior:**
-```
-Internet → SSH_PORT (rate-limited) → Server
-```
-
-**For a management VPS** that controls other production servers:
-```
-Internet → SSH → Management VPS → All production VPSes
-```
-
-**Recommended Fix:**
-
-Add VPN-only mode:
 ```bash
-# bootstrap.env
-SSH_PUBLIC_ACCESS=false  # default for management servers
-MANAGEMENT_CIDRS="10.100.0.0/24"  # WireGuard subnet
-
-# When SSH_PUBLIC_ACCESS=false:
-# - No UFW limit on public interface
-# - SSH allowed only from MANAGEMENT_CIDRS
+curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
 ```
 
-**Priority:** 🔴 **P0/P1 - CRITICAL for management VPS**
+This installer can install Docker and download other artifacts. The repository documents `curl|bash` as a trade-off.
+
+**Trust Boundaries (must be explicit):**
+
+| Boundary | Trust Level | Notes |
+|----------|:-----------:|-------|
+| Own repository | Full | Pinned SHA required |
+| Coolify installer | Accepted | Official, documented |
+| Docker via Coolify | Transitive | Could be isolated |
+
+**Recommendation (P2 hardening):** Pre-install Docker from official Docker repository, then Coolify installer doesn't need to bootstrap Docker via another remote installer.
 
 ---
 
-### 3. Secrets Storage Model (P2 - Context Dependent)
+### 5. Coupling to Coolify Internals (P1) ⚠️ NEW
 
 **Current Behavior:**
-
-`/etc/vps-coolify-bootstrap/bootstrap.env` is stored with:
-- `chmod 0600`
-- `owner root:root`
-
-This is **standard and acceptable** for most configuration secrets. A non-root user cannot read them.
-
-**Nuance - Vault + Key on Same Host:**
-
-If you have simultaneously:
-```
-/etc/vps-coolify-bootstrap/bootstrap.env
-  USER_PASSWORDS_ENCRYPTION_PASSWORD=ABC
-
-/etc/vps-coolify-bootstrap/user-passwords.enc
-  <vault encrypted with ABC>
+Bootstrap runs PHP in container and directly accesses:
+```php
+\App\Models\Server
+\App\Models\PrivateKey
+InstanceSettings
+id=0
 ```
 
-Then an attacker with **root access** can decrypt the vault.
+**Problem:** These are not stable public APIs. A Coolify upgrade may break bootstrap.
 
-**Perspective:** If an attacker already has root, you have much bigger problems (Docker secrets, SSH keys, Coolify config). This is **not a critical vulnerability**.
+**Required:**
+- Use public API if available
+- Add version guard
+- Add smoke tests after each Coolify upgrade
 
-**Risk Classification:**
-
-| Situation | Risk Level |
-|-----------|:----------:|
-| Secret in Git repository | 🔴 Serious |
-| Secret in cloud-init user-data retained by provider | 🟠 Analyze |
-| Secret in `/etc/...` with `root:root 0600` | 🟢 Normal |
-| Vault + encryption key on same host | 🟡 Limited protection |
-| Temporary bootstrap secret no longer needed | Ideal to remove |
-
-**Recommendation (Nice-to-Have):**
-
-For values that are strictly temporary and not needed after bootstrap completes:
-```bash
-# Optional cleanup after bootstrap
-sed -i '/COOLIFY_ROOT_USER_PASSWORD/d' /etc/vps-coolify-bootstrap/bootstrap.env
+**Required Test:**
 ```
-
-**This is not a production blocker.**
-
-**Priority:** 🟢 **P2 - MINOR (Not a production requirement)**
+bootstrap supported Coolify version
+→ upgrade to next version
+→ replay bootstrap
+→ verify localhost Server/PrivateKey
+→ verify proxy
+→ verify deploy
+```
 
 ---
 
-### 4. NOPASSWD:ALL for DEVOPS_USER (P1)
+### 6. DEVOPS_USER has NOPASSWD:ALL (P1)
 
 **Current Behavior:**
 ```
 DEVOPS_USER → NOPASSWD:ALL
-COOLIFY_SUDO_NOPASSWD_USER → NOPASSWD:ALL
+COOLIFY_USER → NOPASSWD:ALL
 ```
 
-**Impact:** If `DEVOPS_USER`'s SSH key is compromised:
-```
-attacker SSH as devops
-        ↓
-sudo -n anything
-        ↓
-root immediately
-```
+**Distinction:**
+- `COOLIFY_USER`: NOPASSWD:ALL is **required** by Coolify non-root mode ([Coolify docs][3])
+- `DEVOPS_USER`: NOPASSWD:ALL is **not required**
 
-The local password doesn't matter.
+**Impact:** Compromised `DEVOPS_USER` SSH key = immediate root.
 
-**Recommended Fix:**
-
+**Required Fix:**
 ```bash
 # bootstrap.env
 DEVOPS_USER_NOPASSWD=false  # default
 
-# Only COOLIFY_USER gets NOPASSWD (required by platform)
-# DEVOPS_USER requires password for sudo
+# cloud-init template must also change
+# to avoid permissive window before apply_sudo_policy()
 ```
-
-**Priority:** 🟠 **P1 - IMPORTANT**
 
 ---
 
-### 5. Docker Group Membership (P1)
+### 7. All Managed Users in Docker Group (P1)
 
 **Current Behavior:**
+`verify-bootstrap-state.sh` requires every managed user in `sudo`, `docker`, `coolify`.
 
-`verify-bootstrap-state.sh` requires every managed user to be in:
-- `sudo`
-- `docker`
-- `coolify`
-
-**Impact:** Docker group membership is **root-equivalent**:
+**Problem:** Docker group is **root-equivalent** ([Docker docs][4]):
 ```bash
 docker run --rm -v /:/host alpine cat /host/etc/shadow
 ```
 
-**Question:** Why do `DEVOPS_USER` and every `ADDITIONAL_SUDO_USER` need Docker access?
-
-**Recommended Fix:**
-
+**Required Fix:**
 ```bash
-# Separate Docker access
-DOCKER_USERS=""  # explicit list, not automatic
+# Explicit, default empty
+DOCKER_USERS=""
 
-# Default: only Coolify user gets docker
-# DEVOPS_USER uses sudo for docker commands if needed
+# Only add users who genuinely need ambient Docker access
+# Others use: sudo docker ...
 ```
-
-**Priority:** 🟠 **P1 - IMPORTANT**
 
 ---
 
-### 6. UFW Reset on Replay (P1)
+### 8. UFW Reset on Replay (P1 Operational)
 
 **Current Behavior:**
 ```bash
-# bootstrap-host.sh
 ufw --force reset
 ```
 
-**Impact:** Any custom rules added after bootstrap are lost:
+**Problem:** In current model where custom rules are permitted out-of-band, replay eliminates:
 - WireGuard rules
 - Monitoring allowlists
 - Backup network access
-- Provider private networks
 
-**Recommended Fix:**
+**Note:** `ufw reset` is **acceptable** if bootstrap is complete source of truth for firewall.
 
-Option A: **Idempotent rule management**
+**Required Fix (until declarative firewall):**
 ```bash
-# Don't reset, manage specific rules
-ufw_ensure_rule() {
-    local rule="$1"
-    if ! ufw status | grep -qF "$rule"; then
-        ufw $rule
-    fi
-}
-```
+# Make firewall fully declarative
+MANAGEMENT_CIDRS="10.100.0.0/24"
+EXTRA_ALLOWED_TCP_PORTS="51820"
+EXTRA_ALLOWED_UDP_PORTS="51820"
+EXTRA_UFW_RULES="allow from 10.200.0.0/24 to any port 9100"
 
-Option B: **Declarative firewall from config**
-```bash
-# Generate complete ruleset from bootstrap.env
-# No reset, complete replacement
+# Generate complete ruleset deterministically
+# reset + regenerate becomes reconciliation mechanism
 ```
-
-**Priority:** 🟠 **P1 - OPERATIONAL SECURITY**
 
 ---
 
-### 7. Coolify Ports Default (P1)
+### 9. Coolify Ports Not Hardened by Default (P1)
 
 **Current Behavior:**
 - `CLOSE_COOLIFY_REALTIME_PORTS=false` (default)
-- Ports `6001`, `6002` are publicly accessible
-- Port `8000` remains open for onboarding
+- Ports 6001, 6002 publicly accessible
+- Port 8000 open during/after onboarding
 
-**Note:** Docker published ports bypass UFW (documented, but still a risk).
+**Coolify docs:** 8000/6001/6002 can be closed when dashboard served via custom domain ([Coolify docs][5])
 
-**Recommended Fix:**
-
+**Required Fix:**
 ```bash
 # Change defaults
-CLOSE_COOLIFY_REALTIME_PORTS=true  # hardened default
+CLOSE_COOLIFY_REALTIME_PORTS=true
 
-# Port 8000 during onboarding:
-# - Restrict to operator IP/VPN
-# - Close immediately after domain configuration
+# Port 8000 policy
+# onboarding: operator CIDR/VPN only
+# post-onboarding: deny public
 ```
-
-**Priority:** 🟠 **P1 - IMPORTANT**
 
 ---
 
-## Additional Findings (P2/P3)
-
-### 8. Coolify Localhost Key Subnet (P2)
-
-**Current Behavior:**
-
-The Coolify SSH key `from=` restriction includes all RFC1918 ranges:
-```
-10.0.0.0/8
-172.16.0.0/12
-192.168.0.0/16
-fc00::/7
-```
-
-**Issue:** This allows any private-range IP that can reach the host, not just the actual Coolify Docker subnet.
-
-**Recommended Fix:**
-```bash
-# Restrict to actual Docker bridge/Coolify subnet
-from="172.17.0.0/16"  # Docker default bridge
-# or specific Coolify network range
-```
-
-**Priority:** 🟡 **P2 - MINOR**
-
----
-
-### 9. sysctl rp_filter=1 Strict Mode (P2)
+### 10. Debian 13 OS Detection Broken (P1)
 
 **Current Behavior:**
 ```bash
-# vps-init.template.yml
-net.ipv4.conf.all.rp_filter=1
-net.ipv4.conf.default.rp_filter=1
+CODENAME="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-}")"
 ```
 
-**Issue:** Strict reverse path filtering (`rp_filter=1`) may cause issues with:
-- Docker bridge networking
-- WireGuard VPN
-- Asymmetric routing
-- Multi-homing
+**Problem:** Debian has `VERSION_CODENAME`, not `UBUNTU_CODENAME`. Script logs "Detected Ubuntu" incorrectly.
 
-**Recommended:**
-- For hosts with WireGuard: verify if `rp_filter=2` (loose) is needed for WG interface
-- Don't change globally without testing
-
-**Priority:** 🟡 **P2 - VERIFY BEFORE VPN SETUP**
-
----
-
-### 10. 80/443 Always Allowed (P2)
-
-**Current Behavior:**
-
-UFW allows ports 80 and 443 unconditionally:
+**Required Fix:**
 ```bash
-ufw allow 80/tcp
-ufw allow 443/tcp
-```
-
-**Issue:** For a "management security-first" server, consider:
-- Which services actually need public access?
-- Should Coolify UI / Forgejo admin be VPN-only?
-
-**Architectural Decision Needed:**
-```
-Public services → 80/443 via Traefik
-Admin services → VPN-only
-```
-
-**Note:** This is not a bug, but an architectural choice that may need revisiting for management VPS.
-
-**Priority:** 🟡 **P2 - ARCHITECTURAL DECISION**
-
----
-
-### 11. Docker IPv6 Workaround Lifecycle (P3)
-
-**Current Behavior:**
-
-Bootstrap contains conditional logic to set `"ipv6": false` for affected Docker versions due to a `ParseAddr` bug.
-
-**Issue:** No expiry condition documented. Workaround may persist indefinitely.
-
-**Recommended:**
-```bash
-# Document clearly:
-# - Affected Docker versions: X.Y.Z - A.B.C
-# - Fixed in: version D.E.F
-# - Remove workaround after: date/version
-```
-
-**Priority:** 🟢 **P3 - TECHNICAL DEBT**
-
----
-
-## OS Compatibility Analysis
-
-### Compatibility Matrix (Current State)
-
-| Component | Ubuntu 24.04 LTS | Ubuntu 26.04 LTS | Debian 13 (Trixie) |
-|-----------|:----------------:|:----------------:|:------------------:|
-| OS Detection | ✅ Full | ⚠️ Warning Only | ❌ Broken |
-| SSH Configuration | ✅ Full | ✅ Full | ✅ Full |
-| Firewall (UFW) | ✅ Full | ✅ Full | ✅ Full |
-| fail2ban | ✅ Full | ✅ Full | ✅ Full |
-| Docker iptables | ✅ Full | ✅ Full | ✅ Full |
-| Packages | ✅ Full | ✅ Full | ✅ Full |
-
-**Legend:** ✅ Full Support | ⚠️ Works with Warnings | ❌ Broken
-
-### OS Detection Issue (P1)
-
-**Current Code:**
-```bash
-# prepare-existing-server.sh
-CODENAME="$(
-    . /etc/os-release &&
-    echo "${UBUNTU_CODENAME:-}"
-)"
-```
-
-**On Debian 13:**
-```
-ID=debian
-VERSION_CODENAME=trixie
-# UBUNTU_CODENAME does not exist!
-```
-
-**Result:** `CODENAME=""`, script shows incorrect Ubuntu warning.
-
-**Recommended Fix:**
-
-```bash
-# Simple, correct approach
 detect_os() {
     if [[ -f /etc/os-release ]]; then
         . /etc/os-release
@@ -471,216 +326,347 @@ detect_os() {
         BOOTSTRAP_OS_VERSION="${VERSION_ID:-unknown}"
         BOOTSTRAP_OS_CODENAME="${VERSION_CODENAME:-unknown}"
     fi
-    
     export BOOTSTRAP_OS_ID BOOTSTRAP_OS_VERSION BOOTSTRAP_OS_CODENAME
 }
-
-validate_os() {
-    detect_os
-    
-    case "${BOOTSTRAP_OS_ID}-${BOOTSTRAP_OS_CODENAME}" in
-        ubuntu-noble|ubuntu-resolute|debian-trixie)
-            bootstrap_info "Detected: $BOOTSTRAP_OS_ID $BOOTSTRAP_OS_VERSION ($BOOTSTRAP_OS_CODENAME)"
-            ;;
-        *)
-            bootstrap_warn "Untested OS: $BOOTSTRAP_OS_ID $BOOTSTRAP_OS_CODENAME"
-            read -rp "Continue anyway? (y/N): " choice
-            [[ ! "$choice" =~ ^[Yy]$ ]] && exit 1
-            ;;
-    esac
-}
 ```
 
-**Note:** Don't over-engineer this. Three supported OSes don't need a generic framework.
+**Note:** Don't use interactive `read -rp` in generic function - may block cloud-init. Use:
+```bash
+# unsupported → fail
+# untested → fail unless ALLOW_UNTESTED_OS=true
+```
 
 ---
 
-### SSH Socket Activation ✅ ALREADY HANDLED
+### 11. Coolify Auto-Update Not Disabled (P1) ⚠️ NEW
 
-The bootstrap correctly handles `ssh.socket` on all three OSes:
+**Current Behavior:** Bootstrap doesn't pass `AUTOUPDATE=false` to Coolify installer.
 
+**Problem:** Coolify self-hosted has auto-update enabled by default. Coolify docs recommend disabling for production ([Coolify docs][6]).
+
+**Required Fix:**
 ```bash
-# bootstrap-host.sh (lines 609-625)
-systemctl disable --now ssh.socket 2>/dev/null || true
-rm -f /etc/systemd/system/ssh.socket.d/override.conf
-systemctl daemon-reload
-systemctl restart ssh.service
-```
+# Pass to installer or configure after
+COOLIFY_AUTOUPDATE=false
 
-**Verification:**
-```bash
-# verify-bootstrap-state.sh
-check_service_enabled_state ssh.socket disabled
-check_service_state ssh.socket inactive
-check_service_enabled_state ssh.service enabled
-check_service_state ssh.service active
+# Add verifier check
 ```
-
-**No changes required.**
 
 ---
 
-### fail2ban Configuration ✅ KEEP SIMPLE
+### 12. Missing `fuser` Dependency (P1) ⚠️ NEW
 
-**Current config uses `banaction = ufw`.**
+**Current Behavior:** `prepare-existing-server.sh` uses `fuser` for APT lock checks before installing prerequisites.
 
-The previous report recommended complex fallback logic. **Don't implement that.**
+**Problem:** `fuser` (from `psmisc`) is not guaranteed on minimal images.
 
-Since UFW is installed on all target OSes:
-- Ubuntu 24.04/26.04: pre-installed
-- Debian 13: installed via packages list
+**Required Fix:**
+```bash
+# Add to prerequisites or check
+command -v fuser &>/dev/null || apt-get install -y psmisc
 
-**Keep the simple approach:**
-```yaml
-banaction = ufw
+# Audit all commands used before package installation:
+# fuser, ss, visudo, systemctl, sysctl
 ```
 
-Multiple fallbacks increase test matrix without benefit.
+---
+
+## P2 Findings (Medium Priority - Hardening)
+
+### 13. SSH Public Access Model (P2)
+
+**Current:** SSH public with key-only, rate-limiting, fail2ban is **not a critical vulnerability**.
+
+For Tier-0 management VPS, VPN-only is **hardening recommendation**, not blocker.
+
+**Recommended:** Three modes instead of boolean:
+```bash
+SSH_ACCESS_MODE=public-key-limited  # default, safe bootstrap
+SSH_ACCESS_MODE=allowlist           # SSH_TRUSTED_CIDRS
+SSH_ACCESS_MODE=vpn-only            # after WireGuard setup
+```
+
+---
+
+### 14. RFC1918 SSH Trust Too Broad (P2)
+
+**Current:** SSH allowed without rate-limit from all private ranges:
+```
+10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, fc00::/7, fe80::/10
+```
+
+**Required:** Add `SSH_TRUSTED_CIDRS` and allow only actually used subnets.
+
+---
+
+### 15. Coolify Localhost Key Subnet (P2)
+
+**Current:** `from=` allows all RFC1918.
+
+**Problem:** Too broad. Should restrict to actual Docker/Coolify network.
+
+**Note:** Don't hardcode `172.17.0.0/16` - detect actual subnet or make configurable.
+
+---
+
+### 16. Docker Preinstall Recommendation (P2)
+
+Pre-installing Docker from official Docker repository before running Coolify installer reduces supply-chain chaining.
+
+**Status:** Hardening recommendation, not blocker. Coolify installer is accepted trust boundary.
+
+---
+
+### 17. Provider Firewall Layer (P2)
+
+Coolify recommends provider firewall when available ([Coolify docs][5]).
+
+For management VPS:
+```
+provider firewall + UFW + DOCKER-USER
+```
+is more robust than UFW alone.
+
+---
+
+### 18. `rp_filter=1` Verification (P2)
+
+**Current:**
+```bash
+net.ipv4.conf.all.rp_filter=1
+```
+
+**Note:** Strict mode (`1`) is recommended for source spoofing protection. Loose mode (`2`) needed only for asymmetric/complex routing ([Kernel docs][7]).
+
+**Required:** Verify per-interface if using WireGuard policy routing, multi-homing, or asymmetric routing. Don't reduce globally without demonstrated need.
+
+---
+
+### 19. unattended-upgrades Incomplete (P2)
+
+**Current:** Only enables service.
+
+**Required verification:**
+```bash
+apt-daily.timer enabled
+apt-daily-upgrade.timer enabled
+APT::Periodic::Update-Package-Lists != 0
+APT::Periodic::Unattended-Upgrade != 0
+Allowed-Origins not empty
+```
+
+Reference: [Ubuntu automatic updates][8]
+
+---
+
+### 20. 80/443 Architectural Decision (P2)
+
+80/443 are normal for Coolify reverse-proxy ([Coolify docs][9]).
+
+**Distinguish:**
+- Public reverse-proxy endpoints → 80/443 ✓
+- Administrative endpoints → access policy decision
+
+Coolify UI exposure is policy decision, not bug.
+
+---
+
+### 21. Docker IPv6 Workaround Validation (P2)
+
+**Current:** Heuristic may set `"ipv6": false` globally.
+
+**Required:**
+- Document upstream bug/issue ID
+- Exact affected versions
+- Exact fixed versions
+- Regression test
+- Don't disable IPv6 globally without demonstrating bug
+
+---
+
+### 22. Recovery: APP_KEY Off-Host (P2)
+
+Coolify requires `APP_KEY` for secret decryption. Without it, restored secrets cannot be decrypted ([Coolify docs][10]).
+
+**Required:** Document APP_KEY backup requirement.
+
+---
+
+## P3 Findings (Low Priority - Quality)
+
+### 23. Ubuntu-Specific Comments (P3)
+Comments like "Ubuntu 24.04 defaults to ssh.socket" should be generalized for multi-OS.
+
+### 24. Recovery: SSH Keys Coolify (P3)
+For migrated/recreated instance, Coolify SSH keys to remote servers must be recovered ([Coolify docs][11]).
+
+### 25. Cloud-Init Secrets Trust Boundary (P3)
+If values transmitted via provider user-data, document provider as trust boundary. If generated only on host, mark N/A.
+
+### 26. Kernel Reboot Check (P3)
+`package_upgrade: true` may install kernel without running it. Add post-bootstrap check for `/var/run/reboot-required`.
+
+### 27. Document Traceability (P3)
+Always include repository commit SHA in audit documents.
+
+---
+
+## OS Compatibility Matrix
+
+### Support Levels Defined
+
+| Level | Meaning |
+|-------|---------|
+| **VERIFIED** | Tested end-to-end by this project |
+| **RECOGNIZED** | Bootstrap recognizes and accepts OS |
+| **COOLIFY-SUPPORTED** | Listed in Coolify official docs |
+| **UNTESTED** | Not validated |
+
+### Current Status
+
+| OS | Bootstrap Recognition | Coolify Support | Project Testing | Overall |
+|----|:---------------------:|:---------------:|:---------------:|:-------:|
+| Ubuntu 24.04 LTS | ✅ | ✅ ([docs][12]) | ⬜ NEEDED | **PARTIAL** |
+| Ubuntu 26.04 LTS | ⚠️ Warning | ❓ Not listed | ⬜ NEEDED | **UNTESTED** |
+| Debian 13 | ❌ Broken | ❓ Not listed | ⬜ NEEDED | **PARTIAL** |
+
+**Note:** Ubuntu 26.04 should not be marked "Full" until:
+1. Coolify officially supports it
+2. End-to-end test completed by this project
+
+### Component Compatibility
+
+| Component | Ubuntu 24.04 | Ubuntu 26.04 | Debian 13 |
+|-----------|:------------:|:------------:|:---------:|
+| OS Detection | ✅ | ⚠️ | ❌ |
+| SSH Socket | ⚠️ Generator | ⚠️ Generator | ✅ |
+| UFW | ✅ | ✅ | ✅ |
+| fail2ban | ✅ | ✅ | ✅ |
+| Docker | ✅ | ⬜ | ✅ |
+| Packages | ✅ | ✅ | ⚠️ `psmisc` |
 
 ---
 
 ## Implementation Roadmap
 
-### Phase 1: Critical Security (Before Production)
+### Phase 1: P1 Fixes (Before Production)
 
-| # | Change | Effort | Impact |
-|---|--------|--------|--------|
-| 1 | Pin bootstrap to immutable Git SHA/tag | 30m | Supply-chain security |
-| 2 | Implement VPN-only SSH mode | 2h | Management plane security |
+| # | Change | Effort | Finding |
+|---|--------|--------|---------|
+| 1 | Mask `sshd-socket-generator` + reboot test | 1h | #1 |
+| 2 | Fix `/data/coolify` permissions + separate groups | 2h | #2 |
+| 3 | Pin bootstrap to SHA + verify | 30m | #3 |
+| 4 | Document Coolify installer trust boundary | 30m | #4 |
+| 5 | Add Coolify version guard + upgrade test | 2h | #5 |
+| 6 | Configurable `DEVOPS_USER_NOPASSWD` + cloud-init fix | 1h | #6 |
+| 7 | Separate `DOCKER_USERS`, default empty | 1h | #7 |
+| 8 | Declarative firewall model | 3h | #8 |
+| 9 | Hardened Coolify ports default + 8000 policy | 1h | #9 |
+| 10 | Fix Debian 13 OS detection | 30m | #10 |
+| 11 | Coolify `AUTOUPDATE=false` | 30m | #11 |
+| 12 | Add `psmisc` dependency | 15m | #12 |
 
-### Phase 2: Important Hardening
+### Phase 2: P2 Hardening
 
-| # | Change | Effort | Impact |
-|---|--------|--------|--------|
-| 3 | Configurable `NOPASSWD` for `DEVOPS_USER` | 30m | Least privilege |
-| 4 | Separate `DOCKER_USERS` from managed users | 1h | Least privilege |
-| 5 | Hardened Coolify ports default | 30m | Reduce exposure |
-| 6 | Idempotent UFW rule management | 2h | Operational safety |
-| 7 | Debian 13 OS detection fix | 30m | Correct operation |
+| # | Change | Effort | Finding |
+|---|--------|--------|---------|
+| 13 | SSH access modes (public/allowlist/vpn-only) | 2h | #13 |
+| 14 | `SSH_TRUSTED_CIDRS` | 1h | #14 |
+| 15 | Coolify localhost key subnet detection | 1h | #15 |
+| 16 | Docker preinstall option | 1h | #16 |
+| 17 | Provider firewall documentation | 30m | #17 |
+| 18 | `rp_filter` per-interface verification | 30m | #18 |
+| 19 | unattended-upgrades full verification | 1h | #19 |
+| 20 | 80/443 access policy documentation | 30m | #20 |
+| 21 | Docker IPv6 workaround validation | 1h | #21 |
+| 22 | APP_KEY backup documentation | 30m | #22 |
 
-### Phase 3: Quality Improvements
+### Phase 3: P3 Quality
 
-| # | Change | Effort | Impact |
-|---|--------|--------|--------|
-| 8 | Restrict Coolify SSH key to actual Docker subnet | 30m | Least privilege |
-| 9 | Verify `rp_filter` compatibility with WireGuard | 30m | VPN functionality |
-| 10 | Document 80/443 architectural decision | 30m | Clarity |
-| 11 | Docker IPv6 workaround expiry documentation | 15m | Technical debt |
-| 12 | Generalize Ubuntu-specific comments | 30m | Documentation |
-| 13 | Optional secrets cleanup post-bootstrap | 15m | Hygiene (nice-to-have) |
-
----
-
-## Complete Code Changes
-
-### File: `scripts/common.sh` (Additions)
-
-```bash
-# =============================================================================
-# OS Detection
-# =============================================================================
-
-detect_os() {
-    local os_id="unknown"
-    local os_version="unknown"
-    local os_codename="unknown"
-    
-    if [[ -f /etc/os-release ]]; then
-        # shellcheck disable=SC1091
-        . /etc/os-release
-        os_id="${ID:-unknown}"
-        os_version="${VERSION_ID:-unknown}"
-        os_codename="${VERSION_CODENAME:-unknown}"
-    elif command -v lsb_release &>/dev/null; then
-        os_id=$(lsb_release -si | tr '[:upper:]' '[:lower:]')
-        os_version=$(lsb_release -sr)
-        os_codename=$(lsb_release -sc)
-    fi
-    
-    export BOOTSTRAP_OS_ID="$os_id"
-    export BOOTSTRAP_OS_VERSION="$os_version"
-    export BOOTSTRAP_OS_CODENAME="$os_codename"
-}
-
-validate_os() {
-    detect_os
-    
-    case "${BOOTSTRAP_OS_ID}-${BOOTSTRAP_OS_CODENAME}" in
-        ubuntu-noble)     bootstrap_info "Detected: Ubuntu 24.04 LTS (Noble)" ;;
-        ubuntu-resolute)  bootstrap_info "Detected: Ubuntu 26.04 LTS (Resolute)" ;;
-        debian-trixie)    bootstrap_info "Detected: Debian 13 (Trixie)" ;;
-        ubuntu-*|debian-*)
-            bootstrap_warn "Untested OS: $BOOTSTRAP_OS_ID $BOOTSTRAP_OS_VERSION ($BOOTSTRAP_OS_CODENAME)"
-            read -rp "Continue anyway? (y/N): " continue_choice
-            [[ ! "$continue_choice" =~ ^[Yy]$ ]] && bootstrap_error "Cancelled."
-            ;;
-        *)
-            bootstrap_error "Unsupported OS: $BOOTSTRAP_OS_ID"
-            exit 1
-            ;;
-    esac
-}
-
-is_ubuntu() { [[ "$BOOTSTRAP_OS_ID" == "ubuntu" ]]; }
-is_debian() { [[ "$BOOTSTRAP_OS_ID" == "debian" ]]; }
-```
-
-### File: `scripts/prepare-existing-server.sh` (Modifications)
-
-Replace OS detection (lines ~56-66):
-
-```bash
-# Source common functions
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/common.sh"
-
-# Validate OS at start
-validate_os
-```
+| # | Change | Effort | Finding |
+|---|--------|--------|---------|
+| 23 | Generalize Ubuntu-specific comments | 30m | #23 |
+| 24 | SSH keys recovery documentation | 30m | #24 |
+| 25 | Cloud-init trust boundary documentation | 30m | #25 |
+| 26 | Kernel reboot check | 15m | #26 |
+| 27 | Audit traceability standards | 15m | #27 |
 
 ---
 
-## Verification Checklist Additions
+## Verifier Requirements
 
-Add to `verify-bootstrap-state.sh`:
+The verifier must become **policy-aware**. Current assertions become incorrect after hardening.
+
+### Derive Expectations From Config
 
 ```bash
-# Security-critical checks
-check_no_public_port 8000 "Coolify onboarding should be closed"
-check_no_public_port 6001 "Coolify realtime should be closed"
-check_no_public_port 6002 "Coolify realtime should be closed"
+# Instead of hardcoded:
+check_user_in_groups "$user" "sudo,docker,coolify"
 
-# If VPN-only mode
-if [[ "$SSH_PUBLIC_ACCESS" == "false" ]]; then
-    check_ssh_not_public "SSH should not be accessible from Internet"
-fi
+# Policy-aware:
+expected_groups="sudo"
+[[ "$user" in "$DOCKER_USERS" ]] && expected_groups+=",docker"
+[[ "$user" in "$COOLIFY_RUNTIME_USERS" ]] && expected_groups+=",coolify"
+check_user_in_groups "$user" "$expected_groups"
 ```
+
+### Effective Exposure Testing
+
+`check_no_public_port()` must test **effective exposure**, not just `ss` output:
+- Port may bind `0.0.0.0` but blocked by DOCKER-USER
+- Port may bind `0.0.0.0` but blocked by provider firewall
 
 ---
 
-## Testing Recommendations
+## Testing Matrix
 
-### Critical Test Cases
+### Required Fresh Image Tests
 
-| Test Case | All OSes | Notes |
-|-----------|:--------:|-------|
-| Bootstrap from pinned SHA | ⬜ | Supply-chain |
-| Bootstrap from tag | ⬜ | Supply-chain |
-| Reject tampered ref | ⬜ | Supply-chain |
-| SSH accessible only from VPN | ⬜ | If VPN-mode |
-| UFW replay preserves custom rules | ⬜ | Operational |
-| Coolify ports closed after onboard | ⬜ | Hardening |
+| OS | Image Source | Provider | Status |
+|----|--------------|----------|:------:|
+| Ubuntu 24.04 | Official minimal | Hetzner | ⬜ |
+| Ubuntu 26.04 | Official minimal | Hetzner | ⬜ |
+| Debian 13 | Official minimal | Hetzner | ⬜ |
 
-### OS-Specific Test Cases
+### Required Test Cases
 
-| Test Case | Ubuntu 24.04 | Ubuntu 26.04 | Debian 13 |
-|-----------|:------------:|:------------:|:---------:|
-| OS detection correct | ⬜ | ⬜ | ⬜ |
-| Fresh cloud-init bootstrap | ⬜ | ⬜ | ⬜ |
-| Bootstrap replay | ⬜ | ⬜ | ⬜ |
-| SSH hardening | ⬜ | ⬜ | ⬜ |
-| fail2ban banning | ⬜ | ⬜ | ⬜ |
-| Docker DOCKER-USER | ⬜ | ⬜ | ⬜ |
+#### Bootstrap Flow
+- [ ] Fresh cloud-init bootstrap
+- [ ] Bootstrap replay
+- [ ] Bootstrap interrupted halfway + replay
+- [ ] Reboot after bootstrap
+- [ ] SSH socket stays disabled after reboot
+
+#### SSH
+- [ ] SSH port change
+- [ ] SSH key rotation
+- [ ] Only SSH_PORT listening (not 22)
+
+#### Firewall
+- [ ] Custom rules preserved after declarative replay
+- [ ] 8000/6001/6002 external reachability blocked
+- [ ] DOCKER-USER rules effective
+
+#### Coolify
+- [ ] Coolify upgrade
+- [ ] Bootstrap replay after Coolify upgrade
+- [ ] localhost Server/PrivateKey verification
+- [ ] Proxy functional
+- [ ] Deploy functional
+
+#### Docker
+- [ ] Docker upgrade
+- [ ] IPv4-only VPS
+- [ ] Dual-stack IPv4/IPv6
+
+#### Recovery
+- [ ] Restore Coolify from backup
+- [ ] APP_KEY recovery
+- [ ] SSH keys recovery
+
+#### Security
+- [ ] Invalid/tampered Git SHA rejected
+- [ ] Compromised user cannot write `/data/coolify` (after fix)
 
 ---
 
@@ -711,54 +697,50 @@ VERSION_CODENAME=trixie
 
 ## Appendix B: References
 
-### Security
-- [Docker - Packet Filtering and Firewalls](https://docs.docker.com/network/packet-filtering-firewalls/)
-- [Coolify - Firewall Configuration](https://coolify.io/docs/knowledge-base/server/firewall)
-
-### SSH Socket Issues
-- [Debian Bug #1128329](https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1128329)
-- [SSH reload error on Debian 13](https://www.claudiokuenzler.com/blog/1522/debian-13-trixie-ssh-service-reload-error-cannot-bind-address)
-
-### fail2ban
-- [fail2ban GitHub](https://github.com/fail2ban/fail2ban)
-- [LinuxCapable - Fail2Ban on Debian](https://linuxcapable.com/how-to-install-fail2ban-on-debian-linux/)
-
-### Official Documentation
-- [Debian 13 Release Notes](https://www.debian.org/releases/trixie/releasenotes)
-- [Ubuntu Security - Firewall](https://documentation.ubuntu.com/security/security-features/network/firewall/)
+[1]: https://next.coolify.io/docs/start-with-self-hosted "Start with Self-hosted | Coolify Docs"
+[2]: https://launchpad.net/ubuntu/noble/+source/openssh/+changelog "Ubuntu Noble openssh changelog"
+[3]: https://coolify.io/docs/knowledge-base/server/non-root-user "Non-root user | Coolify Docs"
+[4]: https://docs.docker.com/engine/install/linux-postinstall "Docker post-installation"
+[5]: https://coolify.io/docs/knowledge-base/server/firewall "Firewall | Coolify Docs"
+[6]: https://coolify.io/docs/knowledge-base/self-update "Coolify Self-Update"
+[7]: https://www.kernel.org/doc/html/v6.12/networking/ip-sysctl.html "Linux Kernel IP Sysctl"
+[8]: https://ubuntu.com/server/docs/how-to/software/automatic-updates "Ubuntu Automatic Updates"
+[9]: https://next.coolify.io/docs/core/infrastructure/servers/firewall "Coolify Firewall"
+[10]: https://next.coolify.io/docs/core/security-model "Coolify Security Model"
+[11]: https://coolify.io/docs/knowledge-base/how-to/backup-restore-coolify "Backup and Restore Coolify"
+[12]: https://coolify.io/docs/get-started/installation "Coolify Installation"
 
 ---
 
 ## Changelog
 
+### v3.0 (September 9, 2026)
+- **MAJOR REWRITE** integrating 48 external audit findings
+- **ADDED** formal P0/P1/P2/P3 definitions
+- **CHANGED** assessment from numeric scores to verifiable states (VERIFIED/PARTIAL/GAP/UNTESTED)
+- **ADDED** repository commit SHA for traceability
+- **NEW P1:** SSH socket generator masking required on Ubuntu 24.04
+- **NEW P1:** `/data/coolify` group permissions too broad
+- **NEW P1:** Supply-chain: Coolify installer trust boundary
+- **NEW P1:** Coupling to Coolify internals (PHP Models)
+- **NEW P1:** Coolify auto-update not disabled
+- **NEW P1:** Missing `fuser`/`psmisc` dependency
+- **RECLASSIFIED:** Mutable Git ref P0→P1 (requires repo compromise)
+- **RECLASSIFIED:** Public SSH P0/P1→P2 (hardening, not vulnerability)
+- **RECLASSIFIED:** Docker preinstall P1→P2 (hardening recommendation)
+- **CLARIFIED:** UFW reset is P1 operational until declarative firewall
+- **CHANGED:** Ubuntu 26.04 from "Full" to "UNTESTED"
+- **ADDED** comprehensive testing matrix with failure/recovery cases
+- **ADDED** verifier policy-awareness requirements
+
 ### v2.1 (September 9, 2026)
-- **FIXED:** Section numbering (duplicate section 3)
-- **EXPANDED:** "What's Already Good" with details about strict env parser and Coolify SSH key restrictions
-- **ADDED:** P2 - Coolify localhost key should restrict to actual Docker subnet (not all RFC1918)
-- **ADDED:** P2 - `sysctl rp_filter=1` may conflict with Docker/WireGuard
-- **ADDED:** P2 - 80/443 architectural decision for management VPS
-- **ADDED:** P3 - Docker IPv6 workaround needs expiry documentation
-- **ADDED:** P3 - Ubuntu-specific comments should be generalized
+- Added P2/P3 findings from audit
 
 ### v2.0 (September 9, 2026)
-- **MAJOR:** Integrated external security audit findings
-- **REMOVED:** UFW packages list recommendation (already implemented)
-- **REMOVED:** Complex fail2ban fallback logic (keep simple)
-- **ADDED:** P0 supply-chain risk (mutable Git ref)
-- **ADDED:** P0/P1 SSH public access risk
-- **ADDED:** P1 NOPASSWD privilege escalation
-- **ADDED:** P1 Docker group membership risk
-- **ADDED:** P1 UFW reset operational risk
-- **ADDED:** P1 Coolify ports hardening
-- **CORRECTED:** Secrets storage model - downgraded from P1 to P2 (root:root 0600 is standard)
-- **RESTRUCTURED:** Priority order based on actual security impact, not OS compatibility
+- Integrated external security audit findings
 
-### v1.2 (September 9, 2026)
-- Fixed SSH status in compatibility matrix
-- Removed redundant SSH handling code
-
-### v1.1 (September 9, 2026)
-- Initial compatibility analysis
+### v1.x (September 9, 2026)
+- Initial OS compatibility analysis
 
 ---
 
