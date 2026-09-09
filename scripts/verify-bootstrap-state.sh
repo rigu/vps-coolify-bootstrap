@@ -141,8 +141,28 @@ check_member_of_group() {
 }
 
 echo "=== SSH service baseline ==="
-check_service_enabled_state ssh.socket disabled
-check_service_state ssh.socket inactive
+# ssh.socket may not exist on all systems (e.g., Debian without socket activation).
+# Accept "disabled" or "not-found" as valid states for ssh.socket.
+ssh_socket_enabled="$(systemctl is-enabled ssh.socket 2>/dev/null || true)"
+case "$ssh_socket_enabled" in
+  disabled|not-found|"")
+    pass "ssh.socket is-enabled = $ssh_socket_enabled (not active)"
+    ;;
+  *)
+    fail "ssh.socket is-enabled = $ssh_socket_enabled (expected disabled or not-found)"
+    ;;
+esac
+
+ssh_socket_active="$(systemctl is-active ssh.socket 2>/dev/null || true)"
+case "$ssh_socket_active" in
+  inactive|unknown|"")
+    pass "ssh.socket is-active = $ssh_socket_active (not running)"
+    ;;
+  *)
+    fail "ssh.socket is-active = $ssh_socket_active (expected inactive)"
+    ;;
+esac
+
 check_service_enabled_state ssh.service enabled
 check_service_state ssh.service active
 
