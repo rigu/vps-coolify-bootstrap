@@ -104,12 +104,40 @@ write_files:
       COOLIFY_ROOT_USER_EMAIL='COOLIFY_ROOT_USER_EMAIL_HERE'
       COOLIFY_ROOT_USER_PASSWORD='COOLIFY_ROOT_USER_PASSWORD_HERE'
       USER_PASSWORDS_ENCRYPTION_PASSWORD='USER_PASSWORDS_ENCRYPTION_PASSWORD_HERE'
+      BOOTSTRAP_EXPECTED_SHA='BOOTSTRAP_EXPECTED_SHA_HERE'
 
 runcmd:
   - |
+    set -euo pipefail
+    
     repo_dir="/opt/vps-coolify-bootstrap"
     repo_url='BOOTSTRAP_REPO_URL_HERE'
     repo_ref='BOOTSTRAP_REPO_REF_HERE'
+    expected_sha='BOOTSTRAP_EXPECTED_SHA_HERE'
+
+    # Supply-chain protection: verify the fetched commit matches expected SHA.
+    # This prevents execution of tampered code even if the ref (branch/tag) is moved.
+    verify_sha() {
+      local actual_sha
+      actual_sha="$(git -C "$repo_dir" rev-parse HEAD)"
+      
+      # If expected_sha is empty or placeholder, skip verification (dev mode warning)
+      if [ -z "$expected_sha" ] || [ "$expected_sha" = "BOOTSTRAP_EXPECTED_SHA_HERE" ]; then
+        echo "WARNING: BOOTSTRAP_EXPECTED_SHA not set - skipping integrity verification" >&2
+        echo "WARNING: This is acceptable for development but NOT for production" >&2
+        return 0
+      fi
+      
+      if [ "$actual_sha" != "$expected_sha" ]; then
+        echo "FATAL: Bootstrap SHA mismatch!" >&2
+        echo "Expected: $expected_sha" >&2
+        echo "Actual:   $actual_sha" >&2
+        echo "This may indicate a tampered or moved ref. Aborting for security." >&2
+        exit 1
+      fi
+      
+      echo "Bootstrap SHA verified: $actual_sha"
+    }
 
     if [ -d "$repo_dir/.git" ]; then
       # Keep origin aligned with repo_url in case env changed since a prior run.
@@ -121,8 +149,18 @@ runcmd:
       git -C "$repo_dir" checkout --force FETCH_HEAD
     else
       rm -rf "$repo_dir"
-      git clone --depth 1 --branch "$repo_ref" "$repo_url" "$repo_dir"
+      # Use git init + fetch pattern for maximum compatibility with SHA refs
+      git init "$repo_dir"
+      git -C "$repo_dir" remote add origin "$repo_url"
+      if ! git -C "$repo_dir" fetch --depth 1 origin "$repo_ref"; then
+        echo "ERROR: failed to fetch $repo_ref from $repo_url" >&2
+        exit 1
+      fi
+      git -C "$repo_dir" checkout --force FETCH_HEAD
     fi
+    
+    # Verify SHA before executing any bootstrap code
+    verify_sha
 
     sysctl --system
     bash "$repo_dir/scripts/bootstrap-host.sh" /etc/vps-coolify-bootstrap/bootstrap.env
