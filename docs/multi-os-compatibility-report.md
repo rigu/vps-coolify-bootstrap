@@ -27,12 +27,12 @@ This report provides a comprehensive analysis of the `public-vps-coolify-bootstr
 |:--------:|---------|--------|
 | **P0** | Bootstrap executed from mutable Git ref | Supply-chain compromise risk |
 | **P0/P1** | SSH accessible publicly, rate-limited only | Management plane exposure |
-| **P1** | Secrets + encryption key on same host | Vault protection defeated |
 | **P1** | `DEVOPS_USER` has `NOPASSWD:ALL` | Compromised SSH key = instant root |
 | **P1** | All managed users in `docker` group | Docker = root-equivalent |
 | **P1** | UFW reset on replay | Custom rules lost |
 | **P1** | Coolify ports `6001/6002/8000` not hardened by default | Direct Internet exposure |
 | **P1** | Debian 13 OS detection broken | `UBUNTU_CODENAME` doesn't exist |
+| **P2** | Vault + encryption key on same host | Limited protection if host compromised |
 | **P2** | Coolify localhost key allows all RFC1918 | Should restrict to actual subnet |
 | **P2** | Docker IPv6 workaround has no expiry | May persist indefinitely |
 
@@ -131,42 +131,56 @@ MANAGEMENT_CIDRS="10.100.0.0/24"  # WireGuard subnet
 
 ---
 
-### 3. Secrets Lifecycle (P1)
+### 3. Secrets Storage Model (P2 - Context Dependent)
 
 **Current Behavior:**
 
-`/etc/vps-coolify-bootstrap/bootstrap.env` contains:
-- `COOLIFY_ROOT_USER_PASSWORD`
-- `USER_PASSWORDS_ENCRYPTION_PASSWORD`
+`/etc/vps-coolify-bootstrap/bootstrap.env` is stored with:
+- `chmod 0600`
+- `owner root:root`
 
-The vault (`user-passwords.enc`) and its decryption key are **on the same host**.
+This is **standard and acceptable** for most configuration secrets. A non-root user cannot read them.
 
-**Impact:** If host is compromised, encryption provides no protection.
+**Nuance - Vault + Key on Same Host:**
 
-**Also:** Cloud-init user-data contains these secrets, which may be:
-- Stored in VPS provider metadata
-- Visible in control panels
-- Logged by provisioning systems
+If you have simultaneously:
+```
+/etc/vps-coolify-bootstrap/bootstrap.env
+  USER_PASSWORDS_ENCRYPTION_PASSWORD=ABC
 
-**Recommended Fix:**
-
-```bash
-# After bootstrap completes successfully:
-# 1. Remove bootstrap secrets no longer needed
-sed -i '/COOLIFY_ROOT_USER_PASSWORD/d' /etc/vps-coolify-bootstrap/bootstrap.env
-sed -i '/USER_PASSWORDS_ENCRYPTION_PASSWORD/d' /etc/vps-coolify-bootstrap/bootstrap.env
-
-# 2. Store vault encryption key off-host:
-#    - Password manager
-#    - SOPS/age
-#    - External secret manager
+/etc/vps-coolify-bootstrap/user-passwords.enc
+  <vault encrypted with ABC>
 ```
 
-**Priority:** 🟠 **P1 - IMPORTANT**
+Then an attacker with **root access** can decrypt the vault.
+
+**Perspective:** If an attacker already has root, you have much bigger problems (Docker secrets, SSH keys, Coolify config). This is **not a critical vulnerability**.
+
+**Risk Classification:**
+
+| Situation | Risk Level |
+|-----------|:----------:|
+| Secret in Git repository | 🔴 Serious |
+| Secret in cloud-init user-data retained by provider | 🟠 Analyze |
+| Secret in `/etc/...` with `root:root 0600` | 🟢 Normal |
+| Vault + encryption key on same host | 🟡 Limited protection |
+| Temporary bootstrap secret no longer needed | Ideal to remove |
+
+**Recommendation (Nice-to-Have):**
+
+For values that are strictly temporary and not needed after bootstrap completes:
+```bash
+# Optional cleanup after bootstrap
+sed -i '/COOLIFY_ROOT_USER_PASSWORD/d' /etc/vps-coolify-bootstrap/bootstrap.env
+```
+
+**This is not a production blocker.**
+
+**Priority:** 🟢 **P2 - MINOR (Not a production requirement)**
 
 ---
 
-### 4. NOPASSWD:ALL for DEVOPS_USER (P1)
+### 3. NOPASSWD:ALL for DEVOPS_USER (P1)
 
 **Current Behavior:**
 ```
@@ -199,7 +213,7 @@ DEVOPS_USER_NOPASSWD=false  # default
 
 ---
 
-### 5. Docker Group Membership (P1)
+### 4. Docker Group Membership (P1)
 
 **Current Behavior:**
 
@@ -229,7 +243,7 @@ DOCKER_USERS=""  # explicit list, not automatic
 
 ---
 
-### 6. UFW Reset on Replay (P1)
+### 5. UFW Reset on Replay (P1)
 
 **Current Behavior:**
 ```bash
@@ -266,7 +280,7 @@ Option B: **Declarative firewall from config**
 
 ---
 
-### 7. Coolify Ports Default (P1)
+### 6. Coolify Ports Default (P1)
 
 **Current Behavior:**
 - `CLOSE_COOLIFY_REALTIME_PORTS=false` (default)
@@ -412,25 +426,25 @@ Multiple fallbacks increase test matrix without benefit.
 |---|--------|--------|--------|
 | 1 | Pin bootstrap to immutable Git SHA/tag | 30m | Supply-chain security |
 | 2 | Implement VPN-only SSH mode | 2h | Management plane security |
-| 3 | Secrets retirement after bootstrap | 1h | Reduce attack surface |
 
 ### Phase 2: Important Hardening
 
 | # | Change | Effort | Impact |
 |---|--------|--------|--------|
-| 4 | Configurable `NOPASSWD` for `DEVOPS_USER` | 30m | Least privilege |
-| 5 | Separate `DOCKER_USERS` from managed users | 1h | Least privilege |
-| 6 | Hardened Coolify ports default | 30m | Reduce exposure |
-| 7 | Idempotent UFW rule management | 2h | Operational safety |
-| 8 | Debian 13 OS detection fix | 30m | Correct operation |
+| 3 | Configurable `NOPASSWD` for `DEVOPS_USER` | 30m | Least privilege |
+| 4 | Separate `DOCKER_USERS` from managed users | 1h | Least privilege |
+| 5 | Hardened Coolify ports default | 30m | Reduce exposure |
+| 6 | Idempotent UFW rule management | 2h | Operational safety |
+| 7 | Debian 13 OS detection fix | 30m | Correct operation |
 
 ### Phase 3: Quality Improvements
 
 | # | Change | Effort | Impact |
 |---|--------|--------|--------|
-| 9 | Restrict Coolify SSH key to actual subnet | 30m | Least privilege |
-| 10 | Docker IPv6 workaround expiry | 15m | Technical debt |
-| 11 | Generalize Ubuntu-specific comments | 30m | Documentation |
+| 8 | Restrict Coolify SSH key to actual subnet | 30m | Least privilege |
+| 9 | Docker IPv6 workaround expiry | 15m | Technical debt |
+| 10 | Generalize Ubuntu-specific comments | 30m | Documentation |
+| 11 | Optional secrets cleanup post-bootstrap | 15m | Hygiene (nice-to-have) |
 
 ---
 
@@ -513,10 +527,6 @@ check_no_public_port 8000 "Coolify onboarding should be closed"
 check_no_public_port 6001 "Coolify realtime should be closed"
 check_no_public_port 6002 "Coolify realtime should be closed"
 
-# Post-bootstrap secrets cleanup
-check_env_not_contains "COOLIFY_ROOT_USER_PASSWORD" "Bootstrap secret should be removed"
-check_env_not_contains "USER_PASSWORDS_ENCRYPTION_PASSWORD" "Vault key should be off-host"
-
 # If VPN-only mode
 if [[ "$SSH_PUBLIC_ACCESS" == "false" ]]; then
     check_ssh_not_public "SSH should not be accessible from Internet"
@@ -537,7 +547,6 @@ fi
 | SSH accessible only from VPN | ⬜ | If VPN-mode |
 | UFW replay preserves custom rules | ⬜ | Operational |
 | Coolify ports closed after onboard | ⬜ | Hardening |
-| Secrets removed post-bootstrap | ⬜ | Hygiene |
 
 ### OS-Specific Test Cases
 
@@ -605,11 +614,11 @@ VERSION_CODENAME=trixie
 - **REMOVED:** Complex fail2ban fallback logic (keep simple)
 - **ADDED:** P0 supply-chain risk (mutable Git ref)
 - **ADDED:** P0/P1 SSH public access risk
-- **ADDED:** P1 secrets lifecycle
 - **ADDED:** P1 NOPASSWD privilege escalation
 - **ADDED:** P1 Docker group membership risk
 - **ADDED:** P1 UFW reset operational risk
 - **ADDED:** P1 Coolify ports hardening
+- **CORRECTED:** Secrets storage model - downgraded from P1 to P2 (root:root 0600 is standard)
 - **RESTRUCTURED:** Priority order based on actual security impact, not OS compatibility
 
 ### v1.2 (September 9, 2026)
