@@ -29,6 +29,7 @@ packages:
   - ufw
   - fail2ban
   - unattended-upgrades
+  - needrestart
 
 write_files:
   # P2 #18: Configure needrestart to not auto-restart services on Ubuntu 24.04+
