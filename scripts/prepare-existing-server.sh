@@ -60,25 +60,34 @@ done
 bootstrap_success "apt lock is free."
 
 # ---------------------------------------------------------------------------
-# Detect Ubuntu codename and validate
+# Detect OS and validate (supports Ubuntu/Debian)
 # ---------------------------------------------------------------------------
 # shellcheck source=/dev/null
-if CODENAME="$(. /etc/os-release 2>/dev/null && echo "${UBUNTU_CODENAME:-}")"; then
-  : # sourced successfully
+if . /etc/os-release 2>/dev/null; then
+  OS_ID="${ID:-unknown}"
+  OS_VERSION="${VERSION_ID:-unknown}"
+  # VERSION_CODENAME works for both Ubuntu and Debian
+  OS_CODENAME="${VERSION_CODENAME:-unknown}"
 else
-  CODENAME=""
+  OS_ID="unknown"
+  OS_VERSION="unknown"
+  OS_CODENAME="unknown"
 fi
-# shellcheck source=/dev/null
-if VERSION_ID="$(. /etc/os-release 2>/dev/null && echo "${VERSION_ID:-}")"; then
-  : # sourced successfully
-else
-  VERSION_ID=""
-fi
-bootstrap_info "Detected Ubuntu: codename=$CODENAME version=$VERSION_ID"
+bootstrap_info "Detected OS: ${OS_ID} ${OS_VERSION} (${OS_CODENAME})"
 
-if [[ "$CODENAME" != "noble" ]]; then
-  bootstrap_warn "This bootstrap is designed for Ubuntu 24.04 LTS (noble)."
-  bootstrap_warn "Detected: $CODENAME ($VERSION_ID). Proceed with caution."
+if [[ "$OS_ID" == "ubuntu" ]]; then
+  if [[ "$OS_CODENAME" != "noble" && "$OS_CODENAME" != "jammy" ]]; then
+    bootstrap_warn "This bootstrap is designed for Ubuntu 24.04 LTS (noble) or 22.04 LTS (jammy)."
+    bootstrap_warn "Detected: ${OS_ID} ${OS_CODENAME} (${OS_VERSION}). Proceed with caution."
+  fi
+elif [[ "$OS_ID" == "debian" ]]; then
+  if [[ "$OS_VERSION" != "12" && "$OS_VERSION" != "13" ]]; then
+    bootstrap_warn "This bootstrap is designed for Debian 12 (bookworm) or 13 (trixie)."
+    bootstrap_warn "Detected: ${OS_ID} ${OS_CODENAME} (${OS_VERSION}). Proceed with caution."
+  fi
+else
+  bootstrap_warn "This bootstrap is designed for Ubuntu or Debian."
+  bootstrap_warn "Detected: ${OS_ID} ${OS_CODENAME} (${OS_VERSION}). Proceed with caution."
 fi
 
 # ---------------------------------------------------------------------------

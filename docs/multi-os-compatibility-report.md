@@ -703,7 +703,7 @@ However, the Quick Installer explicitly lists only:
 | 5 | Separate `DOCKER_USERS`, default empty | 1h | #5 | ✅ |
 | 6 | Declarative firewall model (structured config) | 3h | #6 | ✅ |
 | 7 | Hardened Coolify ports default + 8000 policy | 1h | #7 | ✅ |
-| 8 | Fix Debian 13 OS detection | 30m | #8 | ⬜ |
+| 8 | Fix Debian 13 OS detection | 30m | #8 | ✅ |
 
 ### Phase 2: P2 Hardening
 
