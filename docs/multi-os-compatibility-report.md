@@ -1,10 +1,12 @@
 # Multi-OS Compatibility & Security Audit Report
 
-**Document Version:** 3.1  
+**Document Version:** 3.2  
 **Audit Date:** September 9, 2026  
 **Repository Commit:** `fa5732148f51822679e8d3c65c90cd56fc03cc3d`  
 **Analyst:** Kiro AI + External Security Review  
 **Target Operating Systems:** Ubuntu 24.04 LTS, Ubuntu 26.04 LTS, Debian 13 (Trixie)
+
+**Note:** The commit SHA above references the private repository state at audit time. For external reproducibility, a release tag or archive hash should be published alongside.
 
 ---
 
@@ -21,7 +23,7 @@
 
 ## Executive Summary
 
-This report provides a comprehensive security audit of the `public-vps-coolify-bootstrap` project. Version 3.1 integrates findings from multiple review iterations and external security analysis.
+This report provides a comprehensive security audit of the `public-vps-coolify-bootstrap` project. Version 3.2 integrates findings from multiple review iterations and external security analysis.
 
 ### Overall Assessment
 
@@ -31,7 +33,7 @@ This report provides a comprehensive security audit of the `public-vps-coolify-b
 | Operational Robustness | **PARTIAL** | Excellent verification tooling, but UFW replay risk, missing dependencies, tests pending |
 | Debian 13 Compatibility | **PARTIAL** | OS detection broken, core components appear compatible; E2E validation pending |
 | Ubuntu 26.04 Compatibility | **UNTESTED** | Coolify supports Debian/Ubuntu generically, but Quick Installer lists only 20.04/22.04/24.04 |
-| Supply-Chain Hardening | **GAP** | Own bootstrap not immutable-pinned; external installer trust boundary accepted but not version-pinned |
+| Supply-Chain Hardening | **PARTIAL** | Bootstrap ref currently mutable; external installer is an accepted unpinned trust boundary |
 
 ### Key Findings Summary
 
@@ -86,11 +88,11 @@ Works on Debian 13 (not pre-installed there).
 systemctl disable --now ssh.socket 2>/dev/null || true
 ```
 
-**Problem:** On Ubuntu 24.04, `sshd-socket-generator` exists. Simply disabling `ssh.socket` is **not sufficient for persistent deactivation**. The generator can generate runtime drop-ins for `ssh.socket`; for complete deactivation of socket-activated mode, Ubuntu documents masking the generator. ([Launchpad][2])
+**Problem:** On Ubuntu 24.04, `sshd-socket-generator` exists. Simply disabling `ssh.socket` is **not sufficient for persistent deactivation**. The generator can generate runtime drop-ins for `ssh.socket`; socket-activation configuration may be regenerated after boot or package operations unless the generator is masked. ([Launchpad][2])
 
 **Required Fix:**
 ```bash
-# Mask the generator to prevent re-activation
+# Mask the generator to prevent configuration regeneration
 ln -sf /dev/null /etc/systemd/system-generators/sshd-socket-generator
 systemctl daemon-reload
 systemctl disable --now ssh.socket
@@ -102,7 +104,7 @@ systemctl enable --now ssh.service
 bootstrap → reboot → ssh.socket inactive → ssh.service active → only SSH_PORT listening
 ```
 
-**Impact:** Without masking, SSH socket may be re-enabled after reboot, causing `systemctl reload ssh` failures.
+**Impact:** Without masking, socket-activation configuration may be regenerated after boot/package operations, causing `systemctl reload ssh` failures.
 
 ---
 
@@ -125,7 +127,7 @@ chmod -R o-rwx /data/coolify
 
 # Remove managed users from coolify group
 # Dedicated Coolify user ownership is sufficient
-# Shared runtime group only if demonstrated use-case
+# No shared runtime group needed for standard deployments
 ```
 
 Reference: [Coolify non-root user docs][3]
@@ -144,14 +146,20 @@ If `BOOTSTRAP_REPO_REF=main`, bootstrap executes whatever `main` means at that m
 
 **Note:** A Git tag can also be moved. Only commit SHA is truly immutable.
 
-**Required Fix:**
+**Important Implementation Detail:** Git `--branch` does not reliably accept commit SHA. The robust implementation is:
+
 ```bash
-# Production MUST use exact SHA
-BOOTSTRAP_REPO_REF=fa5732148f51822679e8d3c65c90cd56fc03cc3d
+# Production MUST use exact SHA with proper fetch method
 BOOTSTRAP_EXPECTED_SHA=fa5732148f51822679e8d3c65c90cd56fc03cc3d
 
-# Verify after clone
-actual_sha=$(git rev-parse HEAD)
+# Correct implementation (--branch does not work with SHA):
+git init "$repo_dir"
+git -C "$repo_dir" remote add origin "$repo_url"
+git -C "$repo_dir" fetch --depth=1 origin "$BOOTSTRAP_EXPECTED_SHA"
+git -C "$repo_dir" checkout --detach FETCH_HEAD
+
+# Verify
+actual_sha="$(git -C "$repo_dir" rev-parse HEAD)"
 if [[ "$actual_sha" != "$BOOTSTRAP_EXPECTED_SHA" ]]; then
     echo "FATAL: Bootstrap ref mismatch!" >&2
     exit 1
@@ -229,7 +237,8 @@ EXTRA_ALLOWED_UDP_PORTS="51820"          # e.g., WireGuard
 
 # For complex rules, use structured format:
 # EXTRA_RULES_FILE=/etc/vps-bootstrap/extra-ufw-rules.conf
-# Format: CIDR|PORT|PROTOCOL|DIRECTION
+# MVP Format: CIDR|PORT|PROTOCOL|DIRECTION
+# Full format may need: ACTION|CIDR|DEST|PORT|PROTOCOL|INTERFACE|DIRECTION|COMMENT
 
 # Generate complete ruleset deterministically
 # reset + regenerate becomes reconciliation mechanism
@@ -348,9 +357,17 @@ bootstrap supported Coolify version
 **Problem:** Coolify self-hosted has auto-update enabled by default. Coolify docs recommend disabling for production. ([Coolify docs][8])
 
 **Required Fix:**
-Configure Auto Update Enabled=false through the mechanism supported by the installed Coolify version and verify the state.
+Configure Auto Update through the mechanism supported by the installed Coolify version:
 
-**Note:** Don't assume `COOLIFY_AUTOUPDATE=false` is the correct installer argument without verifying current installer schema.
+```bash
+# Preferred method (documented):
+# Set AUTOUPDATE=false in /data/coolify/source/.env
+# Or use dashboard Settings equivalent for current Coolify version
+
+# Verify state after configuration
+```
+
+**Note:** Don't assume installer arguments without verifying current installer schema.
 
 ---
 
@@ -362,20 +379,30 @@ Configure Auto Update Enabled=false through the mechanism supported by the insta
 
 **Impact:** Bootstrap failure/retry, not privilege escalation.
 
+**Important:** There is a chicken-and-egg problem: `fuser` is needed to wait for APT locks, but `fuser` must be installed via APT.
+
 **Required Fix:**
 ```bash
-# Add to prerequisites or check
-command -v fuser &>/dev/null || apt-get install -y psmisc
+# Option 1: Alternative lock detection when fuser unavailable
+if command -v fuser >/dev/null; then
+    wait_for_apt_locks_with_fuser
+else
+    # Poll for /var/lib/dpkg/lock-frontend directly
+    wait_for_dpkg_lock_with_alternative_method
+fi
 
-# Audit all commands used before package installation:
-# fuser, ss, visudo, systemctl, sysctl
+# Option 2: Include psmisc in cloud image/package stage
+# before prepare-existing-server.sh runs
+
+# Key principle:
+# fuser must not be required to bootstrap the prerequisites that provide fuser
 ```
 
 ---
 
 ### 13. SSH Public Access Model (P2)
 
-**Current:** SSH public with key-only, rate-limiting, fail2ban is **not a critical vulnerability**.
+**Current:** SSH public with key-only, rate-limiting, fail2ban is **not a vulnerability**.
 
 For Tier-0 management VPS, VPN-only is **hardening recommendation**, not blocker.
 
@@ -442,6 +469,17 @@ net.ipv4.conf.all.rp_filter=1
 
 **Required verification:**
 ```bash
+# Check timer status
+systemctl status apt-daily-upgrade.timer
+systemctl list-timers apt-daily*
+
+# Check APT periodic configuration
+apt-config dump | grep -i periodic
+
+# Verify configuration actually works (most valuable test)
+unattended-upgrade --dry-run --debug
+
+# Required states:
 apt-daily.timer enabled
 apt-daily-upgrade.timer enabled
 APT::Periodic::Update-Package-Lists != 0
@@ -482,7 +520,7 @@ Coolify UI exposure is policy decision, not bug.
 
 Coolify requires `APP_KEY` for secret decryption. Without it, restored secrets cannot be decrypted. ([Coolify docs][12])
 
-**Required:** Document APP_KEY backup requirement. This is critical for management control-plane.
+**Required:** Document APP_KEY backup requirement. This is essential for successful control-plane recovery.
 
 ---
 
@@ -500,7 +538,21 @@ For migrated/recreated instance, Coolify SSH keys to remote servers must be reco
 
 **Problem:** "Bootstrap complete" does not mean updated kernel/security stack is running.
 
-**Required:** Add post-bootstrap check for `/var/run/reboot-required` and controlled reboot before final `production-ready` verdict.
+**Required:**
+```bash
+# Bootstrap reports reboot requirement, does not auto-reboot
+# (auto-reboot in cloud-init causes resume/re-entry complexity)
+
+if [[ -f /var/run/reboot-required ]]; then
+    echo "REBOOT_REQUIRED=true"
+    # Log which packages require reboot
+    cat /var/run/reboot-required.pkgs 2>/dev/null || true
+fi
+
+# Production-ready verification occurs only after:
+# 1. Manual/controlled reboot
+# 2. Verifier rerun post-reboot
+```
 
 ---
 
@@ -523,7 +575,10 @@ Comments like "Ubuntu 24.04 defaults to ssh.socket" should be generalized for mu
 If values transmitted via provider user-data, document provider as trust boundary. If generated only on host, mark N/A.
 
 ### 27. Traceability: Release Tag (P3)
-Include release/tag or archive hash alongside commit SHA for accessibility when SHA is not publicly browsable.
+For audit reproducibility:
+- **Commit SHA** is canonical identifier (immutable)
+- **Release tag** is informational only (can be moved)
+- **Archive SHA256** useful if bootstrap uses archive artifacts
 
 ---
 
@@ -554,11 +609,12 @@ However, the Quick Installer explicitly lists only:
 |----|:---------------------:|:-----------------:|:----------------------:|:-----------:|:-------:|
 | Ubuntu 24.04 LTS | ✅ | ✅ | ✅ | ⬜ NEEDED | **PARTIAL** |
 | Ubuntu 26.04 LTS | ⚠️ Warning | ✅ | ❓ Not listed | ⬜ NEEDED | **UNTESTED** |
-| Debian 13 | ❌ Broken | ✅ | ❓ Not listed | ⬜ NEEDED | **PARTIAL** |
+| Debian 13 | ❌ Broken | ✅ | N/A | ⬜ NEEDED | **PARTIAL** |
 
 **Notes:**
 - Ubuntu 26.04 overall is UNTESTED because Quick Installer doesn't list it and no E2E test exists
 - Debian 13 is PARTIAL because OS detection is broken, not because Coolify doesn't support it
+- Quick Installer column is N/A for Debian (column refers to Ubuntu LTS list specifically)
 
 ### Component Compatibility
 
@@ -568,8 +624,11 @@ However, the Quick Installer explicitly lists only:
 | SSH Socket | ⚠️ Generator needs masking | ⚠️ Generator needs masking | ⚠️ May have ssh.socket active; test pending |
 | UFW | ✅ | ✅ | ✅ |
 | fail2ban | ✅ | ✅ | ✅ |
-| Docker | ✅ | ⬜ | ✅ |
+| Docker upstream support | ✅ | ⬜ Expected | ✅ |
 | Packages | ✅ | ✅ | ⚠️ `psmisc` may be missing |
+| **Project E2E validation** | ⬜ | ⬜ | ⬜ |
+
+**Note:** Docker row indicates upstream support expectation, not project validation. All OS require E2E testing.
 
 ---
 
@@ -581,7 +640,7 @@ However, the Quick Installer explicitly lists only:
 |---|--------|--------|---------|
 | 1 | Mask `sshd-socket-generator` + reboot test | 1h | #1 |
 | 2 | Fix `/data/coolify` permissions (dedicated user ownership) | 2h | #2 |
-| 3 | Pin bootstrap to SHA + verify | 30m | #3 |
+| 3 | Pin bootstrap to SHA with correct fetch method | 1h | #3 |
 | 4 | Configurable `DEVOPS_USER_NOPASSWD` + cloud-init fix | 1h | #4 |
 | 5 | Separate `DOCKER_USERS`, default empty | 1h | #5 |
 | 6 | Declarative firewall model (structured config) | 3h | #6 |
@@ -594,19 +653,19 @@ However, the Quick Installer explicitly lists only:
 |---|--------|--------|---------|
 | 9 | Document Coolify installer trust boundary | 30m | #9 |
 | 10 | Add Coolify version guard (MIN/MAX) + upgrade test | 2h | #10 |
-| 11 | Coolify auto-update configuration | 30m | #11 |
-| 12 | Add `psmisc` dependency | 15m | #12 |
+| 11 | Coolify auto-update configuration (AUTOUPDATE=false) | 30m | #11 |
+| 12 | Fix `fuser` chicken-and-egg with alternative lock detection | 1h | #12 |
 | 13 | SSH access modes (public/allowlist/vpn-only) | 2h | #13 |
 | 14 | `SSH_TRUSTED_CIDRS` | 1h | #14 |
 | 15 | Coolify localhost key subnet detection | 1h | #15 |
 | 16 | Provider firewall documentation | 30m | #16 |
 | 17 | `rp_filter` per-interface verification | 30m | #17 |
-| 18 | unattended-upgrades full verification | 1h | #18 |
+| 18 | unattended-upgrades full verification + dry-run test | 1h | #18 |
 | 19 | 80/443 access policy documentation | 30m | #19 |
 | 20 | Docker IPv6 workaround validation | 1h | #20 |
 | 21 | APP_KEY backup documentation | 30m | #21 |
 | 22 | SSH keys recovery documentation + test | 30m | #22 |
-| 23 | Kernel reboot-required check | 15m | #23 |
+| 23 | Kernel reboot-required reporting (not auto-reboot) | 30m | #23 |
 | 24 | Effective exposure integration test | 1h | #24 |
 
 ### Phase 3: P3 Quality
@@ -615,7 +674,7 @@ However, the Quick Installer explicitly lists only:
 |---|--------|--------|---------|
 | 25 | Generalize Ubuntu-specific comments | 30m | #25 |
 | 26 | Cloud-init trust boundary documentation | 30m | #26 |
-| 27 | Add release tag to audit traceability | 15m | #27 |
+| 27 | Add release tag (informational) alongside canonical SHA | 15m | #27 |
 
 ---
 
@@ -626,13 +685,16 @@ The verifier must become **policy-aware**. Current assertions become incorrect a
 ### Derive Expectations From Config
 
 ```bash
-# Instead of hardcoded:
-check_user_in_groups "$user" "sudo,docker,coolify"
+# Instead of hardcoded group checks:
+# check_user_in_groups "$user" "sudo,docker,coolify"
 
-# Policy-aware:
+# Policy-aware (DOCKER_USERS explicit, no shared coolify group by default):
 expected_groups="sudo"
-[[ "$user" in "$DOCKER_USERS" ]] && expected_groups+=",docker"
-[[ "$user" in "$COOLIFY_RUNTIME_USERS" ]] && expected_groups+=",coolify"
+if [[ -n "$DOCKER_USERS" ]] && user_in_list "$user" "$DOCKER_USERS"; then
+    expected_groups+=",docker"
+fi
+# Note: coolify group membership removed from default checks
+# Dedicated coolify user ownership replaces shared group model
 check_user_in_groups "$user" "$expected_groups"
 ```
 
@@ -693,6 +755,15 @@ check_user_in_groups "$user" "$expected_groups"
 - [ ] APP_KEY recovery
 - [ ] SSH keys recovery (control plane to remote servers)
 
+#### Disaster Recovery (Full Rebuild)
+- [ ] Full management VPS rebuild from zero
+- [ ] Restore Coolify DB/config
+- [ ] Restore APP_KEY
+- [ ] Restore SSH keys
+- [ ] Verify Prod VPS1 connection
+- [ ] Verify Prod VPS2 connection
+- [ ] Deploy test container
+
 #### Security
 - [ ] Invalid/tampered Git SHA rejected
 - [ ] Compromised user cannot write `/data/coolify` (after fix)
@@ -744,12 +815,28 @@ VERSION_CODENAME=trixie
 
 ## Changelog
 
+### v3.2 (September 9, 2026)
+- **FIXED:** Supply-Chain Hardening: GAP→PARTIAL (accepted trust boundary is not a complete gap)
+- **FIXED:** Git SHA fetch implementation: `--branch` doesn't work with SHA; use `fetch`+`checkout FETCH_HEAD`
+- **FIXED:** Removed implicit `COOLIFY_RUNTIME_USERS` from Verifier (conflicts with dedicated owner model)
+- **FIXED:** `fuser` chicken-and-egg: added alternative lock detection when fuser unavailable
+- **FIXED:** Debian Quick Installer: ❓→N/A (column is for Ubuntu LTS list)
+- **FIXED:** Docker row in matrix: clarified as "upstream support", added "Project E2E validation" row
+- **FIXED:** Reboot-required: report flag + manual reboot, not auto-reboot (cloud-init resume issues)
+- **FIXED:** "critical"→"essential" in P2 descriptions (avoid P0 terminology confusion)
+- **FIXED:** SSH generator wording: "configuration may be regenerated" (more precise)
+- **IMPROVED:** Auto-update: added concrete `AUTOUPDATE=false` in `/data/coolify/source/.env`
+- **IMPROVED:** Traceability: SHA canonical, tag informational only
+- **IMPROVED:** unattended-upgrades: added `--dry-run --debug` verification command
+- **ADDED:** Full disaster recovery rebuild test case
+- **ADDED:** Note about commit SHA accessibility for external reproducibility
+
 ### v3.1 (September 9, 2026)
 - **RECLASSIFIED:** #4 External Coolify Installer P1→P2 (accepted trust boundary)
 - **RECLASSIFIED:** #5 Coolify Internals Coupling P1→P2 (compatibility risk, not security)
 - **RECLASSIFIED:** #11 Coolify Auto-Update P1→P2 (operational hardening)
 - **RECLASSIFIED:** #12 Missing fuser P1→P2 (bootstrap failure, not privilege escalation)
-- **RECLASSIFIED:** SSH keys recovery P3→P2 (critical for control plane)
+- **RECLASSIFIED:** SSH keys recovery P3→P2 (essential for control plane)
 - **RECLASSIFIED:** Kernel reboot check P3→P2 (operational correctness)
 - **FIXED:** Coolify Debian 13 support: ❓→✅ ("Debian-based...all versions supported")
 - **FIXED:** Executive Summary "critical gaps" → "high-priority gaps" (no P0 findings)
@@ -770,19 +857,6 @@ VERSION_CODENAME=trixie
 - **ADDED** formal P0/P1/P2/P3 definitions
 - **CHANGED** assessment from numeric scores to verifiable states (VERIFIED/PARTIAL/GAP/UNTESTED)
 - **ADDED** repository commit SHA for traceability
-- **NEW P1:** SSH socket generator masking required on Ubuntu 24.04
-- **NEW P1:** `/data/coolify` group permissions too broad
-- **NEW P1:** Supply-chain: Coolify installer trust boundary
-- **NEW P1:** Coupling to Coolify internals (PHP Models)
-- **NEW P1:** Coolify auto-update not disabled
-- **NEW P1:** Missing `fuser`/`psmisc` dependency
-- **RECLASSIFIED:** Mutable Git ref P0→P1 (requires repo compromise)
-- **RECLASSIFIED:** Public SSH P0/P1→P2 (hardening, not vulnerability)
-- **RECLASSIFIED:** Docker preinstall P1→P2 (hardening recommendation)
-- **CLARIFIED:** UFW reset is P1 operational until declarative firewall
-- **CHANGED:** Ubuntu 26.04 from "Full" to "UNTESTED"
-- **ADDED** comprehensive testing matrix with failure/recovery cases
-- **ADDED** verifier policy-awareness requirements
 
 ### v2.x (September 9, 2026)
 - Initial versions and iterations
