@@ -707,25 +707,25 @@ However, the Quick Installer explicitly lists only:
 
 ### Phase 2: P2 Hardening
 
-| # | Change | Effort | Finding |
-|---|--------|--------|---------|
-| 9 | Document Coolify installer trust boundary | 30m | #9 |
-| 10 | Evaluate Coolify public API + version guard (MIN/MAX) | 2h | #10 |
-| 11 | Coolify auto-update configuration (AUTOUPDATE=false) | 30m | #11 |
-| 12 | Fix `fuser` with APT timeout + retry (no lock-file existence check) | 1h | #12 |
-| 13 | SSH access modes (public/allowlist/vpn-only) | 2h | #13 |
-| 14 | `SSH_TRUSTED_CIDRS` | 1h | #14 |
-| 15 | Coolify localhost key subnet detection | 1h | #15 |
-| 16 | Provider firewall documentation | 30m | #16 |
-| 17 | `rp_filter` per-interface verification | 30m | #17 |
-| 18 | Unattended-upgrades + needrestart policy | 1h | #18 |
-| 19 | 80/443 access policy documentation | 30m | #19 |
-| 20 | Docker IPv6 workaround validation | 1h | #20 |
-| 21 | APP_KEY backup documentation | 30m | #21 |
-| 22 | SSH keys recovery documentation + test | 30m | #22 |
-| 23 | Coolify version in recovery manifest + DR test | 1h | #23 |
-| 24 | Kernel reboot-required reporting (not auto-reboot) | 30m | #24 |
-| 25 | Effective exposure integration test | 1h | #25 |
+| # | Change | Effort | Finding | Status |
+|---|--------|--------|---------|:------:|
+| 9 | Document Coolify installer trust boundary | 30m | #9 | ⬜ |
+| 10 | Evaluate Coolify public API + version guard (MIN/MAX) | 2h | #10 | ✅ |
+| 11 | Coolify auto-update configuration (AUTOUPDATE=false) | 30m | #11 | ✅ |
+| 12 | Fix `fuser` with APT timeout + retry (no lock-file existence check) | 1h | #12 | ⬜ |
+| 13 | SSH access modes (public/allowlist/vpn-only) | 2h | #13 | ⬜ |
+| 14 | `SSH_TRUSTED_CIDRS` | 1h | #14 | ⬜ |
+| 15 | Coolify localhost key subnet detection | 1h | #15 | ⬜ |
+| 16 | Provider firewall documentation | 30m | #16 | ⬜ |
+| 17 | `rp_filter` per-interface verification | 30m | #17 | ⬜ |
+| 18 | Unattended-upgrades + needrestart policy | 1h | #18 | ✅ |
+| 19 | 80/443 access policy documentation | 30m | #19 | ⬜ |
+| 20 | Docker IPv6 workaround validation | 1h | #20 | ⬜ |
+| 21 | APP_KEY backup documentation | 30m | #21 | ⬜ |
+| 22 | SSH keys recovery documentation + test | 30m | #22 | ⬜ |
+| 23 | Coolify version in recovery manifest + DR test | 1h | #23 | ⬜ |
+| 24 | Kernel reboot-required reporting (not auto-reboot) | 30m | #24 | ✅ |
+| 25 | Effective exposure integration test | 1h | #25 | ⬜ |
 
 ### Phase 3: P3 Quality
 
