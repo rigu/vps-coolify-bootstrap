@@ -200,6 +200,41 @@ switch ($dockerDisableIpv6ForParseaddrFix.ToLowerInvariant()) {
 }
 $cfg["DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX"] = $dockerDisableIpv6ForParseaddrFix
 
+# DEVOPS_USER_NOPASSWD controls whether DEVOPS_USER gets NOPASSWD:ALL sudo.
+# Default: false (more secure - compromised SSH key doesn't give immediate root)
+$devopsUserNopasswd = if ($cfg.ContainsKey("DEVOPS_USER_NOPASSWD") -and -not [string]::IsNullOrWhiteSpace([string]$cfg["DEVOPS_USER_NOPASSWD"])) { [string]$cfg["DEVOPS_USER_NOPASSWD"] } else { "false" }
+switch ($devopsUserNopasswd.ToLowerInvariant()) {
+    "true" { $devopsUserNopasswd = "true" }
+    "false" { $devopsUserNopasswd = "false" }
+    "1" { $devopsUserNopasswd = "true" }
+    "0" { $devopsUserNopasswd = "false" }
+    default { throw "DEVOPS_USER_NOPASSWD must be true/false or 1/0." }
+}
+$cfg["DEVOPS_USER_NOPASSWD"] = $devopsUserNopasswd
+
+# Compute the sudo spec for cloud-init user definition
+if ($devopsUserNopasswd -eq "true") {
+    $devopsUserSudoSpec = "ALL=(ALL:ALL) NOPASSWD:ALL"
+} else {
+    $devopsUserSudoSpec = "ALL=(ALL:ALL) ALL"
+}
+
+# DOCKER_USERS: users with docker group membership (root-equivalent)
+# Default: empty (no users get ambient docker access)
+if (-not $cfg.ContainsKey("DOCKER_USERS")) { $cfg["DOCKER_USERS"] = "" }
+
+# MANAGEMENT_CIDRS: additional CIDRs with SSH access (VPN, office, etc.)
+# Default: empty
+if (-not $cfg.ContainsKey("MANAGEMENT_CIDRS")) { $cfg["MANAGEMENT_CIDRS"] = "" }
+
+# EXTRA_ALLOWED_TCP_PORTS: additional TCP ports to allow through firewall
+# Default: empty
+if (-not $cfg.ContainsKey("EXTRA_ALLOWED_TCP_PORTS")) { $cfg["EXTRA_ALLOWED_TCP_PORTS"] = "" }
+
+# EXTRA_ALLOWED_UDP_PORTS: additional UDP ports to allow through firewall
+# Default: empty
+if (-not $cfg.ContainsKey("EXTRA_ALLOWED_UDP_PORTS")) { $cfg["EXTRA_ALLOWED_UDP_PORTS"] = "" }
+
 $coolifyRealtimeDomain = if ($cfg.ContainsKey("COOLIFY_REALTIME_DOMAIN")) { [string]$cfg["COOLIFY_REALTIME_DOMAIN"] } else { "" }
 if ($coolifyRealtimeDomain -match '[\s/]') { throw "COOLIFY_REALTIME_DOMAIN must be a hostname without spaces or /." }
 if (-not [string]::IsNullOrWhiteSpace($coolifyRealtimeDomain) -and $coolifyRealtimeDomain -match "CHANGE_ME") {
@@ -253,10 +288,16 @@ $map = [ordered]@{
     "TIMEZONE_HERE" = [string]$cfg["TIMEZONE"]
     "SSH_PORT_HERE" = [string]$cfg["SSH_PORT"]
     "DEVOPS_USER_HERE" = [string]$cfg["DEVOPS_USER"]
+    "DEVOPS_USER_SUDO_SPEC_HERE" = [string]$devopsUserSudoSpec
     "COOLIFY_SUDO_NOPASSWD_USER_HERE" = [string]$cfg["COOLIFY_SUDO_NOPASSWD_USER"]
     "BOOTSTRAP_SSH_PUBLIC_KEY_HERE" = [string]$ssh
     "SSH_KEY_ROTATE_HERE" = [string]$sshKeyRotate
     "ADDITIONAL_SUDO_USERS_HERE" = [string]$cfg["ADDITIONAL_SUDO_USERS"]
+    "DEVOPS_USER_NOPASSWD_HERE" = [string]$cfg["DEVOPS_USER_NOPASSWD"]
+    "DOCKER_USERS_HERE" = [string]$cfg["DOCKER_USERS"]
+    "MANAGEMENT_CIDRS_HERE" = [string]$cfg["MANAGEMENT_CIDRS"]
+    "EXTRA_ALLOWED_TCP_PORTS_HERE" = [string]$cfg["EXTRA_ALLOWED_TCP_PORTS"]
+    "EXTRA_ALLOWED_UDP_PORTS_HERE" = [string]$cfg["EXTRA_ALLOWED_UDP_PORTS"]
     "CLOSE_COOLIFY_REALTIME_PORTS_HERE" = [string]$cfg["CLOSE_COOLIFY_REALTIME_PORTS"]
     "DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX_HERE" = [string]$cfg["DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX"]
     "COOLIFY_REALTIME_DOMAIN_HERE" = [string]$cfg["COOLIFY_REALTIME_DOMAIN"]
@@ -267,6 +308,7 @@ $map = [ordered]@{
     "USER_PASSWORDS_ENCRYPTION_PASSWORD_HERE" = [string]$cfg["USER_PASSWORDS_ENCRYPTION_PASSWORD"]
     "BOOTSTRAP_REPO_URL_HERE" = [string]$cfg["BOOTSTRAP_REPO_URL"]
     "BOOTSTRAP_REPO_REF_HERE" = [string]$cfg["BOOTSTRAP_REPO_REF"]
+    "BOOTSTRAP_EXPECTED_SHA_HERE" = if ($cfg.ContainsKey("BOOTSTRAP_EXPECTED_SHA")) { [string]$cfg["BOOTSTRAP_EXPECTED_SHA"] } else { "" }
 }
 foreach ($k in $map.Keys) { $content = $content.Replace($k, $map[$k]) }
 $content = $content.Replace("    # DEVOPS_SSH_AUTHORIZED_KEYS_BLOCK_HERE", $devopsSshAuthorizedKeysBlock)

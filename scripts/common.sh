@@ -95,7 +95,8 @@ is_valid_cidr() {
   fi
   # IPv6 CIDR: simplified check for common formats
   # Accepts: 2001:db8::/32, ::1, fe80::/10, fc00::/7
-  if [[ "$cidr" =~ ^([0-9A-Fa-f:]+)(/([0-9]|[1-9][0-9]|1[0-2][0-8]))?$ ]]; then
+  # Prefix length 0-128 for IPv6
+  if [[ "$cidr" =~ ^([0-9A-Fa-f:]+)(/([0-9]|[1-9][0-9]|1[01][0-9]|12[0-8]))?$ ]]; then
     local ip="${cidr%/*}"
     # Basic IPv6 format validation (contains colons, no invalid chars)
     if [[ "$ip" =~ ^[0-9A-Fa-f:]+$ ]] && [[ "$ip" == *:* ]]; then
