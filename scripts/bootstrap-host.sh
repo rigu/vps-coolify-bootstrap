@@ -1240,6 +1240,23 @@ if ! is_coolify_running; then
 else
   bootstrap_success "Coolify already running; install step skipped."
 fi
+
+# P2 #10: Check Coolify version compatibility
+coolify_ver_check=0
+check_coolify_version_compatibility || coolify_ver_check=$?
+case "$coolify_ver_check" in
+  0)
+    bootstrap_info "Coolify version ${COOLIFY_VERSION} is within tested range."
+    ;;
+  1)
+    bootstrap_warn "Coolify version ${COOLIFY_VERSION} is outside tested range (${COOLIFY_MIN_VERSION:-4.0.0} - ${COOLIFY_MAX_VERSION:-4.99.99})."
+    bootstrap_warn "Bootstrap may work but has not been verified with this Coolify version."
+    ;;
+  *)
+    bootstrap_warn "Could not determine Coolify version. Proceeding with caution."
+    ;;
+esac
+
 bootstrap_info "Applying Docker ParseAddr mitigation policy if needed."
 apply_docker_parseaddr_ipv6_fix
 bootstrap_success "Docker ParseAddr workaround synchronization completed."

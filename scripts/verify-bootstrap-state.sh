@@ -655,6 +655,26 @@ fi
 
 # === P2 Hardening Verification ===
 
+# P2 #10: Verify Coolify version compatibility
+coolify_version_check=0
+check_coolify_version_compatibility || coolify_version_check=$?
+case "$coolify_version_check" in
+  0)
+    pass "Coolify version ${COOLIFY_VERSION} is within tested range"
+    ;;
+  1)
+    if [[ "${COOLIFY_VERSION_STATUS:-}" == "below_minimum" ]]; then
+      warn "Coolify version ${COOLIFY_VERSION} is below minimum tested (${COOLIFY_MIN_VERSION:-4.0.0})"
+    else
+      warn "Coolify version ${COOLIFY_VERSION} is above maximum tested (${COOLIFY_MAX_VERSION:-4.99.99})"
+    fi
+    warn "Bootstrap was tested with Coolify ${COOLIFY_MIN_VERSION:-4.0.0} - ${COOLIFY_MAX_VERSION:-4.99.99}"
+    ;;
+  *)
+    warn "Coolify version could not be determined (container may not be running)"
+    ;;
+esac
+
 # P2 #11: Verify Coolify auto-update is disabled
 coolify_env="/data/coolify/source/.env"
 if [[ -f "$coolify_env" ]]; then

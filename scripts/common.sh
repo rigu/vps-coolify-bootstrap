@@ -266,3 +266,95 @@ check_reboot_required() {
   fi
   return 1
 }
+
+# =============================================================================
+# Coolify Version Detection
+# =============================================================================
+
+# Detect Coolify version from running container
+# Returns version string or "unknown"
+get_coolify_version() {
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "unknown"
+    return
+  fi
+  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'coolify'; then
+    echo "unknown"
+    return
+  fi
+  # Try to get version from container image tag or app version
+  local version=""
+  version="$(docker inspect coolify --format '{{.Config.Image}}' 2>/dev/null | sed -n 's/.*:\([^:]*\)$/\1/p' || true)"
+  if [[ -z "$version" ]] || [[ "$version" == "latest" ]]; then
+    # Try to get from Coolify's APP_VERSION if available
+    version="$(docker exec coolify printenv APP_VERSION 2>/dev/null || true)"
+  fi
+  if [[ -z "$version" ]]; then
+    echo "unknown"
+  else
+    echo "$version"
+  fi
+}
+
+# Check if Coolify version is within tested range
+# Usage: check_coolify_version_compatibility
+# Returns: 0=compatible, 1=incompatible, 2=unknown (warn)
+# Sets: COOLIFY_VERSION, COOLIFY_VERSION_STATUS
+check_coolify_version_compatibility() {
+  # Tested version range - update after each Coolify upgrade test
+  local min_version="${COOLIFY_MIN_VERSION:-4.0.0}"
+  local max_version="${COOLIFY_MAX_VERSION:-4.99.99}"
+  
+  COOLIFY_VERSION="$(get_coolify_version)"
+  export COOLIFY_VERSION
+  
+  if [[ "$COOLIFY_VERSION" == "unknown" ]]; then
+    COOLIFY_VERSION_STATUS="unknown"
+    export COOLIFY_VERSION_STATUS
+    return 2
+  fi
+  
+  # Simple semver comparison (major.minor.patch)
+  # This is a simplified check - assumes format X.Y.Z
+  local v_major v_minor v_patch
+  local min_major min_minor min_patch
+  local max_major max_minor max_patch
+  
+  IFS='.' read -r v_major v_minor v_patch <<< "$COOLIFY_VERSION"
+  IFS='.' read -r min_major min_minor min_patch <<< "$min_version"
+  IFS='.' read -r max_major max_minor max_patch <<< "$max_version"
+  
+  # Default patch to 0 if not present
+  v_patch="${v_patch:-0}"
+  min_patch="${min_patch:-0}"
+  max_patch="${max_patch:-0}"
+  
+  # Check if numeric
+  if ! [[ "$v_major" =~ ^[0-9]+$ ]]; then
+    COOLIFY_VERSION_STATUS="unknown"
+    export COOLIFY_VERSION_STATUS
+    return 2
+  fi
+  
+  # Check minimum
+  if (( v_major < min_major )) || \
+     (( v_major == min_major && v_minor < min_minor )) || \
+     (( v_major == min_major && v_minor == min_minor && v_patch < min_patch )); then
+    COOLIFY_VERSION_STATUS="below_minimum"
+    export COOLIFY_VERSION_STATUS
+    return 1
+  fi
+  
+  # Check maximum
+  if (( v_major > max_major )) || \
+     (( v_major == max_major && v_minor > max_minor )) || \
+     (( v_major == max_major && v_minor == max_minor && v_patch > max_patch )); then
+    COOLIFY_VERSION_STATUS="above_maximum"
+    export COOLIFY_VERSION_STATUS
+    return 1
+  fi
+  
+  COOLIFY_VERSION_STATUS="compatible"
+  export COOLIFY_VERSION_STATUS
+  return 0
+}
