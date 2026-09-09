@@ -790,8 +790,42 @@ if [[ -n "${MANAGEMENT_CIDRS:-}" ]]; then
   done
 fi
 
-# Keep internet-facing SSH access protected with rate limiting.
-ufw limit "${SSH_PORT}/tcp"
+# P2 #13/#14: SSH access mode configuration
+SSH_ACCESS_MODE="${SSH_ACCESS_MODE:-public}"
+case "$SSH_ACCESS_MODE" in
+  public)
+    # Default: rate-limited public SSH access
+    ufw limit "${SSH_PORT}/tcp"
+    bootstrap_info "SSH access mode: public (rate-limited)"
+    ;;
+  allowlist)
+    # SSH only from MANAGEMENT_CIDRS + SSH_TRUSTED_CIDRS (no public access)
+    if [[ -n "${SSH_TRUSTED_CIDRS:-}" ]]; then
+      for cidr in $(split_csv_to_lines "$SSH_TRUSTED_CIDRS"); do
+        if [[ -n "$cidr" ]] && is_valid_cidr "$cidr"; then
+          ufw allow from "$cidr" to any port "${SSH_PORT}" proto tcp
+          bootstrap_info "UFW: allowed SSH from trusted CIDR $cidr"
+        fi
+      done
+    fi
+    bootstrap_info "SSH access mode: allowlist (MANAGEMENT_CIDRS + SSH_TRUSTED_CIDRS only)"
+    bootstrap_warn "Public SSH access is DISABLED - ensure you have CIDR access configured"
+    ;;
+  vpn-only)
+    # SSH only from MANAGEMENT_CIDRS (requires VPN/bastion)
+    bootstrap_info "SSH access mode: vpn-only (MANAGEMENT_CIDRS only)"
+    bootstrap_warn "Public SSH access is DISABLED - requires VPN/bastion access"
+    if [[ -z "${MANAGEMENT_CIDRS:-}" ]]; then
+      bootstrap_error "SSH_ACCESS_MODE=vpn-only requires MANAGEMENT_CIDRS to be set"
+      exit 1
+    fi
+    ;;
+  *)
+    bootstrap_error "Unknown SSH_ACCESS_MODE: $SSH_ACCESS_MODE (valid: public, allowlist, vpn-only)"
+    exit 1
+    ;;
+esac
+
 ufw allow 80/tcp
 ufw allow 443/tcp
 
@@ -841,7 +875,21 @@ sync_coolify_localhost_ssh_user() {
   local key_dir="/data/coolify/ssh/keys"
   local key_path="${key_dir}/id.${COOLIFY_SUDO_NOPASSWD_USER}@host.docker.internal"
   local key_pub_path="${key_path}.pub"
+  # P2 #15: Base allowed ranges for localhost SSH
+  # Standard private ranges + link-local + IPv6 ULA
   local allowed_from='127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7'
+  
+  # P2 #15: Dynamically detect Docker bridge subnet and add if not covered
+  if command -v docker >/dev/null 2>&1; then
+    local docker_bridge_subnet
+    docker_bridge_subnet="$(docker network inspect bridge --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}' 2>/dev/null || true)"
+    if [[ -n "$docker_bridge_subnet" ]] && [[ "$docker_bridge_subnet" != "172."* ]]; then
+      # Non-standard Docker bridge subnet detected - add explicitly
+      allowed_from="${allowed_from},${docker_bridge_subnet}"
+      bootstrap_info "Added Docker bridge subnet to Coolify localhost allowed: $docker_bridge_subnet"
+    fi
+  fi
+  
   local key_pub=""
   local attempt=0
 
