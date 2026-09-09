@@ -1,6 +1,6 @@
 # Multi-OS Compatibility & Security Audit Report
 
-**Document Version:** 2.0  
+**Document Version:** 2.1  
 **Analysis Date:** September 9, 2026  
 **Last Updated:** September 9, 2026  
 **Analyst:** Kiro AI + External Security Review  
@@ -33,18 +33,43 @@ This report provides a comprehensive analysis of the `public-vps-coolify-bootstr
 | **P1** | Coolify ports `6001/6002/8000` not hardened by default | Direct Internet exposure |
 | **P1** | Debian 13 OS detection broken | `UBUNTU_CODENAME` doesn't exist |
 | **P2** | Vault + encryption key on same host | Limited protection if host compromised |
-| **P2** | Coolify localhost key allows all RFC1918 | Should restrict to actual subnet |
-| **P2** | Docker IPv6 workaround has no expiry | May persist indefinitely |
+| **P2** | Coolify localhost key allows all RFC1918 | Should restrict to actual Docker subnet |
+| **P2** | `sysctl rp_filter=1` may cause issues | Docker/WireGuard routing conflicts |
+| **P2** | `80/443` always allowed on management VPS | Consider VPN-only for admin services |
+| **P3** | Docker IPv6 workaround has no expiry | May persist indefinitely |
+| **P3** | Ubuntu-specific comments in code | Should be generalized |
 
 ### What's Already Good
 
 The repository has several excellent security practices:
 
-1. ✅ **Strict env parser** - `load_env_file_strict()` rejects command injection patterns
-2. ✅ **SSH socket handling** - Correctly disables `ssh.socket` on all OSes
-3. ✅ **Comprehensive verifier** - `verify-bootstrap-state.sh` checks 20+ security properties
-4. ✅ **Coolify SSH key restrictions** - `from=`, `no-agent-forwarding`, etc.
-5. ✅ **Docker/UFW bypass documented** - DOCKER-USER chain properly managed
+1. ✅ **Strict env parser** - `load_env_file_strict()` manually parses env files and rejects:
+   - `$(...)`
+   - `${...}`
+   - Backticks
+   
+   Instead of dangerous `source bootstrap.env`. This eliminates a class of command injection vulnerabilities. **One of the best security choices in the repo.**
+
+2. ✅ **SSH socket handling** - Correctly disables `ssh.socket` on all OSes (lines 609-625)
+
+3. ✅ **Comprehensive verifier** - `verify-bootstrap-state.sh` checks 20+ security properties including:
+   - SSH socket/service state
+   - Port bindings
+   - UFW status
+   - Users/groups
+   - Sudo configuration
+   - Docker version
+   - Coolify container
+   - SSH key restrictions
+
+4. ✅ **Coolify SSH key restrictions** - The localhost key is placed in `authorized_keys` with:
+   ```
+   from="<private ranges>",no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-user-rc
+   ```
+   And operator key is removed from Coolify user. **Good design.**
+
+5. ✅ **Docker/UFW bypass documented** - DOCKER-USER chain properly managed with explicit documentation about the bypass
+
 6. ✅ **UFW already in packages list** - Works on Debian 13 *(corrected from v1.x)*
 
 ---
@@ -180,7 +205,7 @@ sed -i '/COOLIFY_ROOT_USER_PASSWORD/d' /etc/vps-coolify-bootstrap/bootstrap.env
 
 ---
 
-### 3. NOPASSWD:ALL for DEVOPS_USER (P1)
+### 4. NOPASSWD:ALL for DEVOPS_USER (P1)
 
 **Current Behavior:**
 ```
@@ -213,7 +238,7 @@ DEVOPS_USER_NOPASSWD=false  # default
 
 ---
 
-### 4. Docker Group Membership (P1)
+### 5. Docker Group Membership (P1)
 
 **Current Behavior:**
 
@@ -243,7 +268,7 @@ DOCKER_USERS=""  # explicit list, not automatic
 
 ---
 
-### 5. UFW Reset on Replay (P1)
+### 6. UFW Reset on Replay (P1)
 
 **Current Behavior:**
 ```bash
@@ -280,7 +305,7 @@ Option B: **Declarative firewall from config**
 
 ---
 
-### 6. Coolify Ports Default (P1)
+### 7. Coolify Ports Default (P1)
 
 **Current Behavior:**
 - `CLOSE_COOLIFY_REALTIME_PORTS=false` (default)
@@ -301,6 +326,102 @@ CLOSE_COOLIFY_REALTIME_PORTS=true  # hardened default
 ```
 
 **Priority:** 🟠 **P1 - IMPORTANT**
+
+---
+
+## Additional Findings (P2/P3)
+
+### 8. Coolify Localhost Key Subnet (P2)
+
+**Current Behavior:**
+
+The Coolify SSH key `from=` restriction includes all RFC1918 ranges:
+```
+10.0.0.0/8
+172.16.0.0/12
+192.168.0.0/16
+fc00::/7
+```
+
+**Issue:** This allows any private-range IP that can reach the host, not just the actual Coolify Docker subnet.
+
+**Recommended Fix:**
+```bash
+# Restrict to actual Docker bridge/Coolify subnet
+from="172.17.0.0/16"  # Docker default bridge
+# or specific Coolify network range
+```
+
+**Priority:** 🟡 **P2 - MINOR**
+
+---
+
+### 9. sysctl rp_filter=1 Strict Mode (P2)
+
+**Current Behavior:**
+```bash
+# vps-init.template.yml
+net.ipv4.conf.all.rp_filter=1
+net.ipv4.conf.default.rp_filter=1
+```
+
+**Issue:** Strict reverse path filtering (`rp_filter=1`) may cause issues with:
+- Docker bridge networking
+- WireGuard VPN
+- Asymmetric routing
+- Multi-homing
+
+**Recommended:**
+- For hosts with WireGuard: verify if `rp_filter=2` (loose) is needed for WG interface
+- Don't change globally without testing
+
+**Priority:** 🟡 **P2 - VERIFY BEFORE VPN SETUP**
+
+---
+
+### 10. 80/443 Always Allowed (P2)
+
+**Current Behavior:**
+
+UFW allows ports 80 and 443 unconditionally:
+```bash
+ufw allow 80/tcp
+ufw allow 443/tcp
+```
+
+**Issue:** For a "management security-first" server, consider:
+- Which services actually need public access?
+- Should Coolify UI / Forgejo admin be VPN-only?
+
+**Architectural Decision Needed:**
+```
+Public services → 80/443 via Traefik
+Admin services → VPN-only
+```
+
+**Note:** This is not a bug, but an architectural choice that may need revisiting for management VPS.
+
+**Priority:** 🟡 **P2 - ARCHITECTURAL DECISION**
+
+---
+
+### 11. Docker IPv6 Workaround Lifecycle (P3)
+
+**Current Behavior:**
+
+Bootstrap contains conditional logic to set `"ipv6": false` for affected Docker versions due to a `ParseAddr` bug.
+
+**Issue:** No expiry condition documented. Workaround may persist indefinitely.
+
+**Recommended:**
+```bash
+# Document clearly:
+# - Affected Docker versions: X.Y.Z - A.B.C
+# - Fixed in: version D.E.F
+# - Remove workaround after: date/version
+```
+
+**Priority:** 🟢 **P3 - TECHNICAL DEBT**
 
 ---
 
@@ -441,10 +562,12 @@ Multiple fallbacks increase test matrix without benefit.
 
 | # | Change | Effort | Impact |
 |---|--------|--------|--------|
-| 8 | Restrict Coolify SSH key to actual subnet | 30m | Least privilege |
-| 9 | Docker IPv6 workaround expiry | 15m | Technical debt |
-| 10 | Generalize Ubuntu-specific comments | 30m | Documentation |
-| 11 | Optional secrets cleanup post-bootstrap | 15m | Hygiene (nice-to-have) |
+| 8 | Restrict Coolify SSH key to actual Docker subnet | 30m | Least privilege |
+| 9 | Verify `rp_filter` compatibility with WireGuard | 30m | VPN functionality |
+| 10 | Document 80/443 architectural decision | 30m | Clarity |
+| 11 | Docker IPv6 workaround expiry documentation | 15m | Technical debt |
+| 12 | Generalize Ubuntu-specific comments | 30m | Documentation |
+| 13 | Optional secrets cleanup post-bootstrap | 15m | Hygiene (nice-to-have) |
 
 ---
 
@@ -607,6 +730,15 @@ VERSION_CODENAME=trixie
 ---
 
 ## Changelog
+
+### v2.1 (September 9, 2026)
+- **FIXED:** Section numbering (duplicate section 3)
+- **EXPANDED:** "What's Already Good" with details about strict env parser and Coolify SSH key restrictions
+- **ADDED:** P2 - Coolify localhost key should restrict to actual Docker subnet (not all RFC1918)
+- **ADDED:** P2 - `sysctl rp_filter=1` may conflict with Docker/WireGuard
+- **ADDED:** P2 - 80/443 architectural decision for management VPS
+- **ADDED:** P3 - Docker IPv6 workaround needs expiry documentation
+- **ADDED:** P3 - Ubuntu-specific comments should be generalized
 
 ### v2.0 (September 9, 2026)
 - **MAJOR:** Integrated external security audit findings
