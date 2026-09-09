@@ -690,17 +690,14 @@ else
   warn "Coolify env file not found; cannot verify auto-update policy"
 fi
 
-# P2 #18: Verify needrestart policy (Ubuntu 24.04+)
+# P2 #18: Verify needrestart policy (all supported OS with needrestart)
 if [[ -f /etc/needrestart/conf.d/99-bootstrap-policy.conf ]]; then
   pass "needrestart bootstrap policy is configured"
 else
-  # Only warn on Ubuntu 24.04+ where needrestart is default
-  if [[ -f /etc/os-release ]]; then
-    # shellcheck source=/dev/null
-    . /etc/os-release
-    if [[ "${ID:-}" == "ubuntu" ]] && [[ "${VERSION_ID:-}" =~ ^(24|26)\. ]]; then
-      warn "needrestart bootstrap policy not found (Ubuntu 24.04+ may auto-restart services)"
-    fi
+  # Warn on all systems where needrestart should be installed
+  # Bootstrap now installs needrestart on both Ubuntu and Debian
+  if command -v needrestart >/dev/null 2>&1; then
+    warn "needrestart bootstrap policy not found (services may auto-restart after upgrades)"
   fi
 fi
 
