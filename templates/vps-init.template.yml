@@ -31,6 +31,19 @@ packages:
   - unattended-upgrades
 
 write_files:
+  # P2 #18: Configure needrestart to not auto-restart services on Ubuntu 24.04+
+  # This prevents unexpected service restarts after unattended-upgrades
+  # Operators should schedule controlled maintenance windows for restarts
+  - path: /etc/needrestart/conf.d/99-bootstrap-policy.conf
+    permissions: "0644"
+    content: |
+      # Bootstrap policy: don't auto-restart services
+      # Operators should review and restart manually during maintenance windows
+      # Options: i=interactive, a=automatic, l=list-only
+      $nrconf{restart} = 'l';
+      # Don't restart kernel either - report only
+      $nrconf{kernelhints} = 1;
+
   - path: /etc/sysctl.d/99-hardening.conf
     permissions: "0644"
     content: |

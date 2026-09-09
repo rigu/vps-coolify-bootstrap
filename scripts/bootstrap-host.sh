@@ -15,6 +15,33 @@ fi
 
 load_env_file_strict "$ENV_FILE"
 bootstrap_success "Loaded bootstrap env from $ENV_FILE."
+
+# Detect and validate OS
+detect_os
+bootstrap_info "Detected OS: ${BOOTSTRAP_OS_ID} ${BOOTSTRAP_OS_VERSION} (${BOOTSTRAP_OS_CODENAME})"
+
+# Check OS support level
+ALLOW_UNTESTED_OS="${ALLOW_UNTESTED_OS:-false}"
+os_check_result=0
+check_os_support || os_check_result=$?
+case "$os_check_result" in
+  0)
+    bootstrap_info "OS is fully supported."
+    ;;
+  2)
+    if [[ "$ALLOW_UNTESTED_OS" == "true" ]]; then
+      bootstrap_warn "OS ${BOOTSTRAP_OS_ID} ${BOOTSTRAP_OS_VERSION} is untested but allowed via ALLOW_UNTESTED_OS=true"
+    else
+      bootstrap_error "OS ${BOOTSTRAP_OS_ID} ${BOOTSTRAP_OS_VERSION} is untested. Set ALLOW_UNTESTED_OS=true to proceed at your own risk."
+      exit 1
+    fi
+    ;;
+  *)
+    bootstrap_error "OS ${BOOTSTRAP_OS_ID} ${BOOTSTRAP_OS_VERSION} is not supported. Supported: Ubuntu 22.04/24.04, Debian 12/13"
+    exit 1
+    ;;
+esac
+
 bootstrap_info "Starting bootstrap-host workflow."
 
 require_var() {
@@ -564,6 +591,16 @@ configure_coolify_realtime_domain() {
   if [[ ! -f "$coolify_env" ]]; then
     bootstrap_warn "$coolify_env not found; cannot manage realtime host env automatically."
     return 0
+  fi
+
+  # P2 #11: Disable Coolify auto-update for production stability
+  # Coolify docs recommend disabling for production use
+  # https://coolify.io/docs/knowledge-base/server/auto-update
+  current="$(sed -n 's/^AUTOUPDATE=//p' "$coolify_env" | tail -n1 || true)"
+  if [[ "$current" != "false" ]]; then
+    set_env_kv "$coolify_env" "AUTOUPDATE" "false"
+    changed=1
+    bootstrap_success "Disabled Coolify auto-update (AUTOUPDATE=false) for production stability."
   fi
 
   if [[ -n "$EFFECTIVE_COOLIFY_REALTIME_DOMAIN" ]]; then
@@ -1292,4 +1329,15 @@ fi
 
 bootstrap_success "Coolify onboarding URL: http://<your-server-ip>:8000"
 bootstrap_success "After onboarding domain setup, expected URL is: https://${COOLIFY_PUBLIC_DOMAIN}"
+
+# Check if reboot is required after package upgrades
+if check_reboot_required; then
+  bootstrap_warn "REBOOT REQUIRED: Kernel or critical packages were upgraded."
+  bootstrap_warn "Packages requiring reboot:"
+  check_reboot_required | while read -r pkg; do
+    bootstrap_warn "  - $pkg"
+  done
+  bootstrap_warn "Schedule a controlled reboot, then re-run verify-bootstrap-state.sh"
+fi
+
 bootstrap_success "bootstrap-host.sh completed successfully."

@@ -653,6 +653,47 @@ else
   warn "ports 80/443 are not both listening yet (complete Coolify onboarding/domain proxy setup)"
 fi
 
+# === P2 Hardening Verification ===
+
+# P2 #11: Verify Coolify auto-update is disabled
+coolify_env="/data/coolify/source/.env"
+if [[ -f "$coolify_env" ]]; then
+  autoupdate_value="$(sed -n 's/^AUTOUPDATE=//p' "$coolify_env" | tail -n1 || true)"
+  if [[ "$autoupdate_value" == "false" ]]; then
+    pass "Coolify auto-update is disabled (AUTOUPDATE=false)"
+  elif [[ -z "$autoupdate_value" ]]; then
+    warn "Coolify AUTOUPDATE not explicitly set (defaults to enabled - not recommended for production)"
+  else
+    warn "Coolify auto-update is enabled (AUTOUPDATE=$autoupdate_value - consider disabling for production)"
+  fi
+else
+  warn "Coolify env file not found; cannot verify auto-update policy"
+fi
+
+# P2 #18: Verify needrestart policy (Ubuntu 24.04+)
+if [[ -f /etc/needrestart/conf.d/99-bootstrap-policy.conf ]]; then
+  pass "needrestart bootstrap policy is configured"
+else
+  # Only warn on Ubuntu 24.04+ where needrestart is default
+  if [[ -f /etc/os-release ]]; then
+    # shellcheck source=/dev/null
+    . /etc/os-release
+    if [[ "${ID:-}" == "ubuntu" ]] && [[ "${VERSION_ID:-}" =~ ^(24|26)\. ]]; then
+      warn "needrestart bootstrap policy not found (Ubuntu 24.04+ may auto-restart services)"
+    fi
+  fi
+fi
+
+# P2 #24: Check if reboot is required
+if [[ -f /var/run/reboot-required ]]; then
+  warn "REBOOT REQUIRED: kernel or critical packages were upgraded"
+  if [[ -f /var/run/reboot-required.pkgs ]]; then
+    while read -r pkg; do
+      warn "  reboot required by: $pkg"
+    done < /var/run/reboot-required.pkgs
+  fi
+fi
+
 echo "=== Summary ==="
 echo "failures: $failures"
 echo "warnings: $warnings"

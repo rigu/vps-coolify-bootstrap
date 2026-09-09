@@ -190,3 +190,79 @@ load_env_file_strict() {
     declare -gx "$key=$value"
   done < "$env_file"
 }
+
+
+# =============================================================================
+# OS Detection
+# =============================================================================
+
+# Detect operating system from /etc/os-release
+# Sets: BOOTSTRAP_OS_ID, BOOTSTRAP_OS_VERSION, BOOTSTRAP_OS_CODENAME
+# Uses VERSION_CODENAME (works on both Ubuntu and Debian), not UBUNTU_CODENAME
+detect_os() {
+  if [[ -f /etc/os-release ]]; then
+    # shellcheck source=/dev/null
+    . /etc/os-release
+    BOOTSTRAP_OS_ID="${ID:-unknown}"
+    BOOTSTRAP_OS_VERSION="${VERSION_ID:-unknown}"
+    BOOTSTRAP_OS_CODENAME="${VERSION_CODENAME:-unknown}"
+  else
+    BOOTSTRAP_OS_ID="unknown"
+    BOOTSTRAP_OS_VERSION="unknown"
+    BOOTSTRAP_OS_CODENAME="unknown"
+  fi
+  export BOOTSTRAP_OS_ID BOOTSTRAP_OS_VERSION BOOTSTRAP_OS_CODENAME
+}
+
+# Check if running on a supported OS
+# Returns 0 for supported, 1 for unsupported (will fail), 2 for untested (warn)
+check_os_support() {
+  detect_os
+  case "$BOOTSTRAP_OS_ID" in
+    ubuntu)
+      case "$BOOTSTRAP_OS_VERSION" in
+        22.04|24.04) return 0 ;;  # Fully supported
+        26.04) return 2 ;;        # Untested but should work
+        *) return 1 ;;
+      esac
+      ;;
+    debian)
+      case "$BOOTSTRAP_OS_VERSION" in
+        12|13) return 0 ;;        # Supported
+        *) return 1 ;;
+      esac
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# =============================================================================
+# APT Lock Handling
+# =============================================================================
+
+# Run apt-get with lock timeout to handle concurrent package operations
+# Usage: apt_get_with_timeout [apt-get arguments...]
+# Uses DPkg::Lock::Timeout to wait for locks instead of failing immediately
+apt_get_with_timeout() {
+  local timeout="${APT_LOCK_TIMEOUT:-120}"
+  DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout="$timeout" "$@"
+}
+
+# =============================================================================
+# Reboot Detection
+# =============================================================================
+
+# Check if a reboot is required after package upgrades
+# Returns 0 if reboot required, 1 if not
+# Outputs the packages requiring reboot to stdout if reboot needed
+check_reboot_required() {
+  if [[ -f /var/run/reboot-required ]]; then
+    if [[ -f /var/run/reboot-required.pkgs ]]; then
+      cat /var/run/reboot-required.pkgs
+    fi
+    return 0
+  fi
+  return 1
+}
