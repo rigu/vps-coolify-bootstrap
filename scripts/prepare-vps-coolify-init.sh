@@ -277,6 +277,27 @@ case "$docker_disable_ipv6_for_parseaddr_fix" in
 esac
 cfg[DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX]="$docker_disable_ipv6_for_parseaddr_fix"
 
+# DEVOPS_USER_NOPASSWD controls whether DEVOPS_USER gets NOPASSWD:ALL sudo.
+# Default: false (more secure - compromised SSH key doesn't give immediate root)
+devops_user_nopasswd="${cfg[DEVOPS_USER_NOPASSWD]:-false}"
+case "$devops_user_nopasswd" in
+  true|false) ;;
+  1) devops_user_nopasswd="true" ;;
+  0) devops_user_nopasswd="false" ;;
+  *)
+    echo "ERROR: DEVOPS_USER_NOPASSWD must be true/false or 1/0." >&2
+    exit 1
+    ;;
+esac
+cfg[DEVOPS_USER_NOPASSWD]="$devops_user_nopasswd"
+
+# Compute the sudo spec for cloud-init user definition
+if [[ "$devops_user_nopasswd" == "true" ]]; then
+  devops_user_sudo_spec="ALL=(ALL:ALL) NOPASSWD:ALL"
+else
+  devops_user_sudo_spec="ALL=(ALL:ALL) ALL"
+fi
+
 coolify_realtime_domain="${cfg[COOLIFY_REALTIME_DOMAIN]:-}"
 if [[ -n "$coolify_realtime_domain" ]] && [[ "$coolify_realtime_domain" =~ [[:space:]/] ]]; then
   echo "ERROR: COOLIFY_REALTIME_DOMAIN must be a hostname without spaces or /." >&2
@@ -406,6 +427,7 @@ content="$(cat "$template_path")"
 content="${content//TIMEZONE_HERE/${cfg[TIMEZONE]}}"
 content="${content//SSH_PORT_HERE/${cfg[SSH_PORT]}}"
 content="${content//DEVOPS_USER_HERE/${cfg[DEVOPS_USER]}}"
+content="${content//DEVOPS_USER_SUDO_SPEC_HERE/$devops_user_sudo_spec}"
 content="${content//COOLIFY_SUDO_NOPASSWD_USER_HERE/${cfg[COOLIFY_SUDO_NOPASSWD_USER]}}"
 content="${content//    # DEVOPS_SSH_AUTHORIZED_KEYS_BLOCK_HERE/$devops_ssh_authorized_keys_block}"
 content="${content//BOOTSTRAP_SSH_PUBLIC_KEY_HERE/$ssh_public_key}"
@@ -423,7 +445,7 @@ content="${content//BOOTSTRAP_REPO_URL_HERE/${cfg[BOOTSTRAP_REPO_URL]}}"
 content="${content//BOOTSTRAP_REPO_REF_HERE/${cfg[BOOTSTRAP_REPO_REF]}}"
 content="${content//BOOTSTRAP_EXPECTED_SHA_HERE/${cfg[BOOTSTRAP_EXPECTED_SHA]:-}}"
 
-for token in TIMEZONE_HERE SSH_PORT_HERE DEVOPS_USER_HERE COOLIFY_SUDO_NOPASSWD_USER_HERE DEVOPS_SSH_AUTHORIZED_KEYS_BLOCK_HERE BOOTSTRAP_SSH_PUBLIC_KEY_HERE SSH_KEY_ROTATE_HERE ADDITIONAL_SUDO_USERS_HERE CLOSE_COOLIFY_REALTIME_PORTS_HERE DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX_HERE COOLIFY_REALTIME_DOMAIN_HERE COOLIFY_PUBLIC_DOMAIN_HERE COOLIFY_ROOT_USERNAME_HERE COOLIFY_ROOT_USER_EMAIL_HERE COOLIFY_ROOT_USER_PASSWORD_HERE USER_PASSWORDS_ENCRYPTION_PASSWORD_HERE BOOTSTRAP_REPO_URL_HERE BOOTSTRAP_REPO_REF_HERE BOOTSTRAP_EXPECTED_SHA_HERE; do
+for token in TIMEZONE_HERE SSH_PORT_HERE DEVOPS_USER_HERE DEVOPS_USER_SUDO_SPEC_HERE COOLIFY_SUDO_NOPASSWD_USER_HERE DEVOPS_SSH_AUTHORIZED_KEYS_BLOCK_HERE BOOTSTRAP_SSH_PUBLIC_KEY_HERE SSH_KEY_ROTATE_HERE ADDITIONAL_SUDO_USERS_HERE CLOSE_COOLIFY_REALTIME_PORTS_HERE DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX_HERE COOLIFY_REALTIME_DOMAIN_HERE COOLIFY_PUBLIC_DOMAIN_HERE COOLIFY_ROOT_USERNAME_HERE COOLIFY_ROOT_USER_EMAIL_HERE COOLIFY_ROOT_USER_PASSWORD_HERE USER_PASSWORDS_ENCRYPTION_PASSWORD_HERE BOOTSTRAP_REPO_URL_HERE BOOTSTRAP_REPO_REF_HERE BOOTSTRAP_EXPECTED_SHA_HERE; do
   if grep -Fq "$token" <<< "$content"; then
     echo "ERROR: Unreplaced placeholder: $token" >&2
     exit 1

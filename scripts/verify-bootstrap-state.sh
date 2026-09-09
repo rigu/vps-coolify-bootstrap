@@ -46,6 +46,16 @@ case "$DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX" in
     ;;
 esac
 
+# DEVOPS_USER_NOPASSWD controls whether DEVOPS_USER has NOPASSWD:ALL
+# Default: false (more secure - compromised SSH key doesn't give immediate root)
+DEVOPS_USER_NOPASSWD="${DEVOPS_USER_NOPASSWD:-false}"
+case "$DEVOPS_USER_NOPASSWD" in
+  true|false) ;;
+  1) DEVOPS_USER_NOPASSWD="true" ;;
+  0) DEVOPS_USER_NOPASSWD="false" ;;
+  *) DEVOPS_USER_NOPASSWD="false" ;;
+esac
+
 COOLIFY_SUDO_NOPASSWD_USER="${COOLIFY_SUDO_NOPASSWD_USER:-coolify}"
 DEVOPS_USER="${DEVOPS_USER:-devops}"
 COOLIFY_REALTIME_DOMAIN="${COOLIFY_REALTIME_DOMAIN:-}"
@@ -199,10 +209,21 @@ while IFS= read -r user; do
   fi
 done < <(split_csv_to_lines "$managed_users_csv")
 
-if grep -Eq "^${DEVOPS_USER}[[:space:]]+ALL=\\(ALL:ALL\\)[[:space:]]+NOPASSWD:ALL$" /etc/sudoers.d/99-bootstrap-sudo-policy 2>/dev/null; then
-  pass "DEVOPS_USER has NOPASSWD sudo policy (${DEVOPS_USER})"
+# DEVOPS_USER sudo policy: NOPASSWD if DEVOPS_USER_NOPASSWD=true, else password required
+if [[ "${DEVOPS_USER_NOPASSWD:-false}" == "true" ]]; then
+  if grep -Eq "^${DEVOPS_USER}[[:space:]]+ALL=\\(ALL:ALL\\)[[:space:]]+NOPASSWD:ALL$" /etc/sudoers.d/99-bootstrap-sudo-policy 2>/dev/null; then
+    pass "DEVOPS_USER has NOPASSWD sudo policy (${DEVOPS_USER}) [DEVOPS_USER_NOPASSWD=true]"
+  else
+    fail "DEVOPS_USER missing NOPASSWD policy (${DEVOPS_USER}) [DEVOPS_USER_NOPASSWD=true]"
+  fi
 else
-  fail "DEVOPS_USER missing NOPASSWD policy (${DEVOPS_USER})"
+  if grep -Eq "^${DEVOPS_USER}[[:space:]]+ALL=\\(ALL:ALL\\)[[:space:]]+ALL$" /etc/sudoers.d/99-bootstrap-sudo-policy 2>/dev/null; then
+    pass "DEVOPS_USER has password-required sudo policy (${DEVOPS_USER}) [DEVOPS_USER_NOPASSWD=false]"
+  elif grep -Eq "^${DEVOPS_USER}[[:space:]]+ALL=\\(ALL:ALL\\)[[:space:]]+NOPASSWD:ALL$" /etc/sudoers.d/99-bootstrap-sudo-policy 2>/dev/null; then
+    warn "DEVOPS_USER has NOPASSWD policy but DEVOPS_USER_NOPASSWD=false - rerun bootstrap to harden"
+  else
+    fail "DEVOPS_USER missing sudo policy entry (${DEVOPS_USER})"
+  fi
 fi
 
 if grep -Eq "^${COOLIFY_SUDO_NOPASSWD_USER}[[:space:]]+ALL=\\(ALL:ALL\\)[[:space:]]+NOPASSWD:ALL$" /etc/sudoers.d/99-bootstrap-sudo-policy 2>/dev/null; then

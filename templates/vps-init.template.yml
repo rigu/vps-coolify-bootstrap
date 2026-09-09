@@ -9,7 +9,7 @@ users:
   - name: DEVOPS_USER_HERE
     groups: [sudo]
     shell: /bin/bash
-    sudo: ["ALL=(ALL:ALL) NOPASSWD:ALL"]
+    sudo: ["DEVOPS_USER_SUDO_SPEC_HERE"]
     # DEVOPS_SSH_AUTHORIZED_KEYS_BLOCK_HERE
 
   - name: COOLIFY_SUDO_NOPASSWD_USER_HERE

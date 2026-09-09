@@ -161,6 +161,20 @@ case "$DOCKER_DISABLE_IPV6_FOR_PARSEADDR_FIX" in
     ;;
 esac
 
+# DEVOPS_USER_NOPASSWD controls whether DEVOPS_USER gets NOPASSWD:ALL sudo.
+# Default: false (more secure - compromised SSH key doesn't give immediate root)
+# COOLIFY_SUDO_NOPASSWD_USER always has NOPASSWD:ALL (required by Coolify)
+DEVOPS_USER_NOPASSWD="${DEVOPS_USER_NOPASSWD:-false}"
+case "$DEVOPS_USER_NOPASSWD" in
+  true|false) ;;
+  1) DEVOPS_USER_NOPASSWD="true" ;;
+  0) DEVOPS_USER_NOPASSWD="false" ;;
+  *)
+    bootstrap_error "DEVOPS_USER_NOPASSWD must be true/false or 1/0"
+    exit 1
+    ;;
+esac
+
 COOLIFY_REALTIME_DOMAIN="${COOLIFY_REALTIME_DOMAIN:-}"
 if [[ -n "$COOLIFY_REALTIME_DOMAIN" ]] && [[ "$COOLIFY_REALTIME_DOMAIN" =~ [[:space:]/] ]]; then
   bootstrap_error "COOLIFY_REALTIME_DOMAIN must be a hostname without spaces or /"
@@ -553,7 +567,12 @@ apply_sudo_policy() {
   if ! {
     : > "$tmp_file"
     for user in $(split_csv_to_lines "$MANAGED_USERS_CSV"); do
-      if [[ "$user" == "$DEVOPS_USER" || "$user" == "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
+      # COOLIFY_SUDO_NOPASSWD_USER always gets NOPASSWD:ALL (required by Coolify)
+      # DEVOPS_USER gets NOPASSWD:ALL only if DEVOPS_USER_NOPASSWD=true
+      # Other users (ADDITIONAL_SUDO_USERS) require password for sudo
+      if [[ "$user" == "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
+        printf '%s ALL=(ALL:ALL) NOPASSWD:ALL\n' "$user" >> "$tmp_file"
+      elif [[ "$user" == "$DEVOPS_USER" && "${DEVOPS_USER_NOPASSWD:-false}" == "true" ]]; then
         printf '%s ALL=(ALL:ALL) NOPASSWD:ALL\n' "$user" >> "$tmp_file"
       else
         printf '%s ALL=(ALL:ALL) ALL\n' "$user" >> "$tmp_file"
