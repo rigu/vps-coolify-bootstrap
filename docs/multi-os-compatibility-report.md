@@ -697,7 +697,7 @@ However, the Quick Installer explicitly lists only:
 | # | Change | Effort | Finding | Status |
 |---|--------|--------|---------|:------:|
 | 1 | Mask `sshd-socket-generator` on Ubuntu 24.04/26.04 + reboot test | 1h | #1 | ✅ |
-| 2 | Remove human users from coolify group (preserve Coolify ownership) | 1h | #2 | ⬜ |
+| 2 | Remove human users from coolify group (preserve Coolify ownership) | 1h | #2 | ✅ |
 | 3 | Pin bootstrap to SHA with correct fetch + verify method | 1h | #3 | ⬜ |
 | 4 | Configurable `DEVOPS_USER_NOPASSWD` + cloud-init fix | 1h | #4 | ⬜ |
 | 5 | Separate `DOCKER_USERS`, default empty | 1h | #5 | ⬜ |

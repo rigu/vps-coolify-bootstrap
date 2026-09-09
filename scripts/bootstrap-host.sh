@@ -1110,9 +1110,27 @@ done
 apply_sudo_policy
 bootstrap_success "Sudo policy applied for managed users."
 
+# SECURITY: Only COOLIFY_SUDO_NOPASSWD_USER should be in the coolify group.
+# Human users (DEVOPS_USER, ADDITIONAL_SUDO_USERS) should NOT have write access
+# to Coolify control-plane data (/data/coolify). This prevents human user
+# compromise from directly affecting Coolify's control plane.
+#
+# Note: Coolify self-hosted requires ownership of /data/coolify to be 9999:root
+# or the configured coolify user. We preserve this ownership and only manage
+# group membership here.
+ensure_user_exists "$COOLIFY_SUDO_NOPASSWD_USER"
+usermod -aG coolify "$COOLIFY_SUDO_NOPASSWD_USER"
+bootstrap_info "Added $COOLIFY_SUDO_NOPASSWD_USER to coolify group (required for Coolify operations)."
+
+# Remove human users from coolify group if they were previously added.
+# This ensures replay of bootstrap fixes prior insecure configurations.
 for user in $(split_csv_to_lines "$MANAGED_USERS_CSV"); do
-  ensure_user_exists "$user"
-  usermod -aG coolify "$user"
+  if [[ "$user" != "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
+    if id -nG "$user" 2>/dev/null | tr ' ' '\n' | grep -qx "coolify"; then
+      gpasswd -d "$user" coolify 2>/dev/null || true
+      bootstrap_info "Removed $user from coolify group (human users should not have control-plane write access)."
+    fi
+  fi
 done
 
 if getent group docker >/dev/null 2>&1; then
@@ -1121,7 +1139,7 @@ if getent group docker >/dev/null 2>&1; then
     usermod -aG docker "$user"
   done
 fi
-bootstrap_success "Managed users synchronized to sudo/docker/coolify groups."
+bootstrap_success "Managed users synchronized to sudo/docker groups; only $COOLIFY_SUDO_NOPASSWD_USER in coolify group."
 
 bootstrap_info "Synchronizing Coolify localhost SSH configuration."
 sync_coolify_localhost_ssh_user

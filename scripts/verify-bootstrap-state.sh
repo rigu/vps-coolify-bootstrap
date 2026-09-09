@@ -185,7 +185,18 @@ done < <(split_csv_to_lines "$managed_users_csv")
 while IFS= read -r user; do
   check_member_of_group "$user" "sudo"
   check_member_of_group "$user" "docker"
-  check_member_of_group "$user" "coolify"
+  # SECURITY: Only COOLIFY_SUDO_NOPASSWD_USER should be in coolify group.
+  # Human users must NOT have write access to Coolify control-plane data.
+  if [[ "$user" == "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
+    check_member_of_group "$user" "coolify"
+  else
+    # Verify human users are NOT in coolify group
+    if id -nG "$user" 2>/dev/null | tr ' ' '\n' | grep -qx "coolify"; then
+      fail "human user $user is in coolify group (security risk: control-plane write access)"
+    else
+      pass "human user $user is NOT in coolify group (correct)"
+    fi
+  fi
 done < <(split_csv_to_lines "$managed_users_csv")
 
 if grep -Eq "^${DEVOPS_USER}[[:space:]]+ALL=\\(ALL:ALL\\)[[:space:]]+NOPASSWD:ALL$" /etc/sudoers.d/99-bootstrap-sudo-policy 2>/dev/null; then
