@@ -124,7 +124,7 @@ mkdir -p /run/sshd
 chmod 755 /run/sshd
 chown root:root /run/sshd
 
-# Mask sshd-socket-generator if present (Ubuntu 24.04+) to prevent ssh.socket
+# Mask sshd-socket-generator if present to prevent ssh.socket
 # regeneration after reboot or openssh-server package operations.
 SSHD_SOCKET_GENERATOR="/usr/lib/systemd/system-generators/sshd-socket-generator"
 SSHD_SOCKET_GENERATOR_MASK="/etc/systemd/system-generators/sshd-socket-generator"

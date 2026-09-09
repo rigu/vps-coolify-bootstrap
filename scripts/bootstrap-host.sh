@@ -721,19 +721,19 @@ TMP
 systemd-tmpfiles --create /etc/tmpfiles.d/sshd.conf
 bootstrap_success "sshd runtime directory baseline prepared."
 
-# Ubuntu 24.04 and 26.04 default to ssh.socket (systemd socket activation).
-# Socket activation + sshd_config Port directive can conflict, causing sshd
-# to not listen on the custom port. Disable socket activation and use the
-# classic ssh.service for reliable custom-port operation.
+# Some distributions (Ubuntu 24.04+, potentially others) default to ssh.socket
+# (systemd socket activation). Socket activation + sshd_config Port directive
+# can conflict, causing sshd to not listen on the custom port. Disable socket
+# activation and use the classic ssh.service for reliable custom-port operation.
 #
 # IMPORTANT: Simply disabling ssh.socket is NOT sufficient for persistent
-# deactivation. Ubuntu ships sshd-socket-generator which can regenerate
-# socket-activation configuration after boot or package operations.
+# deactivation. Systems with sshd-socket-generator can regenerate socket-
+# activation configuration after boot or package operations.
 # We must mask the generator to prevent this.
 # Reference: https://discourse.ubuntu.com/t/sshd-now-uses-socket-based-activation-ubuntu-22-10-and-later/30189/47
 
 # Mask the sshd-socket-generator to prevent ssh.socket regeneration after
-# boot or openssh-server package upgrades. This is required on Ubuntu 24.04+.
+# boot or openssh-server package upgrades. Required on systems that ship it.
 SSHD_SOCKET_GENERATOR="/usr/lib/systemd/system-generators/sshd-socket-generator"
 SSHD_SOCKET_GENERATOR_MASK="/etc/systemd/system-generators/sshd-socket-generator"
 if [[ -f "$SSHD_SOCKET_GENERATOR" ]]; then

@@ -166,7 +166,7 @@ esac
 check_service_enabled_state ssh.service enabled
 check_service_state ssh.service active
 
-# Verify sshd-socket-generator is masked on systems that have it (Ubuntu 24.04+).
+# Verify sshd-socket-generator is masked on systems that have it.
 # This prevents ssh.socket regeneration after reboot or openssh-server upgrades.
 SSHD_SOCKET_GENERATOR="/usr/lib/systemd/system-generators/sshd-socket-generator"
 SSHD_SOCKET_GENERATOR_MASK="/etc/systemd/system-generators/sshd-socket-generator"
@@ -254,6 +254,31 @@ if command -v ufw >/dev/null 2>&1; then
 else
   warn "ufw command not found; skipping firewall checks"
 fi
+
+echo "=== Kernel hardening (sysctl) ==="
+# Verify key sysctl settings for security
+check_sysctl() {
+  local key="$1"
+  local expected="$2"
+  local actual
+  actual="$(sysctl -n "$key" 2>/dev/null || echo "NOT_SET")"
+  if [[ "$actual" == "$expected" ]]; then
+    pass "sysctl $key = $expected"
+  else
+    warn "sysctl $key = $actual (expected $expected)"
+  fi
+}
+
+# P2 #17: rp_filter per-interface verification
+check_sysctl "net.ipv4.conf.all.rp_filter" "1"
+check_sysctl "net.ipv4.conf.default.rp_filter" "1"
+
+# Other critical security settings
+check_sysctl "net.ipv4.ip_forward" "1"
+check_sysctl "net.ipv4.conf.all.accept_redirects" "0"
+check_sysctl "net.ipv4.conf.all.send_redirects" "0"
+check_sysctl "net.ipv4.tcp_syncookies" "1"
+check_sysctl "net.ipv6.conf.all.accept_redirects" "0"
 
 echo "=== User and sudo policy ==="
 while IFS= read -r user; do

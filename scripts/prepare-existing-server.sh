@@ -107,8 +107,12 @@ PACKAGES=(
   needrestart
 )
 
-apt-get update -y
-apt-get install -y "${PACKAGES[@]}"
+# Use apt with lock timeout to handle concurrent package operations
+export DEBIAN_FRONTEND=noninteractive
+APT_LOCK_TIMEOUT="${APT_LOCK_TIMEOUT:-120}"
+
+apt-get -o DPkg::Lock::Timeout="$APT_LOCK_TIMEOUT" update -y
+apt-get -o DPkg::Lock::Timeout="$APT_LOCK_TIMEOUT" install -y "${PACKAGES[@]}"
 bootstrap_success "All required packages installed."
 
 # ---------------------------------------------------------------------------

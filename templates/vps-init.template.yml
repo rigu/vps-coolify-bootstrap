@@ -32,7 +32,7 @@ packages:
   - needrestart
 
 write_files:
-  # P2 #18: Configure needrestart to not auto-restart services on Ubuntu 24.04+
+  # P2 #18: Configure needrestart to not auto-restart services
   # This prevents unexpected service restarts after unattended-upgrades
   # Operators should schedule controlled maintenance windows for restarts
   - path: /etc/needrestart/conf.d/99-bootstrap-policy.conf
