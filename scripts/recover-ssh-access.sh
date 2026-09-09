@@ -123,6 +123,19 @@ fi
 mkdir -p /run/sshd
 chmod 755 /run/sshd
 chown root:root /run/sshd
+
+# Mask sshd-socket-generator if present (Ubuntu 24.04+) to prevent ssh.socket
+# regeneration after reboot or openssh-server package operations.
+SSHD_SOCKET_GENERATOR="/usr/lib/systemd/system-generators/sshd-socket-generator"
+SSHD_SOCKET_GENERATOR_MASK="/etc/systemd/system-generators/sshd-socket-generator"
+if [[ -f "$SSHD_SOCKET_GENERATOR" ]]; then
+  install -d -m 755 /etc/systemd/system-generators
+  if [[ ! -L "$SSHD_SOCKET_GENERATOR_MASK" ]] || [[ "$(readlink -f "$SSHD_SOCKET_GENERATOR_MASK")" != "/dev/null" ]]; then
+    ln -sf /dev/null "$SSHD_SOCKET_GENERATOR_MASK"
+    bootstrap_success "Masked sshd-socket-generator to prevent ssh.socket regeneration."
+  fi
+fi
+
 systemctl daemon-reload
 systemctl disable --now ssh.socket 2>/dev/null || true
 rm -f /etc/systemd/system/ssh.socket.d/override.conf

@@ -127,6 +127,20 @@ check_service_state ssh.socket inactive
 check_service_enabled_state ssh.service enabled
 check_service_state ssh.service active
 
+# Verify sshd-socket-generator is masked on systems that have it (Ubuntu 24.04+).
+# This prevents ssh.socket regeneration after reboot or openssh-server upgrades.
+SSHD_SOCKET_GENERATOR="/usr/lib/systemd/system-generators/sshd-socket-generator"
+SSHD_SOCKET_GENERATOR_MASK="/etc/systemd/system-generators/sshd-socket-generator"
+if [[ -f "$SSHD_SOCKET_GENERATOR" ]]; then
+  if [[ -L "$SSHD_SOCKET_GENERATOR_MASK" ]] && [[ "$(readlink -f "$SSHD_SOCKET_GENERATOR_MASK")" == "/dev/null" ]]; then
+    pass "sshd-socket-generator is masked (prevents ssh.socket regeneration)"
+  else
+    fail "sshd-socket-generator exists but is NOT masked; ssh.socket may regenerate after reboot/upgrade"
+  fi
+else
+  pass "sshd-socket-generator not present on this system (no masking needed)"
+fi
+
 if ss -lnt "( sport = :${SSH_PORT} )" 2>/dev/null | grep -q ":${SSH_PORT}"; then
   pass "sshd listens on configured SSH_PORT=${SSH_PORT}"
 else

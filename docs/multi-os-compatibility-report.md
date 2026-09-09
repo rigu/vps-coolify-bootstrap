@@ -694,16 +694,16 @@ However, the Quick Installer explicitly lists only:
 
 ### Phase 1: P1 Fixes (Before Production)
 
-| # | Change | Effort | Finding |
-|---|--------|--------|---------|
-| 1 | Mask `sshd-socket-generator` on Ubuntu 24.04/26.04 + reboot test | 1h | #1 |
-| 2 | Remove human users from coolify group (preserve Coolify ownership) | 1h | #2 |
-| 3 | Pin bootstrap to SHA with correct fetch + verify method | 1h | #3 |
-| 4 | Configurable `DEVOPS_USER_NOPASSWD` + cloud-init fix | 1h | #4 |
-| 5 | Separate `DOCKER_USERS`, default empty | 1h | #5 |
-| 6 | Declarative firewall model (structured config) | 3h | #6 |
-| 7 | Hardened Coolify ports default + 8000 policy | 1h | #7 |
-| 8 | Fix Debian 13 OS detection | 30m | #8 |
+| # | Change | Effort | Finding | Status |
+|---|--------|--------|---------|:------:|
+| 1 | Mask `sshd-socket-generator` on Ubuntu 24.04/26.04 + reboot test | 1h | #1 | ✅ |
+| 2 | Remove human users from coolify group (preserve Coolify ownership) | 1h | #2 | ⬜ |
+| 3 | Pin bootstrap to SHA with correct fetch + verify method | 1h | #3 | ⬜ |
+| 4 | Configurable `DEVOPS_USER_NOPASSWD` + cloud-init fix | 1h | #4 | ⬜ |
+| 5 | Separate `DOCKER_USERS`, default empty | 1h | #5 | ⬜ |
+| 6 | Declarative firewall model (structured config) | 3h | #6 | ⬜ |
+| 7 | Hardened Coolify ports default + 8000 policy | 1h | #7 | ⬜ |
+| 8 | Fix Debian 13 OS detection | 30m | #8 | ⬜ |
 
 ### Phase 2: P2 Hardening
 
