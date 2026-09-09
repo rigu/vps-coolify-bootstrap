@@ -253,7 +253,8 @@ if [[ -z "$close_coolify_realtime_ports" ]] && [[ -n "${cfg[ALLOW_PUBLIC_COOLIFY
     close_coolify_realtime_ports="false"
   fi
 fi
-close_coolify_realtime_ports="${close_coolify_realtime_ports:-false}"
+# Default: true (hardened - realtime goes through Traefik/domain proxy)
+close_coolify_realtime_ports="${close_coolify_realtime_ports:-true}"
 case "$close_coolify_realtime_ports" in
   true|false) ;;
   1) close_coolify_realtime_ports="true" ;;

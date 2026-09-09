@@ -157,7 +157,8 @@ if [[ -z "$CLOSE_COOLIFY_REALTIME_PORTS" ]] && [[ -n "${ALLOW_PUBLIC_COOLIFY_REA
     CLOSE_COOLIFY_REALTIME_PORTS="false"
   fi
 fi
-CLOSE_COOLIFY_REALTIME_PORTS="${CLOSE_COOLIFY_REALTIME_PORTS:-false}"
+# Default: true (hardened - realtime goes through Traefik/domain proxy)
+CLOSE_COOLIFY_REALTIME_PORTS="${CLOSE_COOLIFY_REALTIME_PORTS:-true}"
 case "$CLOSE_COOLIFY_REALTIME_PORTS" in
   true|false) ;;
   1) CLOSE_COOLIFY_REALTIME_PORTS="true" ;;

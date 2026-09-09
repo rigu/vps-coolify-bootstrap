@@ -22,7 +22,8 @@ if [[ -z "$CLOSE_COOLIFY_REALTIME_PORTS" ]] && [[ -n "${ALLOW_PUBLIC_COOLIFY_REA
     CLOSE_COOLIFY_REALTIME_PORTS="false"
   fi
 fi
-CLOSE_COOLIFY_REALTIME_PORTS="${CLOSE_COOLIFY_REALTIME_PORTS:-false}"
+# Default: true (hardened - realtime goes through Traefik/domain proxy)
+CLOSE_COOLIFY_REALTIME_PORTS="${CLOSE_COOLIFY_REALTIME_PORTS:-true}"
 invalid_close_coolify_realtime_ports=""
 case "$CLOSE_COOLIFY_REALTIME_PORTS" in
   true|false) ;;
@@ -30,7 +31,7 @@ case "$CLOSE_COOLIFY_REALTIME_PORTS" in
   0) CLOSE_COOLIFY_REALTIME_PORTS="false" ;;
   *)
     invalid_close_coolify_realtime_ports="$CLOSE_COOLIFY_REALTIME_PORTS"
-    CLOSE_COOLIFY_REALTIME_PORTS="false"
+    CLOSE_COOLIFY_REALTIME_PORTS="true"
     ;;
 esac
 
