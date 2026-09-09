@@ -68,6 +68,43 @@ is_valid_coolify_root_password() {
   return 0
 }
 
+# Validate port number is in valid range (1-65535)
+is_valid_port() {
+  local port="$1"
+  [[ "$port" =~ ^[0-9]+$ ]] || return 1
+  local port_num=$((10#$port))
+  (( port_num >= 1 && port_num <= 65535 ))
+}
+
+# Validate CIDR notation (IPv4 or IPv6)
+# Accepts: 10.0.0.0/8, 192.168.1.0/24, 2001:db8::/32, fe80::/10
+# Also accepts single IPs: 10.0.0.1, 2001:db8::1
+is_valid_cidr() {
+  local cidr="$1"
+  # IPv4 CIDR: x.x.x.x/y where y is 0-32
+  if [[ "$cidr" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(/([0-9]|[12][0-9]|3[0-2]))?$ ]]; then
+    # Validate each octet is 0-255
+    local ip="${cidr%/*}"
+    local IFS='.'
+    local -a octets
+    read -ra octets <<< "$ip"
+    for octet in "${octets[@]}"; do
+      (( 10#$octet <= 255 )) || return 1
+    done
+    return 0
+  fi
+  # IPv6 CIDR: simplified check for common formats
+  # Accepts: 2001:db8::/32, ::1, fe80::/10, fc00::/7
+  if [[ "$cidr" =~ ^([0-9A-Fa-f:]+)(/([0-9]|[1-9][0-9]|1[0-2][0-8]))?$ ]]; then
+    local ip="${cidr%/*}"
+    # Basic IPv6 format validation (contains colons, no invalid chars)
+    if [[ "$ip" =~ ^[0-9A-Fa-f:]+$ ]] && [[ "$ip" == *:* ]]; then
+      return 0
+    fi
+  fi
+  return 1
+}
+
 csv_contains_value() {
   local csv="$1"
   local needle="$2"

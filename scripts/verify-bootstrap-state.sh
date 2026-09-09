@@ -191,24 +191,43 @@ if command -v ufw >/dev/null 2>&1; then
   # Verify EXTRA_ALLOWED_TCP_PORTS are allowed
   if [[ -n "${EXTRA_ALLOWED_TCP_PORTS:-}" ]]; then
     for port in $(split_csv_to_lines "$EXTRA_ALLOWED_TCP_PORTS"); do
-      if [[ -n "$port" ]] && [[ "$port" =~ ^[0-9]+$ ]]; then
+      if [[ -n "$port" ]] && is_valid_port "$port"; then
         if grep -Eq "^[[:space:]]*${port}/tcp[[:space:]]+ALLOW IN" <<<"$ufw_status"; then
           pass "UFW allows extra TCP port ${port}"
         else
           fail "UFW missing EXTRA_ALLOWED_TCP_PORTS entry: ${port}/tcp"
         fi
+      elif [[ -n "$port" ]]; then
+        warn "EXTRA_ALLOWED_TCP_PORTS contains invalid port: $port"
       fi
     done
   fi
   # Verify EXTRA_ALLOWED_UDP_PORTS are allowed
   if [[ -n "${EXTRA_ALLOWED_UDP_PORTS:-}" ]]; then
     for port in $(split_csv_to_lines "$EXTRA_ALLOWED_UDP_PORTS"); do
-      if [[ -n "$port" ]] && [[ "$port" =~ ^[0-9]+$ ]]; then
+      if [[ -n "$port" ]] && is_valid_port "$port"; then
         if grep -Eq "^[[:space:]]*${port}/udp[[:space:]]+ALLOW IN" <<<"$ufw_status"; then
           pass "UFW allows extra UDP port ${port}"
         else
           fail "UFW missing EXTRA_ALLOWED_UDP_PORTS entry: ${port}/udp"
         fi
+      elif [[ -n "$port" ]]; then
+        warn "EXTRA_ALLOWED_UDP_PORTS contains invalid port: $port"
+      fi
+    done
+  fi
+  # Verify MANAGEMENT_CIDRS SSH rules exist
+  if [[ -n "${MANAGEMENT_CIDRS:-}" ]]; then
+    for cidr in $(split_csv_to_lines "$MANAGEMENT_CIDRS"); do
+      if [[ -n "$cidr" ]] && is_valid_cidr "$cidr"; then
+        # UFW shows CIDR rules with "from <cidr>" format
+        if grep -Eq "from ${cidr}[[:space:]]" <<<"$ufw_status"; then
+          pass "UFW has SSH rule for management CIDR ${cidr}"
+        else
+          warn "UFW may be missing SSH rule for management CIDR ${cidr} (manual verification needed)"
+        fi
+      elif [[ -n "$cidr" ]]; then
+        warn "MANAGEMENT_CIDRS contains invalid CIDR: $cidr"
       fi
     done
   fi

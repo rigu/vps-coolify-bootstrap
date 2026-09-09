@@ -141,6 +141,46 @@ else
   bootstrap_info "Docker group users: (none - users can use 'sudo docker' if needed)"
 fi
 
+# MANAGEMENT_CIDRS: validate CIDR format for firewall rules
+MANAGEMENT_CIDRS="${MANAGEMENT_CIDRS:-}"
+if [[ -n "$MANAGEMENT_CIDRS" ]]; then
+  for cidr in $(split_csv_to_lines "$MANAGEMENT_CIDRS"); do
+    if [[ -n "$cidr" ]] && ! is_valid_cidr "$cidr"; then
+      bootstrap_error "MANAGEMENT_CIDRS contains invalid CIDR: $cidr"
+      exit 1
+    fi
+  done
+  bootstrap_info "Management CIDRs: $(split_csv_to_lines "$MANAGEMENT_CIDRS" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+fi
+
+# EXTRA_ALLOWED_TCP_PORTS: validate port numbers
+EXTRA_ALLOWED_TCP_PORTS="${EXTRA_ALLOWED_TCP_PORTS:-}"
+if [[ -n "$EXTRA_ALLOWED_TCP_PORTS" ]]; then
+  for port in $(split_csv_to_lines "$EXTRA_ALLOWED_TCP_PORTS"); do
+    if [[ -n "$port" ]]; then
+      if ! is_valid_port "$port"; then
+        bootstrap_error "EXTRA_ALLOWED_TCP_PORTS contains invalid port: $port (must be 1-65535)"
+        exit 1
+      fi
+    fi
+  done
+  bootstrap_info "Extra allowed TCP ports: $(split_csv_to_lines "$EXTRA_ALLOWED_TCP_PORTS" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+fi
+
+# EXTRA_ALLOWED_UDP_PORTS: validate port numbers
+EXTRA_ALLOWED_UDP_PORTS="${EXTRA_ALLOWED_UDP_PORTS:-}"
+if [[ -n "$EXTRA_ALLOWED_UDP_PORTS" ]]; then
+  for port in $(split_csv_to_lines "$EXTRA_ALLOWED_UDP_PORTS"); do
+    if [[ -n "$port" ]]; then
+      if ! is_valid_port "$port"; then
+        bootstrap_error "EXTRA_ALLOWED_UDP_PORTS contains invalid port: $port (must be 1-65535)"
+        exit 1
+      fi
+    fi
+  done
+  bootstrap_info "Extra allowed UDP ports: $(split_csv_to_lines "$EXTRA_ALLOWED_UDP_PORTS" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+fi
+
 SSH_KEY_ROTATE="${SSH_KEY_ROTATE:-0}"
 
 if [[ "$SSH_KEY_ROTATE" != "0" && "$SSH_KEY_ROTATE" != "1" ]]; then
@@ -719,25 +759,23 @@ ufw allow 80/tcp
 ufw allow 443/tcp
 
 # EXTRA_ALLOWED_TCP_PORTS: additional TCP ports (monitoring, custom services)
+# Already validated at input stage - safe to apply directly
 if [[ -n "${EXTRA_ALLOWED_TCP_PORTS:-}" ]]; then
   for port in $(split_csv_to_lines "$EXTRA_ALLOWED_TCP_PORTS"); do
-    if [[ -n "$port" ]] && [[ "$port" =~ ^[0-9]+$ ]]; then
+    if [[ -n "$port" ]]; then
       ufw allow "${port}/tcp"
       bootstrap_info "UFW: allowed extra TCP port $port"
-    elif [[ -n "$port" ]]; then
-      bootstrap_warn "UFW: invalid EXTRA_ALLOWED_TCP_PORTS entry: $port (skipped)"
     fi
   done
 fi
 
 # EXTRA_ALLOWED_UDP_PORTS: additional UDP ports (VPN, DNS)
+# Already validated at input stage - safe to apply directly
 if [[ -n "${EXTRA_ALLOWED_UDP_PORTS:-}" ]]; then
   for port in $(split_csv_to_lines "$EXTRA_ALLOWED_UDP_PORTS"); do
-    if [[ -n "$port" ]] && [[ "$port" =~ ^[0-9]+$ ]]; then
+    if [[ -n "$port" ]]; then
       ufw allow "${port}/udp"
       bootstrap_info "UFW: allowed extra UDP port $port"
-    elif [[ -n "$port" ]]; then
-      bootstrap_warn "UFW: invalid EXTRA_ALLOWED_UDP_PORTS entry: $port (skipped)"
     fi
   done
 fi
