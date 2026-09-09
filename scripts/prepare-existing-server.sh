@@ -104,11 +104,29 @@ PACKAGES=(
   ufw
   fail2ban
   unattended-upgrades
+  needrestart
 )
 
 apt-get update -y
 apt-get install -y "${PACKAGES[@]}"
 bootstrap_success "All required packages installed."
+
+# ---------------------------------------------------------------------------
+# needrestart policy (P2 #18)
+# ---------------------------------------------------------------------------
+NEEDRESTART_POLICY="/etc/needrestart/conf.d/99-bootstrap-policy.conf"
+bootstrap_info "Writing needrestart policy: $NEEDRESTART_POLICY"
+
+install -d -m 755 /etc/needrestart/conf.d
+cat > "$NEEDRESTART_POLICY" <<'EOF'
+# Bootstrap policy: don't auto-restart services
+# Operators should review and restart manually during maintenance windows
+# Options: i=interactive, a=automatic, l=list-only
+$nrconf{restart} = 'l';
+# Don't restart kernel either - report only
+$nrconf{kernelhints} = 1;
+EOF
+bootstrap_success "needrestart policy configured (list-only mode)."
 
 # ---------------------------------------------------------------------------
 # Kernel hardening (sysctl)
