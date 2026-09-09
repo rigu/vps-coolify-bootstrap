@@ -74,6 +74,11 @@ done
 # DOCKER_USERS: users expected to have docker group membership
 DOCKER_USERS="${DOCKER_USERS:-}"
 
+# Firewall declarative model variables
+MANAGEMENT_CIDRS="${MANAGEMENT_CIDRS:-}"
+EXTRA_ALLOWED_TCP_PORTS="${EXTRA_ALLOWED_TCP_PORTS:-}"
+EXTRA_ALLOWED_UDP_PORTS="${EXTRA_ALLOWED_UDP_PORTS:-}"
+
 failures=0
 warnings=0
 has_iptables_600x_drop=unknown
@@ -181,6 +186,30 @@ if command -v ufw >/dev/null 2>&1; then
     pass "UFW allows 80/tcp and 443/tcp"
   else
     fail "UFW missing 80/tcp or 443/tcp allow rule"
+  fi
+  # Verify EXTRA_ALLOWED_TCP_PORTS are allowed
+  if [[ -n "${EXTRA_ALLOWED_TCP_PORTS:-}" ]]; then
+    for port in $(split_csv_to_lines "$EXTRA_ALLOWED_TCP_PORTS"); do
+      if [[ -n "$port" ]] && [[ "$port" =~ ^[0-9]+$ ]]; then
+        if grep -Eq "^[[:space:]]*${port}/tcp[[:space:]]+ALLOW IN" <<<"$ufw_status"; then
+          pass "UFW allows extra TCP port ${port}"
+        else
+          fail "UFW missing EXTRA_ALLOWED_TCP_PORTS entry: ${port}/tcp"
+        fi
+      fi
+    done
+  fi
+  # Verify EXTRA_ALLOWED_UDP_PORTS are allowed
+  if [[ -n "${EXTRA_ALLOWED_UDP_PORTS:-}" ]]; then
+    for port in $(split_csv_to_lines "$EXTRA_ALLOWED_UDP_PORTS"); do
+      if [[ -n "$port" ]] && [[ "$port" =~ ^[0-9]+$ ]]; then
+        if grep -Eq "^[[:space:]]*${port}/udp[[:space:]]+ALLOW IN" <<<"$ufw_status"; then
+          pass "UFW allows extra UDP port ${port}"
+        else
+          fail "UFW missing EXTRA_ALLOWED_UDP_PORTS entry: ${port}/udp"
+        fi
+      fi
+    done
   fi
 else
   warn "ufw command not found; skipping firewall checks"

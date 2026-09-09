@@ -701,7 +701,7 @@ However, the Quick Installer explicitly lists only:
 | 3 | Pin bootstrap to SHA with correct fetch + verify method | 1h | #3 | ✅ |
 | 4 | Configurable `DEVOPS_USER_NOPASSWD` + cloud-init fix | 1h | #4 | ✅ |
 | 5 | Separate `DOCKER_USERS`, default empty | 1h | #5 | ✅ |
-| 6 | Declarative firewall model (structured config) | 3h | #6 | ⬜ |
+| 6 | Declarative firewall model (structured config) | 3h | #6 | ✅ |
 | 7 | Hardened Coolify ports default + 8000 policy | 1h | #7 | ⬜ |
 | 8 | Fix Debian 13 OS detection | 30m | #8 | ⬜ |
 

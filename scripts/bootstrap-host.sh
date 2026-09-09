@@ -683,12 +683,14 @@ cleanup_stale_sshd_port22_listeners
 bootstrap_success "ssh.socket disabled; ssh.service validated/restarted on configured port."
 
 # Firewall hardening.
-# This intentionally resets UFW to the bootstrap baseline.
+# This intentionally resets UFW to the bootstrap baseline (declarative model).
+# Out-of-band rules are lost - use MANAGEMENT_CIDRS/EXTRA_ALLOWED_*_PORTS instead.
 bootstrap_info "Applying UFW baseline policy and rules."
 ufw --force reset
 ufw default deny incoming
 ufw default deny routed
 ufw default allow outgoing
+
 # Allow localhost/private source ranges to reach SSH port without rate-limit
 # side effects. Coolify localhost checks originate from Docker bridge networks.
 ufw allow from 127.0.0.1 to any port "${SSH_PORT}" proto tcp
@@ -699,15 +701,51 @@ ufw allow from 100.64.0.0/10 to any port "${SSH_PORT}" proto tcp
 ufw allow from ::1 to any port "${SSH_PORT}" proto tcp
 ufw allow from fc00::/7 to any port "${SSH_PORT}" proto tcp
 ufw allow from fe80::/10 to any port "${SSH_PORT}" proto tcp
+
+# MANAGEMENT_CIDRS: additional CIDRs with SSH access (VPN, office, etc.)
+if [[ -n "${MANAGEMENT_CIDRS:-}" ]]; then
+  for cidr in $(split_csv_to_lines "$MANAGEMENT_CIDRS"); do
+    if [[ -n "$cidr" ]]; then
+      ufw allow from "$cidr" to any port "${SSH_PORT}" proto tcp
+      bootstrap_info "UFW: allowed SSH from management CIDR $cidr"
+    fi
+  done
+fi
+
 # Keep internet-facing SSH access protected with rate limiting.
 ufw limit "${SSH_PORT}/tcp"
 ufw allow 80/tcp
 ufw allow 443/tcp
+
+# EXTRA_ALLOWED_TCP_PORTS: additional TCP ports (monitoring, custom services)
+if [[ -n "${EXTRA_ALLOWED_TCP_PORTS:-}" ]]; then
+  for port in $(split_csv_to_lines "$EXTRA_ALLOWED_TCP_PORTS"); do
+    if [[ -n "$port" ]] && [[ "$port" =~ ^[0-9]+$ ]]; then
+      ufw allow "${port}/tcp"
+      bootstrap_info "UFW: allowed extra TCP port $port"
+    elif [[ -n "$port" ]]; then
+      bootstrap_warn "UFW: invalid EXTRA_ALLOWED_TCP_PORTS entry: $port (skipped)"
+    fi
+  done
+fi
+
+# EXTRA_ALLOWED_UDP_PORTS: additional UDP ports (VPN, DNS)
+if [[ -n "${EXTRA_ALLOWED_UDP_PORTS:-}" ]]; then
+  for port in $(split_csv_to_lines "$EXTRA_ALLOWED_UDP_PORTS"); do
+    if [[ -n "$port" ]] && [[ "$port" =~ ^[0-9]+$ ]]; then
+      ufw allow "${port}/udp"
+      bootstrap_info "UFW: allowed extra UDP port $port"
+    elif [[ -n "$port" ]]; then
+      bootstrap_warn "UFW: invalid EXTRA_ALLOWED_UDP_PORTS entry: $port (skipped)"
+    fi
+  done
+fi
+
 ufw delete allow 22/tcp || true
 ufw delete allow OpenSSH || true
 ufw logging low
 ufw --force enable
-bootstrap_success "UFW baseline rules applied (private-allow + limited public SSH,80,443)."
+bootstrap_success "UFW baseline rules applied (private-allow + limited public SSH,80,443 + extras)."
 
 bootstrap_info "Enabling fail2ban and unattended-upgrades services."
 systemctl enable --now fail2ban
