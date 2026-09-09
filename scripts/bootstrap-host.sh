@@ -123,6 +123,24 @@ for user in $(split_csv_to_lines "${ADDITIONAL_SUDO_USERS:-}"); do
 done
 bootstrap_info "Managed users resolved: $(split_csv_to_lines "$MANAGED_USERS_CSV" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
 
+# DOCKER_USERS: users who get ambient Docker group membership (root-equivalent).
+# Must be a subset of managed users.
+DOCKER_USERS="${DOCKER_USERS:-}"
+if [[ -n "$DOCKER_USERS" ]]; then
+  for user in $(split_csv_to_lines "$DOCKER_USERS"); do
+    if ! is_valid_unix_username "$user"; then
+      bootstrap_error "DOCKER_USERS contains invalid UNIX username: $user"
+      exit 1
+    fi
+    if ! csv_contains_value "$MANAGED_USERS_CSV" "$user"; then
+      bootstrap_warn "DOCKER_USERS contains user not in managed users: $user (will be added if user exists on system)"
+    fi
+  done
+  bootstrap_info "Docker group users: $(split_csv_to_lines "$DOCKER_USERS" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+else
+  bootstrap_info "Docker group users: (none - users can use 'sudo docker' if needed)"
+fi
+
 SSH_KEY_ROTATE="${SSH_KEY_ROTATE:-0}"
 
 if [[ "$SSH_KEY_ROTATE" != "0" && "$SSH_KEY_ROTATE" != "1" ]]; then
@@ -1153,12 +1171,21 @@ for user in $(split_csv_to_lines "$MANAGED_USERS_CSV"); do
 done
 
 if getent group docker >/dev/null 2>&1; then
-  for user in $(split_csv_to_lines "$MANAGED_USERS_CSV"); do
-    ensure_user_exists "$user"
-    usermod -aG docker "$user"
-  done
+  # SECURITY: Docker group is root-equivalent - members can mount host filesystem.
+  # Only users explicitly listed in DOCKER_USERS get ambient docker access.
+  # Others can still use `sudo docker ...` if they have sudo.
+  if [[ -n "${DOCKER_USERS:-}" ]]; then
+    for user in $(split_csv_to_lines "$DOCKER_USERS"); do
+      if id "$user" >/dev/null 2>&1; then
+        usermod -aG docker "$user"
+        bootstrap_info "Added $user to docker group (DOCKER_USERS)"
+      else
+        bootstrap_warn "DOCKER_USERS contains non-existent user: $user (skipped)"
+      fi
+    done
+  fi
 fi
-bootstrap_success "Managed users synchronized to sudo/docker groups; only $COOLIFY_SUDO_NOPASSWD_USER in coolify group."
+bootstrap_success "Managed users synchronized to sudo group; docker group membership controlled by DOCKER_USERS; only $COOLIFY_SUDO_NOPASSWD_USER in coolify group."
 
 bootstrap_info "Synchronizing Coolify localhost SSH configuration."
 sync_coolify_localhost_ssh_user

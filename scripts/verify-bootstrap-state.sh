@@ -71,6 +71,9 @@ for user in $(split_csv_to_lines "${ADDITIONAL_SUDO_USERS:-}"); do
   managed_users_csv="$(csv_append_unique "$managed_users_csv" "$user")"
 done
 
+# DOCKER_USERS: users expected to have docker group membership
+DOCKER_USERS="${DOCKER_USERS:-}"
+
 failures=0
 warnings=0
 has_iptables_600x_drop=unknown
@@ -194,7 +197,18 @@ done < <(split_csv_to_lines "$managed_users_csv")
 
 while IFS= read -r user; do
   check_member_of_group "$user" "sudo"
-  check_member_of_group "$user" "docker"
+  # SECURITY: Docker group membership is root-equivalent.
+  # Only users explicitly listed in DOCKER_USERS should have it.
+  if csv_contains_value "$DOCKER_USERS" "$user"; then
+    check_member_of_group "$user" "docker"
+  else
+    # Verify user is NOT in docker group (unless in DOCKER_USERS)
+    if id -nG "$user" 2>/dev/null | tr ' ' '\n' | grep -qx "docker"; then
+      warn "user $user is in docker group but not in DOCKER_USERS (root-equivalent access)"
+    else
+      pass "user $user is NOT in docker group (correct - not in DOCKER_USERS)"
+    fi
+  fi
   # SECURITY: Only COOLIFY_SUDO_NOPASSWD_USER should be in coolify group.
   # Human users must NOT have write access to Coolify control-plane data.
   if [[ "$user" == "$COOLIFY_SUDO_NOPASSWD_USER" ]]; then
