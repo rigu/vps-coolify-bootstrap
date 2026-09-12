@@ -250,7 +250,7 @@ What replay enforces:
 
 - SSH hardening (`sshd_config`, `AllowUsers`, service state)
 - sudo policy (`DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` passwordless by default)
-- user/group memberships (`sudo`, `docker`, `coolify`)
+- user/group memberships (`sudo` for all managed users, `docker` for `DOCKER_USERS`)
 - on-host password generation for locked/unset managed users (during bootstrap/replay) and encrypted vault update
 - UFW baseline (`SSH_PORT`, `80`, `443`)
 - `fail2ban` and `unattended-upgrades`

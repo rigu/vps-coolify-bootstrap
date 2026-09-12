@@ -184,7 +184,8 @@ This script is idempotent and executes the following actions in order:
 - ensure Coolify root account exists (`RootUserSeeder` + DB verification)
 - sync Coolify localhost server connection to `COOLIFY_SUDO_NOPASSWD_USER` + `SSH_PORT` and dedicated localhost SSH key
 - sync realtime host env (`PUSHER_HOST`, `PUSHER_PORT`, `PUSHER_SCHEME`) from effective realtime domain (`COOLIFY_REALTIME_DOMAIN` or `COOLIFY_PUBLIC_DOMAIN` fallback)
-- enforce sudo/docker/coolify memberships and sudo policy (passwordless for `DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` by default)
+- enforce sudo group memberships (all managed users) and docker group (DOCKER_USERS only)
+- enforce sudo policy (passwordless for `DEVOPS_USER` when `DEVOPS_USER_NOPASSWD=true`, always for `COOLIFY_SUDO_NOPASSWD_USER`)
 - sync `DOCKER-USER` guards:
   - block public `6001/6002` when `CLOSE_COOLIFY_REALTIME_PORTS=true`
 
@@ -202,7 +203,7 @@ sudo ip6tables -S DOCKER-USER 2>/dev/null | grep -E '6001|6002' || true
 devops_user="$(sudo sed -n 's/^DEVOPS_USER=//p' /etc/vps-coolify-bootstrap/bootstrap.env | tr -d \"'\\r\")"
 devops_user="${devops_user:-devops}"
 id "$devops_user" || true
-getent group sudo docker coolify
+getent group sudo docker
 sudo bash /opt/vps-coolify-bootstrap/scripts/verify-bootstrap-state.sh /etc/vps-coolify-bootstrap/bootstrap.env
 ```
 
