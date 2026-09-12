@@ -30,7 +30,7 @@ On first boot, the VPS init agent:
 ```mermaid
 flowchart TD
   A["Prepare env + secrets"] --> B["Render VPS-Coolify init"]
-  B --> C["Provision Ubuntu 24 VPS"]
+  B --> C["Provision VPS (Ubuntu 22.04/24.04 or Debian 12/13)"]
   C --> D["VPS first boot: run VPS init user-data"]
   D --> E["Install packages + write baseline files"]
   E --> F["Clone BOOTSTRAP_REPO_URL at BOOTSTRAP_REPO_REF"]
@@ -182,7 +182,9 @@ Accepted format:
 Runtime behavior:
 
 - each effective managed user is ensured to exist
-- each effective managed user is added to `sudo`, `docker`, and `coolify` groups
+- each effective managed user is added to `sudo` group
+- users in `DOCKER_USERS` are also added to `docker` group (explicit opt-in)
+- human users are NOT added to `coolify` group (Coolify data access via sudo only)
 
 ### 7) SSH public key configuration types
 

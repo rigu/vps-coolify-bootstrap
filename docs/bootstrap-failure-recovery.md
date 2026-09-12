@@ -31,7 +31,7 @@ sudo cloud-init status --long
 sudo cloud-init query --all | head -n 40
 ```
 
-Note: `cloud-init` is the native Ubuntu first-boot service provided by the base image.
+Note: `cloud-init` is the native first-boot service provided by the base image (Ubuntu/Debian).
 This repository does not create that service; bootstrap scripts run inside its first-boot execution.
 
 Where to run these commands:
