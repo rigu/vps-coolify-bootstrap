@@ -11,7 +11,7 @@ The sequence is explicit and safe to execute end-to-end.
 ## 0) Preparation (do not skip)
 
 1. Keep provider web console access open (rescue path if SSH is broken).
-2. Run recovery as `root` (provider console) or as `DEVOPS_USER` / `COOLIFY_SUDO_NOPASSWD_USER` (passwordless `sudo`).
+2. Run recovery as `root` (provider console) or as `COOLIFY_SUDO_NOPASSWD_USER` (passwordless `sudo`), or `DEVOPS_USER` (passwordless if `DEVOPS_USER_NOPASSWD=true`).
 3. Keep local source of truth ready:
    - local repo: `public-vps-coolify-bootstrap`
    - local env file: `bootstrap-artifacts/bootstrap.env`
@@ -285,7 +285,7 @@ sudo systemctl restart fail2ban
 ### C) Fix sudo policy for Coolify-managed SSH user
 
 Coolify server validation runs non-interactively and needs passwordless sudo.
-By default, `DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` are passwordless.
+By default, `COOLIFY_SUDO_NOPASSWD_USER` is passwordless. `DEVOPS_USER` is passwordless only when `DEVOPS_USER_NOPASSWD=true` (default: false).
 
 Check effective sudo mode:
 

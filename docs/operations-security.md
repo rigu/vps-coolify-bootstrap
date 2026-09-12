@@ -63,7 +63,7 @@ sudo passwd <DEVOPS_USER>
 
 Replace `<DEVOPS_USER>` with the value from `/etc/vps-coolify-bootstrap/bootstrap.env`.
 
-`DEVOPS_USER` has passwordless sudo for operations, but setting a local
+`DEVOPS_USER` has passwordless sudo when `DEVOPS_USER_NOPASSWD=true` (default is `false`), but setting a local
 password is still required for emergency/recovery flows (for example provider
 console access when SSH key auth is unavailable).
 
@@ -72,7 +72,8 @@ console access when SSH key auth is unavailable).
 Generated user passwords are stored encrypted at
 `/etc/vps-coolify-bootstrap/user-passwords.enc`. Decrypting requires `sudo`.
 
-`DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` have passwordless sudo
+`COOLIFY_SUDO_NOPASSWD_USER` has passwordless sudo (required by Coolify).
+`DEVOPS_USER` has passwordless sudo only when `DEVOPS_USER_NOPASSWD=true` (default: false).
 (`NOPASSWD:ALL`). Other sudo users need their password to run `sudo` — but
 their password is inside the vault.
 
@@ -249,7 +250,7 @@ What replay does not do:
 What replay enforces:
 
 - SSH hardening (`sshd_config`, `AllowUsers`, service state)
-- sudo policy (`DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` passwordless by default)
+- sudo policy (`COOLIFY_SUDO_NOPASSWD_USER` always passwordless, `DEVOPS_USER` per `DEVOPS_USER_NOPASSWD`)
 - user/group memberships (`sudo` for all managed users, `docker` for `DOCKER_USERS`)
 - on-host password generation for locked/unset managed users (during bootstrap/replay) and encrypted vault update
 - UFW baseline (`SSH_PORT`, `80`, `443`)
