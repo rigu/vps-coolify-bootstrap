@@ -1275,16 +1275,21 @@ ensure_coolify_root_user_seeded() {
 }
 
 if ! is_coolify_running; then
-  export DEBIAN_FRONTEND=noninteractive
-  bootstrap_info "Coolify not detected; running official installer."
-  # Official Coolify installer path. Trade-off: remote script execution via curl|bash.
-  # Detection assumes container name `coolify` or compose project label `coolify`.
-  env \
-    ROOT_USERNAME="$COOLIFY_ROOT_USERNAME" \
-    ROOT_USER_EMAIL="$COOLIFY_ROOT_USER_EMAIL" \
-    ROOT_USER_PASSWORD="$COOLIFY_ROOT_USER_PASSWORD" \
-    bash -c 'curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash'
-  bootstrap_success "Coolify installed via official installer."
+  if [[ "${SKIP_COOLIFY_INSTALL:-false}" == "true" ]]; then
+    bootstrap_warn "SKIP_COOLIFY_INSTALL=true; skipping Coolify installation (test mode)."
+    bootstrap_warn "Coolify will NOT be available. Use only for bootstrap testing."
+  else
+    export DEBIAN_FRONTEND=noninteractive
+    bootstrap_info "Coolify not detected; running official installer."
+    # Official Coolify installer path. Trade-off: remote script execution via curl|bash.
+    # Detection assumes container name `coolify` or compose project label `coolify`.
+    env \
+      ROOT_USERNAME="$COOLIFY_ROOT_USERNAME" \
+      ROOT_USER_EMAIL="$COOLIFY_ROOT_USER_EMAIL" \
+      ROOT_USER_PASSWORD="$COOLIFY_ROOT_USER_PASSWORD" \
+      bash -c 'curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash'
+    bootstrap_success "Coolify installed via official installer."
+  fi
 else
   bootstrap_success "Coolify already running; install step skipped."
 fi
