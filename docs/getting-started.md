@@ -84,7 +84,7 @@ Use this path when:
 - you want to apply bootstrap hardening to a running server
 
 Prerequisites:
-- Ubuntu 24.04 LTS (recommended) or 22.04 LTS
+- Ubuntu 24.04 LTS (recommended), Ubuntu 22.04 LTS, Debian 12, or Debian 13
 - root or sudo access (provider console or SSH)
 - `bootstrap-artifacts/bootstrap.env` prepared locally (steps 1-2 above)
 

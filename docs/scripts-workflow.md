@@ -17,6 +17,7 @@ This page documents the detailed local workflow for:
 - `scripts/pg-backup-infra.sh`
 - `scripts/pg-basebackup-infra.sh`
 - `scripts/offsite-backup-sync.example.sh`
+- `scripts/test-effective-exposure.sh`
 - `scripts/generate-docmost-secrets.sh` / `scripts/generate-docmost-secrets.ps1`
 - `scripts/prepare-docmost-compose.sh` / `scripts/prepare-docmost-compose.ps1`
 - `scripts/generate-plane-secrets.sh` / `scripts/generate-plane-secrets.ps1`
@@ -202,11 +203,13 @@ sudo bash /opt/vps-coolify-bootstrap/scripts/prepare-existing-server.sh /etc/vps
 
 What it does:
 - waits for apt lock release (max 60s)
-- detects Ubuntu version and warns if not 24.04 LTS (noble)
-- installs: `ca-certificates`, `curl`, `git`, `openssl`, `python3`, `ufw`, `fail2ban`, `unattended-upgrades`
+- detects OS version and validates support (Ubuntu 22.04/24.04, Debian 12/13)
+- warns if not Ubuntu 24.04 LTS (noble) — other supported OS still proceed
+- installs: `ca-certificates`, `curl`, `git`, `openssl`, `python3`, `ufw`, `fail2ban`, `unattended-upgrades`, `needrestart`
 - writes `/etc/sysctl.d/99-hardening.conf` (rp_filter, no redirects, syncookies, ip_forward)
 - applies sysctl settings
 - writes `/etc/fail2ban/jail.d/10-bootstrap-sshd.local` with `SSH_PORT` from env
+- configures needrestart to auto-restart services without prompting
 
 What it does not do:
 - does not configure SSH hardening (that is `bootstrap-host.sh`)
@@ -583,5 +586,32 @@ sudo ss -lntp | grep -E ':(5434|6379|5672|15672|8333)\b' || true
 
 If a port is already occupied by another service, update the corresponding
 `*_HOST_PORT` in `production-infra.env` and rerun `setup-infra.sh`.
+
+Back to [Docs Home](index.md)
+
+## Effective exposure testing (`test-effective-exposure.sh`)
+
+Use this script to validate actual network exposure after bootstrap. It tests
+effective firewall state by attempting connections from an external machine.
+
+Run from an external host (not the VPS itself):
+
+```bash
+bash scripts/test-effective-exposure.sh --host <VPS_IP> --ssh-port <SSH_PORT> --user <DEVOPS_USER>
+```
+
+What it tests:
+- SSH connectivity on configured port
+- HTTP (80) and HTTPS (443) accessibility
+- Coolify internal ports (6001, 6002, 8000) are blocked from public
+- iptables DOCKER-USER rules match expected state per `SSH_ACCESS_MODE`
+
+Modes:
+- `--mode public` (default): expects rate-limited public SSH
+- `--mode allowlist`: expects SSH only from allowed CIDRs
+- `--mode vpn-only`: expects SSH only from management CIDRs
+
+**Note:** This is an integration test that requires network access to the target VPS.
+It cannot verify provider firewall rules (those require provider-specific tools).
 
 Back to [Docs Home](index.md)

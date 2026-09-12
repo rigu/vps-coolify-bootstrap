@@ -6,7 +6,7 @@
 [![Latest Release](https://img.shields.io/github/v/release/rigu/vps-coolify-bootstrap)](https://github.com/rigu/vps-coolify-bootstrap/releases)
 [![Last Commit](https://img.shields.io/github/last-commit/rigu/vps-coolify-bootstrap)](https://github.com/rigu/vps-coolify-bootstrap/commits/main)
 
-Production-ready **VPS bootstrap for Coolify on Ubuntu 24.04 LTS** with VPS-Coolify init user-data, SSH hardening, UFW baseline, fail2ban, unattended upgrades, user password vault encryption, and replay-safe bootstrap scripts.
+Production-ready **VPS bootstrap for Coolify on Ubuntu 22.04/24.04 LTS and Debian 12/13** with VPS-Coolify init user-data, SSH hardening, UFW baseline, fail2ban, unattended upgrades, user password vault encryption, and replay-safe bootstrap scripts.
 
 ![Bootstrap Overview](docs/assets/bootstrap-overview.svg)
 
@@ -75,9 +75,15 @@ Recommended execution order:
 4. Docmost deployment: [docs/install-docmost-on-coolify.md](docs/install-docmost-on-coolify.md)
 5. Plane deployment: [docs/install-plane-on-coolify.md](docs/install-plane-on-coolify.md)
 
-## Ubuntu Target
+## Supported Operating Systems
 
-This bootstrap is adapted for **Ubuntu 24.04 LTS**.
+This bootstrap supports:
+- **Ubuntu 24.04 LTS** (recommended)
+- **Ubuntu 22.04 LTS**
+- **Debian 12 (Bookworm)**
+- **Debian 13 (Trixie)**
+
+See [docs/multi-os-compatibility-report.md](docs/multi-os-compatibility-report.md) for the full compatibility matrix.
 
 ## Disclaimer
 

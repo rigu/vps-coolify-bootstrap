@@ -21,11 +21,17 @@ Effective managed users are:
 
 `bootstrap-host.sh` enforces this at runtime:
 - each managed user is created if missing
-- each managed user is added to `sudo`, `docker`, and `coolify`
+- each managed user is added to `sudo` group
+- users in `DOCKER_USERS` are added to `docker` group (explicit opt-in, default empty)
+- human users are NOT added to `coolify` group (Coolify data access via sudo only)
 - usernames must match `^[a-z_][a-z0-9_-]*[$]?$`
 - `root` is forbidden for `DEVOPS_USER`, `COOLIFY_SUDO_NOPASSWD_USER`, and in `ADDITIONAL_SUDO_USERS`
 - `DEVOPS_USER` and `COOLIFY_SUDO_NOPASSWD_USER` must be different
 - `ADDITIONAL_SUDO_USERS` must not contain `COOLIFY_SUDO_NOPASSWD_USER`
+
+**Security notes:**
+- Docker group is root-equivalent — only add users to `DOCKER_USERS` when truly needed.
+- Human users should NOT have direct write access to `/data/coolify` — use sudo when needed.
 
 ### More than two sudo users
 

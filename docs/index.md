@@ -5,7 +5,7 @@ nav_order: 1
 
 # VPS Coolify Bootstrap
 
-Production-ready bootstrap for **Coolify on Ubuntu 24.04 LTS** — from first boot to running workloads.
+Production-ready bootstrap for **Coolify on Ubuntu 22.04/24.04 LTS and Debian 12/13** — from first boot to running workloads.
 
 ## Quick Start
 
@@ -60,6 +60,8 @@ Follow these pages in order for a complete deployment:
 | [Realtime Modes](vps-coolify-realtime-modes.md) | Realtime port exposure options |
 | [Failure Recovery](bootstrap-failure-recovery.md) | Step-by-step recovery runbook |
 | [Plane Incident Prevention](plane-community-v1.2.3-incident-prevention.md) | Known Plane issues and fixes |
+| [Security Trust Boundaries](security-trust-boundaries.md) | Supply-chain and trust model |
+| [Multi-OS Compatibility](multi-os-compatibility-report.md) | OS support matrix and audit |
 | [GitHub Promotion](github-promotion.md) | Maintainer checklist |
 
 ## Repository Layout
@@ -80,7 +82,7 @@ bootstrap-artifacts/  Generated output (not committed)
 - [Coolify auto-update behavior](https://coolify.io/docs/knowledge-base/server/auto-update)
 - [OpenSSH AllowUsers](https://man.openbsd.org/sshd_config#AllowUsers)
 
-_Last verified: March 7, 2026._
+_Last verified: September 9, 2026._
 
 ---
 
