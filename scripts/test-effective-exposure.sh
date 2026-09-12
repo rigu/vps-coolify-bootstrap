@@ -9,17 +9,23 @@
 # =============================================================================
 set -euo pipefail
 
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly SCRIPT_NAME="${0##*/}"
+SCRIPT_DIR=""
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
 
 # Source common functions
 # shellcheck source=common.sh
 source "$SCRIPT_DIR/common.sh" 2>/dev/null || {
-  # Minimal fallback if common.sh not available
+  # Minimal fallback if common.sh not available (shellcheck thinks these are unreachable)
+  # shellcheck disable=SC2317
   log_info() { echo "[INFO] $*"; }
+  # shellcheck disable=SC2317
   log_warn() { echo "[WARN] $*" >&2; }
+  # shellcheck disable=SC2317
   log_error() { echo "[ERROR] $*" >&2; }
+  # shellcheck disable=SC2317
   log_pass() { echo "[PASS] $*"; }
+  # shellcheck disable=SC2317
   log_fail() { echo "[FAIL] $*" >&2; }
 }
 
