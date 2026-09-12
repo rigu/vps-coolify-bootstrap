@@ -98,6 +98,19 @@ git clone https://github.com/rigu/vps-coolify-bootstrap.git /opt/vps-coolify-boo
 mkdir -p /etc/vps-coolify-bootstrap
 ```
 
+**Production recommendation:** Pin to a specific commit SHA for reproducibility:
+
+```bash
+# Clone and checkout specific commit
+git clone https://github.com/rigu/vps-coolify-bootstrap.git /opt/vps-coolify-bootstrap
+git -C /opt/vps-coolify-bootstrap checkout --detach <COMMIT_SHA>
+
+# Verify the commit
+test "$(git -C /opt/vps-coolify-bootstrap rev-parse HEAD)" = "<COMMIT_SHA>"
+```
+
+See [Bootstrap Env Reference](bootstrap-env-reference.md#production-sha-pinning) for details.
+
 #### Copy env from local machine to server:
 
 ```bash

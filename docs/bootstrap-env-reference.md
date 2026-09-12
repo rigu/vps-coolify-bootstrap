@@ -76,6 +76,24 @@ Additional source controls:
 - `BOOTSTRAP_REPO_URL=https://github.com/rigu/vps-coolify-bootstrap.git`
 - `BOOTSTRAP_REPO_REF=main`
 
+**Production SHA pinning:**
+
+For production deployments, use a full commit SHA instead of `main`:
+
+```bash
+BOOTSTRAP_REPO_REF=6ea4d088ca2e4590d6c7aca5f34ecc7dc45671a9
+```
+
+Why:
+- `main` is mutable — you cannot audit what production actually executed
+- Release tags can also be moved; only commit SHA is truly immutable
+- Enables reproducible deployments and rollback to known-good states
+
+After bootstrap, verify the pinned commit:
+```bash
+test "$(git -C /opt/vps-coolify-bootstrap rev-parse HEAD)" = "$BOOTSTRAP_REPO_REF"
+```
+
 Local render override controls (optional):
 - `TEMPLATE_FILE=../templates/vps-init.template.yml`
 - `OUTPUT_FILE=../bootstrap-artifacts/vps-coolify-init.generated.yml`
