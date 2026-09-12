@@ -6,12 +6,15 @@
 #
 # This script performs a complete end-to-end test of the bootstrap process:
 # 1. Builds systemd-enabled Docker images for each OS
-# 2. Runs prepare-existing-server.sh
-# 3. Runs bootstrap-host.sh
-# 4. Runs verify-bootstrap-state.sh
-# 5. Tests idempotency (re-run bootstrap)
-# 6. Tests reboot persistence (docker restart)
-# 7. Runs verify-bootstrap-state.sh post-reboot
+# 2. Starts container with systemd as PID 1
+# 3. Sets up bootstrap environment
+# 4. Runs prepare-existing-server.sh
+# 5. Runs bootstrap-host.sh (first run)
+# 6. Runs verify-bootstrap-state.sh (post-bootstrap)
+# 7. Runs bootstrap-host.sh (idempotency test)
+# 8. Runs verify-bootstrap-state.sh (post-idempotency)
+# 9. Restarts container (reboot simulation)
+# 10. Runs verify-bootstrap-state.sh (post-reboot)
 #
 # Requirements:
 # - Docker with privileged container support
@@ -25,7 +28,9 @@ SCRIPT_DIR=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly SCRIPT_NAME="${0##*/}"
-readonly REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT=""
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+readonly REPO_ROOT
 
 # --- Configuration ---
 NO_CLEANUP="${NO_CLEANUP:-0}"
@@ -33,7 +38,8 @@ KEEP_IMAGES="${KEEP_IMAGES:-0}"
 SINGLE_OS="${SINGLE_OS:-}"
 VERBOSE="${VERBOSE:-0}"
 
-# Test timeout in seconds (per phase)
+# Test timeout in seconds (per phase) - used by timeout command if available
+# shellcheck disable=SC2034
 readonly PHASE_TIMEOUT=300
 
 # OS matrix: os_tag|base_image|os_id|os_version
@@ -50,6 +56,7 @@ readonly CONTAINER_PREFIX="bootstrap-integration-test"
 # Track resources for cleanup
 declare -a CONTAINERS_CREATED=()
 declare -a IMAGES_CREATED=()
+declare -a LOG_DIRS_CREATED=()
 
 # Test results
 declare -A TEST_RESULTS=()
@@ -136,8 +143,22 @@ cleanup() {
         log_info "Keeping images (--keep-images specified): ${IMAGES_CREATED[*]}"
     fi
     
+    # Remove log directories (keep on failure for debugging)
+    if [[ $exit_code -eq 0 ]] && [[ "$NO_CLEANUP" != "1" ]]; then
+        for log_dir in "${LOG_DIRS_CREATED[@]}"; do
+            if [[ -d "$log_dir" ]]; then
+                log_info "Removing log directory: $log_dir"
+                rm -rf "$log_dir"
+            fi
+        done
+    else
+        if [[ ${#LOG_DIRS_CREATED[@]} -gt 0 ]]; then
+            log_info "Keeping log directories for debugging: ${LOG_DIRS_CREATED[*]}"
+        fi
+    fi
+    
     log_info "Cleanup complete"
-    return $exit_code
+    return "$exit_code"
 }
 trap cleanup EXIT
 
@@ -165,13 +186,14 @@ Available OS:
 Test Phases:
     1. Build systemd-enabled Docker image
     2. Start container with systemd as PID 1
-    3. Run prepare-existing-server.sh
-    4. Run bootstrap-host.sh (first run)
-    5. Run verify-bootstrap-state.sh (post-bootstrap)
-    6. Run bootstrap-host.sh (idempotency test)
-    7. Run verify-bootstrap-state.sh (post-idempotency)
-    8. Restart container (simulates reboot)
-    9. Run verify-bootstrap-state.sh (post-reboot)
+    3. Setup bootstrap environment
+    4. Run prepare-existing-server.sh
+    5. Run bootstrap-host.sh (first run)
+    6. Run verify-bootstrap-state.sh (post-bootstrap)
+    7. Run bootstrap-host.sh (idempotency test)
+    8. Run verify-bootstrap-state.sh (post-idempotency)
+    9. Restart container (simulates reboot)
+    10. Run verify-bootstrap-state.sh (post-reboot)
 
 Exit Codes:
     0   All tests passed
@@ -340,9 +362,7 @@ DOCKERFILE
 )
     
     # Build image
-    echo "$dockerfile_content" | docker build -t "$image_name" -f - . >/dev/null 2>&1
-    
-    if [[ $? -eq 0 ]]; then
+    if echo "$dockerfile_content" | docker build -t "$image_name" -f - . >/dev/null 2>&1; then
         IMAGES_CREATED+=("$image_name")
         log_success "Image built: ${image_name}"
         return 0
@@ -367,7 +387,7 @@ start_container() {
     fi
     
     # Start container with systemd
-    docker run -d \
+    if ! docker run -d \
         --privileged \
         --name "$container_name" \
         --cgroupns=host \
@@ -375,9 +395,7 @@ start_container() {
         --tmpfs /run/lock \
         -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
         -v "${REPO_ROOT}:/opt/vps-coolify-bootstrap:ro" \
-        "$image_name" >/dev/null 2>&1
-    
-    if [[ $? -ne 0 ]]; then
+        "$image_name" >/dev/null 2>&1; then
         log_error "Failed to start container: ${container_name}"
         return 1
     fi
@@ -440,24 +458,24 @@ run_in_container() {
     local script_name="$2"
     local description="$3"
     local log_file="$4"
+    local timeout_seconds="${PHASE_TIMEOUT:-300}"
     
     log_subphase "Running: ${description}"
     
     local start_time
     start_time=$(date +%s)
     
-    # Run script
+    # Run script with timeout
     local exit_code=0
+    local docker_cmd="
+        cd /opt/vps-coolify-bootstrap
+        bash scripts/${script_name} /etc/vps-coolify-bootstrap/bootstrap.env 2>&1
+    "
+    
     if [[ "$VERBOSE" == "1" ]]; then
-        docker exec "$container_name" bash -c "
-            cd /opt/vps-coolify-bootstrap
-            bash scripts/${script_name} /etc/vps-coolify-bootstrap/bootstrap.env 2>&1
-        " | tee -a "$log_file" || exit_code=$?
+        timeout "$timeout_seconds" docker exec "$container_name" bash -c "$docker_cmd" | tee -a "$log_file" || exit_code=$?
     else
-        docker exec "$container_name" bash -c "
-            cd /opt/vps-coolify-bootstrap
-            bash scripts/${script_name} /etc/vps-coolify-bootstrap/bootstrap.env 2>&1
-        " >> "$log_file" 2>&1 || exit_code=$?
+        timeout "$timeout_seconds" docker exec "$container_name" bash -c "$docker_cmd" >> "$log_file" 2>&1 || exit_code=$?
     fi
     
     local end_time
@@ -467,6 +485,13 @@ run_in_container() {
     if [[ $exit_code -eq 0 ]]; then
         log_success "${description} completed (${duration}s)"
         return 0
+    elif [[ $exit_code -eq 124 ]]; then
+        log_error "${description} TIMED OUT after ${timeout_seconds}s"
+        log_error "See log file: ${log_file}"
+        echo "--- Last 20 lines of log ---"
+        tail -20 "$log_file"
+        echo "---"
+        return 1
     else
         log_error "${description} failed with exit code ${exit_code} (${duration}s)"
         log_error "See log file: ${log_file}"
@@ -501,18 +526,43 @@ run_verification() {
     warn_count=$(echo "$verify_output" | grep -c "^\[.*\] WARN" || true)
     
     # In test mode (SKIP_COOLIFY_INSTALL), filter out expected failures
+    # These are failures that occur because:
+    # - Coolify is not installed (SKIP_COOLIFY_INSTALL=true)
+    # - Docker is not installed (Coolify installer skipped)
+    # - SSH service not auto-started in container
     local unexpected_failures=0
     local expected_fail_patterns=(
+        # Docker not installed (Coolify installer skipped)
         "docker command not found"
+        "Docker.*IPv6"
+        "Docker network inspect"
+        
+        # Coolify not installed
         "Coolify localhost SSH key"
         "authorized_keys against Coolify"
+        "Coolify localhost public key"
+        "Coolify localhost server"
+        "Coolify container"
+        "coolify container is not running"
+        "Coolify root user"
+        "cannot reach localhost server"
+        "unable to read Coolify localhost server"
+        
+        # PUSHER config (Coolify env not created)
         "PUSHER_HOST"
         "PUSHER_PORT"
         "PUSHER_SCHEME"
+        "closed realtime mode requires"
+        
+        # SSH service (not auto-started in container)
         "sshd does not listen"
         "port 22 still has a listener"
-        "coolify-realtime"
-        "Coolify container"
+        
+        # DOCKER-USER iptables (Docker not installed)
+        "DOCKER-USER DROP guard"
+        "iptables DOCKER-USER"
+        "ip6tables DOCKER-USER"
+        "6001/6002 listen"
     )
     
     # Count unexpected failures (failures not in expected list)
@@ -598,13 +648,17 @@ run_os_test() {
     local test_env_file="${log_dir}/bootstrap.env"
     
     # Create log directory
-    mkdir -p "$log_dir"
+    if ! mkdir -p "$log_dir"; then
+        log_error "Failed to create log directory: ${log_dir}"
+        return 1
+    fi
+    LOG_DIRS_CREATED+=("$log_dir")
     
     local overall_result=0
     local phase_results=()
     
     # Phase 1: Build image
-    log_info "Phase 1/9: Build systemd image"
+    log_info "Phase 1/10: Build systemd image"
     if build_systemd_image "$os_tag" "$base_image"; then
         phase_results+=("build:PASS")
     else
@@ -614,7 +668,7 @@ run_os_test() {
     
     # Phase 2: Start container
     if [[ $overall_result -eq 0 ]]; then
-        log_info "Phase 2/9: Start container"
+        log_info "Phase 2/10: Start container"
         if start_container "$container_name" "$image_name"; then
             phase_results+=("start:PASS")
         else
@@ -625,7 +679,7 @@ run_os_test() {
     
     # Phase 3: Setup environment
     if [[ $overall_result -eq 0 ]]; then
-        log_info "Phase 3/9: Setup environment"
+        log_info "Phase 3/10: Setup environment"
         generate_test_env "$test_env_file"
         if setup_container_env "$container_name" "$test_env_file"; then
             phase_results+=("env:PASS")
@@ -637,7 +691,7 @@ run_os_test() {
     
     # Phase 4: Run prepare-existing-server.sh
     if [[ $overall_result -eq 0 ]]; then
-        log_info "Phase 4/9: Run prepare-existing-server.sh"
+        log_info "Phase 4/10: Run prepare-existing-server.sh"
         if run_in_container "$container_name" "prepare-existing-server.sh" \
             "prepare-existing-server.sh" "${log_dir}/prepare.log"; then
             phase_results+=("prepare:PASS")
@@ -649,7 +703,7 @@ run_os_test() {
     
     # Phase 5: Run bootstrap-host.sh (first run)
     if [[ $overall_result -eq 0 ]]; then
-        log_info "Phase 5/9: Run bootstrap-host.sh (first run)"
+        log_info "Phase 5/10: Run bootstrap-host.sh (first run)"
         if run_in_container "$container_name" "bootstrap-host.sh" \
             "bootstrap-host.sh (first run)" "${log_dir}/bootstrap-first.log"; then
             phase_results+=("bootstrap-1:PASS")
@@ -661,7 +715,7 @@ run_os_test() {
     
     # Phase 6: Verify post-bootstrap
     if [[ $overall_result -eq 0 ]]; then
-        log_info "Phase 6/9: Verify post-bootstrap"
+        log_info "Phase 6/10: Verify post-bootstrap"
         if run_verification "$container_name" "post-bootstrap" "${log_dir}/verify-post-bootstrap.log"; then
             phase_results+=("verify-1:PASS")
         else
@@ -673,7 +727,7 @@ run_os_test() {
     
     # Phase 7: Run bootstrap-host.sh (idempotency test)
     if [[ $overall_result -eq 0 ]] || [[ "${phase_results[*]}" == *"bootstrap-1:PASS"* ]]; then
-        log_info "Phase 7/9: Run bootstrap-host.sh (idempotency)"
+        log_info "Phase 7/10: Run bootstrap-host.sh (idempotency)"
         if run_in_container "$container_name" "bootstrap-host.sh" \
             "bootstrap-host.sh (idempotency)" "${log_dir}/bootstrap-idempotent.log"; then
             phase_results+=("bootstrap-2:PASS")
@@ -683,9 +737,21 @@ run_os_test() {
         fi
     fi
     
-    # Phase 8: Restart container (reboot test)
-    if [[ "${phase_results[*]}" == *"bootstrap-1:PASS"* ]]; then
-        log_info "Phase 8/9: Restart container (reboot test)"
+    # Phase 8: Verify post-idempotency (ensure second run didn't break anything)
+    if [[ "${phase_results[*]}" == *"bootstrap-2:PASS"* ]]; then
+        log_info "Phase 8/10: Verify post-idempotency"
+        if run_verification "$container_name" "post-idempotency" "${log_dir}/verify-post-idempotency.log"; then
+            phase_results+=("verify-2:PASS")
+        else
+            phase_results+=("verify-2:FAIL")
+            overall_result=1
+        fi
+    fi
+    
+    # Phase 9: Restart container (reboot test)
+    # Only run reboot test if idempotency succeeded
+    if [[ "${phase_results[*]}" == *"bootstrap-2:PASS"* ]]; then
+        log_info "Phase 9/10: Restart container (reboot test)"
         if restart_container "$container_name"; then
             phase_results+=("reboot:PASS")
         else
@@ -694,9 +760,9 @@ run_os_test() {
         fi
     fi
     
-    # Phase 9: Verify post-reboot
+    # Phase 10: Verify post-reboot
     if [[ "${phase_results[*]}" == *"reboot:PASS"* ]]; then
-        log_info "Phase 9/9: Verify post-reboot"
+        log_info "Phase 10/10: Verify post-reboot"
         if run_verification "$container_name" "post-reboot" "${log_dir}/verify-post-reboot.log"; then
             phase_results+=("verify-reboot:PASS")
         else
@@ -731,7 +797,7 @@ run_os_test() {
         log_error "OS test FAILED: ${os_tag}"
     fi
     
-    return $overall_result
+    return "$overall_result"
 }
 
 # --- Main ---
