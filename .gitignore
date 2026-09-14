@@ -14,3 +14,10 @@ __pycache__/
 .idea/
 _site/
 .jekyll-cache/
+/prompts/
+/CLAUDE.md
+/CODEX.md
+/.claude/
+/.codex/
+
+/docs/codex-setup.md
